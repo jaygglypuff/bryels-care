@@ -54,14 +54,23 @@ recipes (plain and advanced, and versions), steps (and versions), how-to sheets,
 areas, sites, warehouses, shelves and areas (set up), reasons, suppliers (set up), imports, document and label layouts,
 documents, sync conflicts. Floor screens (weigh, more weighing, steps, get materials) use the restyled `FlowHeader`.
 
-Not done (next pass):
-1. Pages in the lite demo without data were not photographed: purchase requests, repair jobs, invoices, bills,
-   payments, credits, expense claims, picks, second check, deliveries, returns (they use the same component; check them
-   on the full demo).
-2. `admin/users/[id]` and `admin/roles/[id]` still use `PageHeader` (person and job pages; no identifier) — fine as
-   they are but not on the template.
-3. Forms are not regrouped into titled sections (`Field` spacing and the title size changed only).
-4. The QA lot page shows its status in a banner, not as a chip in the header.
-5. Other page-level "next step" cards (production order "Next step" card, item page action row) keep their own larger
-   buttons; they could move into the header's "What to do next".
-6. Print layouts and the keypad keep their own sizes by design.
+Not done in the first pass, then done in the leftovers pass (ADR-123, 2026-11-07) — see below.
+
+## Leftovers pass (ADR-123, 2026-11-07)
+
+Measured on the FULL demo (`DEMO_PROFILE=full`, production build) with Playwright; owner unless noted. Screenshots
+were taken at 390 px (phone, touch) and 1440 px for 57 record pages (not committed; the lead keeps them with the
+report). Checked per page: header on the template, status chip beside the identifier, no sideways scroll, visible
+green buttons, most fields visible in one form, text above 20 px.
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Owner's desktop menu row at 1280 px 74 px too long | Logo mark (36 px) instead of the full logo (156 px) at 1280–1535 px. Owner and QA: 38 px to spare at 1280 (was −74), sales 90, finance 150; 39 px at 1536/1920. 165 checks (8 roles × 5 widths × every destination) pass: nothing cut, site selector and search button visible, page never scrolls sideways, tab row one line (`tests/e2e/top-bar-fit.cjs`). |
+| 2 | `admin/users/[id]`, `admin/roles/[id]` on `PageHeader` | `RecordHeader`, setup-style: the person's or job's name is the H1, status chip beside it, e-mail / code in the meta line. The job page's "Open People" is the header's one green button. |
+| 3 | QA lot status as a banner | `QaStatusChip` beside the lot number; below it only what the status means when it stops people ("Nobody can use this lot until QA says it is OK."), nothing for an OK lot. The duplicate "Made in batch …" banner went into the meta line. An OK lot's "Stop it or say not OK" form is folded. |
+| 4 | Own next-step cards and button rows | Production order: the "Next step" card (shown twice, phone and desktop) is the header's `next`/`primary`/`waitingFor` with the same controls (Plan the batch, the next action, Approve, the not-ready warning, who approves); its progress strip is the header's steps. Item page: the main action is the header's button, the others in ⋯ More, with a next-step sentence. Also: QA batch review's second green "Check quality" → outlined; supplier (procurement) only the first suggestion's "Yes" and the suggest form when it is the next step are green; customer "Turn on the customer portal" outlined; product "Make it ready to use" outlined (the recipe step is green). Status chips moved from the first card into the header on problem reports, fix-and-prevent plans, change requests, complaints, recalls, QA tests, QA batch review, repair jobs and regular maintenance. Rule: a next step that jumps to a form on the same page (`#…`) is outlined. Result: every one of the 57 pages has at most one visible green button at 390 and 1440 px. |
+| 5 | Long forms without sections | `FormSection` and `EditDetails` (`src/ui/form-section.tsx`) on material, product, supplier, reason, site and shelf/area forms (list in `docs/ux-system.md` Rules 5.8). At most 5 visible fields on every surveyed page (reason 3, equipment 5, QA lot 4, delivery 5). |
+| 6 | Record pages without lite-demo data | Checked on the full demo at 390 and 1440 px: purchase requests (approved, submitted), repair jobs (open, in progress), invoices (draft, waiting for approval, part paid), supplier bills (disputed, saved), payments, credit notes, expense claims (submitted, paid back), picks, second check (in progress, done), deliveries, customer returns, returns to supplier. All on the template, one green button, no sideways scroll. Fixed: repair job had no status chip in the header (now `WoStatusChip`). Seen and left to the finance owner (agent B): invoice lines read "ACS-135 · Acapulco Soap 135 g" (code first) — fixed by ADR-124's `LineName` in the same round. |
+
+Count progress on a stock count ("0 of 0 counted") used the page-title size inside a card; it is `text-value` now.
+Print layouts and the keypad keep their own sizes by design.

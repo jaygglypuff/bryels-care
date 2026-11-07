@@ -1,13 +1,14 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import type { Permission } from "@/lib/permissions";
 import { type RoleDetail, getRole, permissionCatalogue } from "@/modules/identity";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordNo } from "@/ui/plain-list";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
-import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { MoreDetails, PageIntro } from "@/ui/guide";
 import { permissionSummary, plainModule } from "@/ui/permission-words";
 import { plainRole, plainRoleName } from "@/ui/role-names";
 import { Forbidden } from "../../../forbidden";
@@ -53,33 +54,44 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
   for (const p of d.permissions) grouped.set(p.code.split(".")[0], [...(grouped.get(p.code.split(".")[0]) ?? []), p]);
   return (
     <>
-      <p className="mb-2 text-[13px]">
-        <Link href="/admin/roles" className="text-primary-text hover:underline">
-          ← Roles
-        </Link>
-      </p>
-      <PageHeader
+      {/* Harmony pass (ADR-119/123): a job (role) is a setup record: the name is the H1, the chips beside it, the code in
+          the meta line; the one next step sits in the header's "What to do next". */}
+      <RecordHeader
+        back={{ href: "/admin/roles", label: "Roles" }}
+        typeLabel="Job (role)"
         title={plainRole(role.code, role.name)}
-        actions={
+        chip={
           <>
             {role.isSystem ? <Chip tone="neu">Standard</Chip> : <Chip tone="info">Made here</Chip>}
             {role.status === "inactive" && <Chip tone="warn">Not used any more</Chip>}
-            {canAdmin && (
-              <LinkButton href={`/admin/roles/${role.id}/clone`} variant="secondary" size="sm">
-                Copy into a new job
-              </LinkButton>
-            )}
           </>
+        }
+        meta={[<RecordNo key="code">{role.code}</RecordNo>, ["People with this job", String(d.activeAssignments)]]}
+        secondary={
+          canAdmin ? (
+            <LinkButton href={`/admin/roles/${role.id}/clone`} variant="secondary" size="sm">
+              Copy into a new job
+            </LinkButton>
+          ) : undefined
+        }
+        next={
+          role.status === "inactive"
+            ? "This job is not used any more. Nobody can be given it."
+            : ctx.can("identity.user.view")
+              ? role.isSystem
+                ? "Standard job: it cannot be changed. To give it to someone, open their page under People."
+                : "To give this job to someone, open their page under People."
+              : "Nothing to do here."
+        }
+        primary={
+          role.status !== "inactive" && ctx.can("identity.user.view") ? (
+            <LinkButton href="/admin/users" variant="cta">
+              Open People
+            </LinkButton>
+          ) : undefined
         }
       />
       <PageIntro>This screen is for the owner and the IT person: what people with this job may do. Give the job to a person on their page under People.</PageIntro>
-      {role.status === "inactive" ? (
-        <NextStep text="This job is not used any more. Nobody can be given it." />
-      ) : ctx.can("identity.user.view") ? (
-        <NextStep text={role.isSystem ? "Standard job: it cannot be changed. To give it to someone, open their page under People." : "To give this job to someone, open their page under People."} action={{ label: "Open People", href: "/admin/users" }} />
-      ) : (
-        <NextStep text="Nothing to do here." />
-      )}
       {(await searchParams).created === "1" && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title="New job made">Give it to a person on their page under People. Every change to it is kept in the history of changes.</Banner>

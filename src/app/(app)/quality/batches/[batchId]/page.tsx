@@ -52,6 +52,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
       <RecordHeader
         typeLabel="Batch · full QA review"
         reference={batch.batchNumber}
+        chip={<QaStatusChip status={batch.status} />}
         title={v.productName}
         actions={
           <>
@@ -301,7 +302,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
                 <p className="text-[14px] text-muted">{releaseBlocker ?? "Nothing to decide now."}</p>
               )}
               {["awaiting_qc", "quarantined"].includes(batch.status) && (
-                <LinkButton href={`/quality/check/${batch.id}`} variant="cta" size="lg" className="mt-2">
+                <LinkButton href={`/quality/check/${batch.id}`} variant="secondary" className="mt-2">
                   Check quality
                 </LinkButton>
               )}

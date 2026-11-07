@@ -4,6 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { MATERIAL_KIND_DEFAULTS, MATERIAL_TRANSITIONS, getMaterial, lookupLabels, materialFormOptions, type MaterialStatus } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
+import { EditDetails } from "@/ui/form-section";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
@@ -39,7 +40,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   const moves = ctx.can("masterdata.material.edit") ? MATERIAL_TRANSITIONS[m.status as MaterialStatus] ?? [] : [];
   const canSeeStock = ctx.can("inventory.lot.view");
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <RecordHeader
         back={{ href: "/masterdata/materials", label: "Materials" }}
         typeLabel={KIND_WORDS[m.materialKind] ?? m.materialKind}
@@ -47,7 +48,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         chip={<StateChip status={m.status} />}
         meta={[<span key="code" className="font-mono">{m.code}</span>, countWords(m.baseUom), categoryLabel, m.brand ? `brand ${m.brand}` : null, pack ? `one pack holds ${pack}` : null]}
       />
-      <PageIntro>Everything the system knows about this material. Change a box and press Save.</PageIntro>
+      <PageIntro>Everything the system knows about this material. To change it, open Change the details, change a box and press Save.</PageIntro>
       {created === "1" && <Banner tone="ok" title={`${m.name} added as ${m.code}`}>You can now order it, receive it and use it in recipes.</Banner>}
       {m.status === "draft" && moves.includes("active") ? (
         <NextStepBox text="Next: when the details are right, mark it ready to use. Then it can be ordered, received and used in recipes.">
@@ -67,16 +68,19 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       {m.warnings.map((w) => (
         <Banner key={w} tone="warn" title="Please check">{w}</Banner>
       ))}
-      <Card>
-        <CardTitle>Details</CardTitle>
-        {canEdit ? (
+      {canEdit ? (
+        // ADR-123: the form is folded so the next step keeps the one green button; same form, same action.
+        <EditDetails>
           <ActionForm action={saveMaterialAction} submitLabel="Save" hidden={{ _id: m.id }}>
             <MaterialFields options={{ ...options, kindDefaults: MATERIAL_KIND_DEFAULTS }} d={m} locked={m.inUse} />
           </ActionForm>
-        ) : (
+        </EditDetails>
+      ) : (
+        <Card>
+          <CardTitle>Details</CardTitle>
           <ReadOnlyNote what="this material" />
-        )}
-      </Card>
+        </Card>
+      )}
       {moves.length > 0 && (
         <MoreDetails title="Stop using it, or use it again">
           <p className="text-[13px] text-muted">Stopping needs a reason. &quot;No longer used&quot; is final; materials that were used are never deleted.</p>

@@ -416,6 +416,13 @@ guide for the current screen (FR-platform-16 in `docs/PRD.md`): versioned, organ
 `help_guides` records authored with `platform.help_guide.admin` (reading needs no
 permission) and cached for offline reading (`docs/offline-sync.md` §7).
 
+**Fit at 1280–1535 px (ADR-123).** The bar shows the logo mark (36 px) instead of the full logo (156 px) from 1280 to
+1535 px; the full logo returns from 1536 px. Measured on the full demo (`tests/e2e/top-bar-fit.cjs`, every
+destination): the owner's menu row was 74 px too long at 1280 px and now has 38 px to spare (QA the same; sales
+90 px, finance 150 px); at 1536/1920 px 39 px to spare. Nothing is cut, the site selector and the master search
+button stay visible, no page scrolls sideways, and every tab row is one line at 1280, 1366, 1440, 1536 and 1920 px
+for owner, manager, finance, sales, QA, warehouse (one and two sites) and operator.
+
 ### 3.3 Tablet (768 to 1023 px)
 
 Icon rail 72 px with group icons and tooltips; tap expands to the full 240 px nav as an
@@ -594,6 +601,21 @@ one line of facts (13 px) with the record number small and mono at the end.
 Forms keep `PageHeader` (the verb as title, e.g. "New purchase order"), `Field` (label 13 px, 8 px
 to the input, hint 12 px) and `MoreDetails` for everything not needed on most days.
 
+**Leftovers pass (ADR-123, 2026-11-07).**
+- Every page about one record uses `RecordHeader`, including the person (`/admin/users/[id]`) and job
+  (`/admin/roles/[id]`) pages (setup-style: name is the H1, e-mail or code in the meta line).
+- The status chip sits **beside the identifier**, never only in a banner or in the first card's title (QA lot, QA
+  batch review, problem report, fix-and-prevent plan, change request, complaint, recall, QA test, repair job,
+  regular maintenance). Below the header only what the status means for people, and only when it stops them
+  ("Nobody can use this lot until QA says it is OK."); an OK lot has no message.
+- A page's own "Next step" card or row of action buttons folds into the header: `next` (sentence), `primary`
+  (the existing control), `waitingFor` (who; block content allowed, e.g. `WhoCanHelp`). Production order and item
+  page done; the other actions go in ⋯ More.
+- **One green button per page.** A next step that jumps to a form further down the same page (`href="#…"`) is an
+  outlined button with a down arrow (`NextStep` does this by itself); the form's own button is the green one. Setup
+  pages fold their edit form in `EditDetails` ("Change the details", closed) so the next step keeps the green
+  button; other controls that the next step does not point at are outlined.
+
 ### Rules: 5.8 Forms and fields
 
 - Label above the field (never placeholder-only); required marked with text "Required" in
@@ -611,6 +633,16 @@ to the input, hint 12 px) and `MoreDetails` for everything not needed on most da
 - Dirty forms warn before navigating away; drafts auto-save where the data model has a
   draft state.
 - Dates display `DD MMM YYYY` and times 24-hour in the site time zone (ADR-019).
+- **Long forms (more than 5 fields) on record and setup pages use titled sections (ADR-123).** One shared
+  component, `FormSection` (`src/ui/form-section.tsx`): a `fieldset` whose legend is the title in the
+  `text-section` role, an optional `text-meta` hint, at most five visible fields, the rest in its `more` fold
+  ("More (you can skip this)" or a named fold; opened when a folded field has a server error). On setup pages the
+  whole form sits in `EditDetails` (closed "Change the details" card). Done for: material (What it is · Buying ·
+  Keeping it and quality · Other names and code), product (What it is · Boxes and labels · Keeping it and code),
+  supplier (Name and who to call · Address and paying · QA, code and notes), reason (The words people see · Where it
+  is offered · Code and order in the list), site (Name and address), shelf/area (Name and where it is). The create
+  pages of material, product, supplier and reason share the same fields and so the same sections. Other record pages
+  measured on the full demo show at most 5 fields at a time (repair job 2, QA lot 4, equipment 5, delivery 5).
 
 ### Rules: 5.8a In-place actions (ADR-043)
 

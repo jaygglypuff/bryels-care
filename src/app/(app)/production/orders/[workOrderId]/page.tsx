@@ -16,7 +16,8 @@ import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
 import { AssignForm, ApproveButton, CancelOrderForm, DailyLogForm, PlanBatchButton, SetAsideAgainButton } from "../forms";
 import { WorkOrderForm } from "../../work-orders/wo-form";
-import { ActionButton, DefectTables, NeededBy, OrderStatusChip, OrderWarning, ProgressStrip } from "../parts";
+import { ActionButton, DefectTables, NeededBy, OrderStatusChip, OrderWarning } from "../parts";
+import { Hourglass } from "lucide-react";
 import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Production order" };
@@ -49,48 +50,44 @@ function batchesWords(v: ProductionOrderView): string {
   return `${finished} of ${total} finished · ${v.statusView.batchesDone} of ${total} decided by QA`;
 }
 
-function NextActionCard({ v, planKey, approvalNext }: { v: ProductionOrderView; planKey: string; approvalNext: NextActors | null }) {
+/**
+ * The order's one next step, in the header's "What to do next" box (ADR-123; was its own "Next step" card, shown twice
+ * for phone and desktop). Same controls, same conditions: the plan button, the order's next action (a link, Approve,
+ * or a wait with who can help), the not-ready warning (ADR-116) and who approves the order (docs/NEXT_APPROVER.md).
+ */
+function nextSlots(v: ProductionOrderView, planKey: string, approvalNext: NextActors | null): { next: React.ReactNode; primary?: React.ReactNode; waitingFor?: React.ReactNode } {
   const a = v.nextAction;
   // UX review: an approved order without a batch says why nothing can be done, and whom to ask.
   if (v.noBatchPlanned)
-    return (
-      <Card>
-        <CardTitle>Next step</CardTitle>
-        <div className="flex flex-col gap-2">
-          <p className="text-[15px] text-fg">
-            This order is approved but no batch is planned yet.{" "}
-            {v.canPlanBatch ? "You can plan it." : v.planner ? `Ask ${v.planner.name} to plan it.` : "Ask your supervisor to plan it."}
-          </p>
-          {v.canPlanBatch ? (
-            // Re-audit N2 (ADR-105): planned here, never on the old order view. The batch uses the versions fixed at approval.
-            <PlanBatchButton workOrderId={v.detail.workOrder.id} idempotencyKey={planKey} />
-          ) : (
-            <WhoCanHelp permission="production.batch.create" siteId={v.detail.workOrder.siteId} hideEmails lead="Who can plan it: " />
-          )}
-        </div>
-      </Card>
-    );
-  return (
-    <Card>
-      <CardTitle>Next step</CardTitle>
-      <div className="flex flex-col gap-2">
-        {v.notReady ? (
-          // ADR-116: approval would refuse; say why and who acts, instead of a button that fails.
-          <p role="status" className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="order-not-ready">
-            {v.notReady}
-          </p>
-        ) : (
-          <>
-            <p className="text-[14px] text-fg-2">{a.hint}</p>
-            <ActionButton a={a} approve={<ApproveButton workOrderId={v.detail.workOrder.id} />} />
-          </>
-        )}
-        {/* Who approves the order, by name and role (docs/NEXT_APPROVER.md). */}
-        {approvalNext && <NextApprover next={approvalNext} />}
-        {a.kind === "wait" && !a.who && !approvalNext && <p className="text-[13px] text-muted">Nothing to press yet.</p>}
-      </div>
-    </Card>
-  );
+    return {
+      next: `This order is approved but no batch is planned yet. ${v.canPlanBatch ? "You can plan it." : v.planner ? `Ask ${v.planner.name} to plan it.` : "Ask your supervisor to plan it."}`,
+      // Re-audit N2 (ADR-105): planned here, never on the old order view. The batch uses the versions fixed at approval.
+      primary: v.canPlanBatch ? <PlanBatchButton workOrderId={v.detail.workOrder.id} idempotencyKey={planKey} /> : undefined,
+      waitingFor: v.canPlanBatch ? undefined : <WhoCanHelp permission="production.batch.create" siteId={v.detail.workOrder.siteId} hideEmails lead="Who can plan it: " />,
+    };
+  const wait =
+    a.kind === "wait" || approvalNext ? (
+      <>
+        {a.kind === "wait" && <span className="block font-medium text-fg">{a.title}</span>}
+        {a.kind === "wait" && a.who && <WhoCanHelp permission={a.who.permission} siteId={a.who.siteId} hideEmails />}
+        {approvalNext && <NextApprover next={approvalNext} inline className="block" />}
+      </>
+    ) : undefined;
+  if (v.notReady)
+    // ADR-116: approval would refuse; say why and who acts, instead of a button that fails.
+    return {
+      next: (
+        <span role="status" className="block text-[var(--warn-fg)]" data-testid="order-not-ready">
+          {v.notReady}
+        </span>
+      ),
+      waitingFor: approvalNext ? <NextApprover next={approvalNext} inline /> : undefined,
+    };
+  return {
+    next: a.hint || (a.kind === "wait" ? a.title : "Nothing to press yet."),
+    primary: a.kind === "approve" || a.kind === "link" ? <ActionButton a={a} size="md" approve={<ApproveButton workOrderId={v.detail.workOrder.id} />} /> : undefined,
+    waitingFor: wait ?? (a.kind === "wait" ? "Nothing to press yet." : undefined),
+  };
 }
 
 /** Multi-batch orders: one row per batch with its own status and button (UX review S2). */
@@ -238,6 +235,8 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
           ) : null,
         ]}
         actions={<Help screen="production.production_order" />}
+        steps={v.status === "cancelled" || v.status === "failed" || !v.progress.steps ? [] : v.progress.steps.map((x) => ({ label: x.label, state: x.state === "todo" ? "upcoming" : (x.state as "done" | "current") }))}
+        {...nextSlots(v, planKey, approvalNext)}
       />
       <PageIntro>One production order: what to make, its batches, and the one thing to do next.</PageIntro>
 
@@ -259,15 +258,20 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
           <Banner tone="rej" title="Failed">Every batch of this order failed the quality check. Nothing from it can be sold.</Banner>
         </div>
       ) : (
-        <Card className="mb-4">
-          <ProgressStrip steps={v.progress.steps} note={v.statusView.stepNote} />
-          {v.statusView.batchesTotal > 1 && <p className="mt-2 text-[13px] text-muted">Batches: {batchesWords(v)}</p>}
-        </Card>
+        (v.statusView.stepNote || v.statusView.batchesTotal > 1) && (
+          // The progress strip is in the header (ADR-123); its note and the batch count stay as one small line.
+          <p className="-mt-2 mb-4 flex flex-wrap items-center gap-x-1.5 text-meta text-fg-2" data-testid="order-step-note">
+            {v.statusView.stepNote && (
+              <span className="inline-flex items-center gap-1.5">
+                {/until|time over/.test(v.statusView.stepNote) && <Hourglass size={14} aria-hidden />}
+                {v.statusView.stepNote}
+              </span>
+            )}
+            {v.statusView.stepNote && v.statusView.batchesTotal > 1 && <span aria-hidden>·</span>}
+            {v.statusView.batchesTotal > 1 && <span className="text-muted">Batches: {batchesWords(v)}</span>}
+          </p>
+        )
       )}
-
-      <div className="mb-4 lg:hidden">
-        <NextActionCard v={v} planKey={planKey} approvalNext={approvalNext} />
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
@@ -408,9 +412,6 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         </div>
 
         <aside className="space-y-4">
-          <div className="hidden lg:block">
-            <NextActionCard v={v} planKey={planKey} approvalNext={approvalNext} />
-          </div>
           {v.canAssign && (
             <div className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
               <AssignForm workOrderId={wo.id} current={v.assignee?.id ?? null} people={people} />

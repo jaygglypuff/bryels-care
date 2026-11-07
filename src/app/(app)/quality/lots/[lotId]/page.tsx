@@ -6,7 +6,7 @@ import { getLotDisposition } from "@/modules/quality/dispositions";
 import { issueDownloadUrl, listLotDocuments } from "@/modules/inventory/receiving-documents";
 import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
-import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -23,13 +23,16 @@ import { waitingFor } from "../../../waiting-for";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "QA check of a lot" };
 
-const BANNER: Record<string, { title: string; body: string }> = {
-  quarantine: { title: "Waiting for QA check", body: "Nobody can use, set aside or ship this lot until QA says it is OK." },
-  on_hold: { title: "Stopped by QA", body: "Nobody can use this lot until QA says it is OK again, or not OK." },
-  released: { title: "OK to use", body: "This lot may be used and shipped." },
-  rejected: { title: "Not OK – don't use", body: "This lot is blocked; its stock is in the area for things we cannot use." },
-  expired: { title: "Expired – don't use", body: "This lot is past its use-by date and cannot be made OK. Say not OK to move it to the area for things we cannot use." },
-  recalled: { title: "Recalled – don't use", body: "This lot is blocked by a product recall." },
+/**
+ * Harmony leftovers (ADR-123): the status is the chip in the header (QaStatusChip); below it only what the status
+ * means for people, and only when it stops them. "OK to use" needs no message (the chip and the next step say it).
+ */
+const NOTICE: Record<string, string> = {
+  quarantine: "Nobody can use, set aside or ship this lot until QA says it is OK.",
+  on_hold: "Nobody can use this lot until QA says it is OK again, or not OK.",
+  rejected: "This lot is blocked; its stock is in the area for things we cannot use.",
+  expired: "This lot is past its use-by date and cannot be made OK. Say not OK to move it to the area for things we cannot use.",
+  recalled: "This lot is blocked by a product recall.",
 };
 
 const HINT: Record<string, string> = {
@@ -65,7 +68,7 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
       href: ctx.can("documents.file_attachment.view") ? ((await issueDownloadUrl(ctx, d.id).catch(() => null))?.url ?? null) : null,
     })),
   );
-  const banner = BANNER[lot.qualityStatus] ?? { title: lot.qualityStatus, body: "" };
+  const notice = NOTICE[lot.qualityStatus] ?? null;
   const days = daysUntil(lot.expiresOn);
   // Only the choices that fit the lot's status are shown ("OK to use again" only for a lot stopped by QA).
   const fits = (d: string) => (d === "release_from_hold" ? lot.qualityStatus === "on_hold" : d === "release" ? lot.qualityStatus !== "on_hold" : true);
@@ -83,6 +86,8 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         typeLabel={lot.itemKind === "material" ? "Delivery (material lot)" : "Finished product lot"}
         reference={lot.lotNumber}
         title={v.itemName}
+        chip={<QaStatusChip status={lot.qualityStatus} />}
+        meta={[["Use by", fmtDate(lot.expiresOn)], v.pendingBatch ? ["Made in batch", v.pendingBatch.number] : null]}
         actions={
           <>
             <Help screen="quality.release" />
@@ -147,22 +152,15 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         />
       ) : null}
 
-      <div className="flex flex-col gap-5">
-        <Banner tone={statusTone(lot.qualityStatus)} title={banner.title}>
-          {banner.body}
-        </Banner>
+      <div className="flex flex-col gap-4">
+        {notice && <Banner tone={statusTone(lot.qualityStatus)} title={notice} />}
         {v.expired && lot.qualityStatus !== "expired" && (
           <Banner tone="exp" title={`Expiry date passed (${fmtDate(lot.expiresOn)})`}>
             It cannot be made OK to use. Say not OK, or stop it.
           </Banner>
         )}
-        {v.pendingBatch && (
-          <Banner tone="appr" title={`Made in batch ${v.pendingBatch.number}`}>
-            A finished product lot gets its OK or not OK together with its batch.
-          </Banner>
-        )}
 
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardTitle>About this lot</CardTitle>
             <Dl
@@ -294,7 +292,15 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
                   </Banner>
                 </div>
               )}
-              <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+              {lot.qualityStatus === "released" ? (
+                // ADR-123: an OK lot's next step is elsewhere (put away, or nothing); stopping it is rare, so it is folded
+                // and the page keeps one green button. Same form, same choices.
+                <MoreDetails title="Stop it or say not OK">
+                  <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+                </MoreDetails>
+              ) : (
+                <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+              )}
               <QaRules rules={v.rules} />
             </>
           ) : (

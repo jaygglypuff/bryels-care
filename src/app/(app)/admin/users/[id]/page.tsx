@@ -5,7 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { type SessionView, type UserDetail, getUser, grantableRoles, listActiveSessions, warehousesForSites } from "@/modules/identity";
-import { Card, CardTitle, Dl, EmptyState, Input, PageHeader, Select } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Input, Select } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { plainRole, plainRoleName } from "@/ui/role-names";
@@ -44,12 +45,14 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <>
-      <p className="mb-2 text-[13px]">
-        <Link href="/admin/users" className="text-primary-text hover:underline">
-          ← People
-        </Link>
-      </p>
-      <PageHeader title={u.displayName} subtitle={u.email} actions={<UserStatusChip status={u.status} />} />
+      {/* Harmony pass (ADR-119/123): a person is a setup record: the name is the H1, the status chip beside it, the e-mail in the meta line. */}
+      <RecordHeader
+        back={{ href: "/admin/users", label: "People" }}
+        typeLabel="Person"
+        title={u.displayName}
+        chip={<UserStatusChip status={u.status} />}
+        meta={[u.email, ["Last sign-in", u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : "never"]]}
+      />
       <PageIntro>This screen is for the owner and the IT person: what this person may do (their job), where, and their account. Changes are kept in the history of changes.</PageIntro>
       {!self && u.status === "invited" && (
         <NextStep text={`${u.displayName} has not signed in yet.`} waitingFor="They must open the link in their email (or the link you gave them) and choose a password." />

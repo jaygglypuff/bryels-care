@@ -153,7 +153,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
 
       <Card>
         <CardTitle>How far are we?</CardTitle>
-        <p className="font-display text-title tabular">
+        <p className="text-value tabular">
           {c.progress.linesCounted} of {c.progress.lines} counted
         </p>
         <div className="mt-2 h-4 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Count progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} data-testid="count-progress">

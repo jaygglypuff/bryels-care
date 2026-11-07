@@ -51,6 +51,20 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
     ctx.can("inventory.movement.post") && !nothing ? { href: firstUsable && !r.scope.all ? `/inventory/move?lot=${firstUsable.lotId}` : "/inventory/move", label: "Move stock", icon: <ScanLine size={18} aria-hidden />, main: false } : null,
   ].filter((a): a is NonNullable<typeof a> => a !== null);
 
+  // ADR-123: the one main action is the header's green button; the others are in ⋯ More (was a row of its own).
+  // Without a main action the first one leads (as before, not green).
+  const main = actions.find((a) => a.main) ?? actions[0] ?? null;
+  const rest = actions.filter((a) => a !== main);
+  const nextWords = nothing
+    ? `There is no ${it.name} ${where}.${r.minimum ? ` We should have at least ${r.minimum.text}.` : ""}`
+    : r.minimum && r.belowMinimum
+      ? `There is less than the minimum (${r.minimum.text}). ${isMat ? "Order or receive more." : "Make more."}`
+      : blockedFirst
+        ? "Nothing is ready to use right now. The lots wait for the QA check or must not be used."
+        : firstUsable
+          ? `Use lot ${firstUsable.lotNumber} first: it is ready and expires first.`
+          : `Stock ${where} is below.`;
+
   const fourth = r.minimum && r.belowMinimum
     ? <BigNumber label="Below minimum?" scope={scopeTag} value="Yes" tone="bad" hint={<>We should have at least {r.minimum.text}. Order or make more.</>} testId="item-card-minimum" />
     : <BigNumber label="Expiring soon" scope={scopeTag} value={r.totals.expiringSoon.text} tone={r.totals.expiringSoon.qty !== "0" ? "warn" : "neu"} hint={<>Expires in the next 30 days.{r.minimum ? ` Minimum ${r.minimum.text}: OK.` : ""}</>} testId="item-card-expiring" />;
@@ -63,50 +77,40 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
           typeLabel={isMat ? "Raw material" : "Finished product"}
           title={it.name}
           meta={[it.group, it.usualBrand ? `usual brand ${it.usualBrand}` : null, it.shelfLifeDays ? `keeps about ${it.shelfLifeDays} days` : null, it.storageConditions, `code ${it.code}`]}
+          actions={
+            rest.length > 0 ? (
+              <MoreMenu compact>
+                <div className="flex flex-col gap-2" data-testid="item-more-actions">
+                  {rest.map((a) => (
+                    <LinkButton key={a.label} href={a.href} variant="secondary">
+                      {a.icon} {a.label}
+                    </LinkButton>
+                  ))}
+                </div>
+              </MoreMenu>
+            ) : undefined
+          }
+          next={main ? nextWords : undefined}
+          primary={
+            main ? (
+              <LinkButton href={main.href} variant={main.main ? "cta" : "secondary"} data-testid="item-actions">
+                {main.icon} {main.label}
+              </LinkButton>
+            ) : undefined
+          }
         />
         <PageIntro>This screen is for everything about {it.name}: how much we have, from whom, where it is, and which one to use first.</PageIntro>
       </div>
 
-      {(r.scope.canAll || actions.length > 0) && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {r.scope.canAll ? (
-            <nav aria-label="Which sites" className="inline-flex rounded-full border border-line bg-surface p-1 text-[14px]">
-              <Link href={base} aria-current={!r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", !r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
-                This plant
-              </Link>
-              <Link href={`${base}?all=1`} aria-current={r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
-                All plants
-              </Link>
-            </nav>
-          ) : <span />}
-          {actions.length > 0 && (
-            <div className="flex w-full flex-wrap items-start gap-2 sm:w-auto" data-testid="item-actions">
-              {/* One main button; the rest in ⋯ More (ADR-088). Without a main action the first one leads. */}
-              {(() => {
-                const main = actions.find((a) => a.main) ?? actions[0];
-                const rest = actions.filter((a) => a !== main);
-                return (
-                  <>
-                    <LinkButton href={main.href} variant={main.main ? "cta" : "secondary"} className="flex-1 sm:flex-none">
-                      {main.icon} {main.label}
-                    </LinkButton>
-                    {rest.length > 0 && (
-                      <MoreMenu>
-                        <div className="flex flex-col gap-2">
-                          {rest.map((a) => (
-                            <LinkButton key={a.label} href={a.href} variant="secondary">
-                              {a.icon} {a.label}
-                            </LinkButton>
-                          ))}
-                        </div>
-                      </MoreMenu>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          )}
-        </div>
+      {r.scope.canAll && (
+        <nav aria-label="Which sites" className="inline-flex rounded-full border border-line bg-surface p-1 text-[14px]">
+          <Link href={base} aria-current={!r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", !r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
+            This plant
+          </Link>
+          <Link href={`${base}?all=1`} aria-current={r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
+            All plants
+          </Link>
+        </nav>
       )}
 
       {nothing ? (

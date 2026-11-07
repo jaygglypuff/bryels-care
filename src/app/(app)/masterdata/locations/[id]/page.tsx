@@ -5,7 +5,8 @@ import { LOCATION_KINDS, LOCATION_KIND_LABELS, LOCATION_TRANSITIONS, SPECIAL_ROL
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
-import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { EditDetails, FormSection } from "@/ui/form-section";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, CheckField, Grid, SelectField, TextField } from "../../_org/form";
@@ -35,8 +36,8 @@ export default async function LocationPage({ params, searchParams }: { params: P
   const parents = opts.locations.filter((x) => x.warehouseId === l.warehouseId && x.id !== l.id);
   const moves = (LOCATION_TRANSITIONS[l.status as LocationStatus] ?? []).filter((s) => (s === "inactive" || l.status === "inactive" ? canAdmin : canEdit));
   return (
-    <div className="space-y-5">
-      <RecordHeader back={{ href: `/masterdata/locations?warehouse=${l.warehouseId}`, label: "Shelves and areas (set up)" }} typeLabel={LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} title={l.name} chip={<StateChip status={l.status} />} meta={[<span key="code" className="font-mono">{l.code}</span>, l.warehouse.name]} secondary={canEdit ? <LinkButton href="#edit" variant="secondary" size="sm">Edit location</LinkButton> : undefined} />
+    <div className="space-y-4">
+      <RecordHeader back={{ href: `/masterdata/locations?warehouse=${l.warehouseId}`, label: "Shelves and areas (set up)" }} typeLabel={LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} title={l.name} chip={<StateChip status={l.status} />} meta={[<span key="code" className="font-mono">{l.code}</span>, l.warehouse.name]} />
       <PageIntro>One place where stock sits. Rename it, move it inside a bigger place, or switch it off.</PageIntro>
       {l.status === "active" ? (
         <NextStep text={l.lotsInStock > 0 ? `In use: ${l.lotsInStock} ${l.lotsInStock === 1 ? "lot is" : "lots are"} here. See what is on it.` : "In use and empty. Stock can be moved here."} action={ctx.can("inventory.lot.view") ? { label: "See this shelf", href: `/inventory/locations/${l.id}` } : undefined} />
@@ -58,27 +59,37 @@ export default async function LocationPage({ params, searchParams }: { params: P
           ]}
         />
       </Card>
-      <Card id="edit">
-        <CardTitle>Edit location</CardTitle>
-        {canEdit ? (
+      {canEdit ? (
+        // ADR-123: the shared fold and titled sections (same form, same action); the next step keeps the one green button.
+        <EditDetails title="Change this place">
           <ActionForm action={saveLocationAction} submitLabel="Save" hidden={{ _id: l.id }}>
-            <TextField name="name" label="Name of the place" defaultValue={l.name} />
-            <Grid>
-              <SelectField name="kind" label="Type of place" defaultValue={l.kind} options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Changes only while the place is empty and not a special place." />
-              <SelectField name="parentLocationId" label="Inside a bigger place? (optional)" defaultValue={l.parentLocationId} emptyLabel="No" options={parents.map((p) => ({ value: p.id, label: p.name }))} />
-            </Grid>
-            <MoreDetails>
+            <FormSection
+              title="Name and where it is"
+              moreTitle="Code, warehouse section, taking stock (you can skip this)"
+              more={
+                <>
+                  <Grid>
+                    <TextField name="code" label="Your own code (optional)" defaultValue={l.code} mono hint="Fixed once stock has been recorded here." />
+                    <SelectField name="section" label="Warehouse section" defaultValue={l.section} emptyLabel="Work it out from the type" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens. Does not change any stock rule." />
+                  </Grid>
+                  <CheckField name="isPickable" label="Stock here may be taken for orders and batches" defaultChecked={l.isPickable} />
+                </>
+              }
+            >
+              <TextField name="name" label="Name of the place" defaultValue={l.name} />
               <Grid>
-                <TextField name="code" label="Your own code (optional)" defaultValue={l.code} mono hint="Fixed once stock has been recorded here." />
-                <SelectField name="section" label="Warehouse section" defaultValue={l.section} emptyLabel="Work it out from the type" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens. Does not change any stock rule." />
+                <SelectField name="kind" label="Type of place" defaultValue={l.kind} options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Changes only while the place is empty and not a special place." />
+                <SelectField name="parentLocationId" label="Inside a bigger place? (optional)" defaultValue={l.parentLocationId} emptyLabel="No" options={parents.map((p) => ({ value: p.id, label: p.name }))} />
               </Grid>
-              <CheckField name="isPickable" label="Stock here may be taken for orders and batches" defaultChecked={l.isPickable} />
-            </MoreDetails>
+            </FormSection>
           </ActionForm>
-        ) : (
+        </EditDetails>
+      ) : (
+        <Card id="edit">
+          <CardTitle>Edit location</CardTitle>
           <ReadOnlyNote what="this location" />
-        )}
-      </Card>
+        </Card>
+      )}
       {moves.length > 0 && (
         <Card>
           <CardTitle>In use or switched off</CardTitle>

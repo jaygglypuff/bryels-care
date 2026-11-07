@@ -44,6 +44,7 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
         back={{ href: "/quality/complaints", label: "Customer complaints" }}
         typeLabel={`Complaint · ${c.categoryLabel}`}
         reference={c.complaintNumber}
+        chip={<ComplaintStatusChip status={c.status} />}
         title={`From ${c.customerName}`}
         actions={
           <>
@@ -95,7 +96,7 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
         {c.traceMatch === "mismatch" && <Banner tone="warn" title="We did not send this lot to this customer">The number on the label is not in what we sent them. Ask the customer to read it again.</Banner>}
 
         <Card>
-          <CardTitle action={<ComplaintStatusChip status={c.status} />}>What the customer reports</CardTitle>
+          <CardTitle>What the customer reports</CardTitle>
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{c.description}</p>
           <Dl
             items={[
