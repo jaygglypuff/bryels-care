@@ -29,6 +29,8 @@ fields with a name search the same box also finds by name). Rules:
 | dispense audit `lotConfirmed` (weighing lot confirmation) | `scan` | `typed` | refused |
 | put-away movement `meta.locationVia` | `scan` | `typed` | `tap` |
 | count audit `inventory.stock_count.line_counted.lotVia` | `scan` | `typed` | `tap` |
+| offline count (`/offline`, outbox payload `lotVia`, replayed into the count audit `lotVia`, ADR-125) | `scan` | `typed` | `tap` |
+| offline weighing (`/offline`, outbox payload `lotVia`, replayed into dispense audit `lotConfirmed`, ADR-125) | `scan` | `typed` | refused on the phone and on replay (`checkEntryMode`) |
 | customer return `manual_entry` | false | true | true |
 
 Migration `0039_typed_label_codes` adds the columns and allows `typed` in `ck_pick_lines_mode`. Server matching:
@@ -85,8 +87,9 @@ code**: ✓ = the number printed on the label can be typed (2026-11-08 audit; ev
 | `/warehouse/packs/[packId]` Add a box | Which lot are you boxing? | the pack's lot (check) | Text box "Scan the lot label" | tap or scan the one expected lot (V-MAT check kept on the server) | ✓ | ✓ |
 | `/warehouse/packs/[packId]` Checker | Scan each box label, or type the number printed on it | box (verification) | Scanner with typing | scan (camera + handheld) or the box number typed (recorded `typed`); no tap: reading the label is the check | ✓ | ✓ |
 | `/warehouse/repack` | Which boxes? | boxes (several) | Text area "Scan the box labels" | tap (product boxes QA said OK) · scan · words | ✓ | ✓ |
-| `/offline` Count | Which lot? | lot (or shelf) | Scanner with placeholder `BC:LOT:L-2610-00001` | tap (lots on the shelf, phone data) · scan (lot or shelf) · words (list) — works offline | ✓ | ✓ |
-| `/offline` Weigh | Which container? | lot | Scanner with placeholder `BC:LOT:…` | tap (lots OK for the ingredient, phone data) · scan · words (list) | ✓ | ✓ |
+| `/offline` Count | Which lot? | lot (or shelf) | Scanner with placeholder `BC:LOT:L-2610-00001` | tap (lots on the shelf, phone data) · scan (lot or shelf) · words (list) — works offline; how the lot was given goes with the queued count (`lotVia`, ADR-125) | ✓ | ✓ |
+| `/offline` Weigh | Which container? | lot | Scanner with placeholder `BC:LOT:…` | scan · typed lot number (list shown as a checklist, `allowTap={false}`: the lot field is the lot confirmation); `lotVia` goes with the queued weighing, the server refuses a tap on replay (ADR-125). A scanned `BC:EQP` label sets the scale | ✓ | ✓ |
+| `/offline` Weigh | Scale | equipment (scale) | Drop-down | `kind="equipment"`: tap the scales saved on the phone · scan · type the number (ADR-125) | ✓ | ✓ |
 
 ## Sales: picking, second check, dispatch, returns
 
@@ -119,7 +122,8 @@ code**: ✓ = the number printed on the label can be typed (2026-11-08 audit; ev
 | Route | Field | Identifies | How it worked | How it works now | ✓ | Type the code |
 |---|---|---|---|---|---|---|
 | `/maintenance/work-orders/[id]` | Which part? | spare part lot + place | Drop-down | tap (parts OK to use here) · scan · words (list) | ✓ | ✓ |
-| `/maintenance/*` | Which machine? | equipment | Drop-down by name | unchanged (picked by name; no code typed). Equipment labels (`BC:EQP`) are not a ScanOrPick kind yet | n/a | n/a |
+| `/maintenance/work-orders/new` (Report a problem), `/maintenance/plans/new` | Which machine? | equipment | Drop-down by name | `kind="equipment"` (ADR-125): tap (machines at your sites, status shown) · scan a `BC:EQP` label · type the machine number (`mix01` = MIX-01) · words (list); `onlyCandidates`; the service checks organisation and site again (`equipmentInScope`) | ✓ | ✓ |
+| `/maintenance/spare-parts` | Only for one machine? (optional) | equipment | Drop-down | unchanged: optional set-up filter under More details, not a floor field | n/a | n/a |
 | `/procurement/returns/[id]` | Which lot? | rejected lot + place | Drop-down | tap · scan · words (list) | ✓ | ✓ |
 
 ## Production (adopted by the production pass, one path for production work 2026-10-31)
@@ -131,12 +135,14 @@ transfer and step fields of that page no longer exist. Production fields now:
 |---|---|---|---|---|---|
 | `/production/orders/[id]/step/[n]` packaging box (no packaging lines) | `lotRef` + `locationRef` | packaging lot, shelf | `kind="lot"` candidates = released packaging lots at the site (tap · scan · words); then `kind="location"` = places of the chosen lot, `hideWhenSingle`, `onlyCandidates` | ✓ | ✓ |
 | `/production/orders/[id]/step/[n]` packaging box (packaging lines) | — | — | the taken lot is shown; nothing to identify | ✓ | n/a |
+| `/production/orders/[id]/weigh` (More details) | scale (`equipmentRef`) | equipment | `kind="equipment"`, `submit="code"`, candidates = the site's scales (the ones that cannot be used greyed with the reason), first usable preselected (ADR-125) | ✓ | ✓ |
 | `/production/orders/[id]/weigh` | `lotConfirm` + `lotConfirmVia` | lot | `kind="lot"`, `mode="emit"`, `allowTap={false}`, `onlyCandidates` (a tap is not a check, A-SCAN-11; ADR-080 §3); "Type the lot number" (all of it or the last 4) is a normal option, recorded `typed` (replaces "Label damaged? Type the last 4") | ✓ | ✓ |
 | `/production/orders/[id]/weigh/more` ("Other ways to weigh", exec-forms `WeighForm`) | `lotRef` + `locationRef` | lot, shelf | `kind="lot"` candidates = usable lots (FEFO) with `places`; `kind="location"` `hideWhenSingle` | ✓ | ✓ |
+| `/production/orders/[id]/weigh/more` | 2. Scale (`equipmentRef`) | equipment | `kind="equipment"`, `submit="code"`, blocked scales greyed with the reason (ADR-125) | ✓ | ✓ |
 | `/production/orders/[id]/materials` (setting scan_lots) | `lotCode` + `lotVia` | lot | `kind="lot"`, `allowTap={false}`, `onlyCandidates`, candidates = the lot to take; typed lot number recorded `typed` | ✓ | ✓ |
 | `/production/[batchId]/finish` | `locationRef` | hold area | `kind="location"`, candidates = hold areas, `onlyCandidates` | ✓ | ✓ |
 | `/production/staging/[batchId]` ("Lots and sheets") QA substitution | `substituteLotCode` | lot | `kind="lot"` scan · words | ✓ (scan-to-stage removed: Materials list) | ✓ |
-| step card equipment | `equipmentRef` | equipment | big radio cards (equipment kind not in ScanOrPick yet) | open | open |
+| `/production/orders/[id]/step/[n]` equipment (mixing, moulding … and line clearance steps that name equipment) | `equipmentRef` | equipment | `kind="equipment"`, `submit="code"`, `onlyCandidates`, candidates = the equipment of the step's kind at the site; the ones that cannot be used are greyed with the reason (ADR-125). Server: `selectEquipment` → `resolveEquipment` (id, `BC:EQP:` label or the number, matched loosely with `findByCode`, organisation and the caller's sites; then the batch's site and the step's kind) | ✓ | ✓ |
 | `/labels/**`, `/print/**` | reprint reason, copies | — | no lot/box identified by typing (labels pass to confirm) | — | n/a |
 
 ## Component API (for adopters)
@@ -145,7 +151,7 @@ transfer and step fields of that page no longer exist. Production fields now:
 import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 
 <ScanOrPick
-  kind="lot" | "container" | "location" | "batch" | "item"
+  kind="lot" | "container" | "location" | "batch" | "item" | "equipment"
   label="Which lot?"                 // the question
   name="lotRef"                      // hidden input; omit for client-only use
   candidates={[{ value: lot.id, title: "Coconut oil", detail: "lot L-2610-00001 · 25 kg on A-01",
@@ -166,6 +172,16 @@ Server: `findPickCandidates(ctx, kind, text)` and `resolvePickRef(ctx, kind, raw
 (through `src/app/(app)/scan-pick-actions.ts`). Pure rules: `src/lib/scan/pick.ts` (`classifyPickInput`,
 `matchCandidate`, `filterCandidates`, `isScannerBurst`, messages). Lot candidates carry `places` (the shelves that
 hold the lot at the current site) and `uom`, so a "which shelf?" field can follow without another call.
+
+### Equipment (machines and scales), ADR-125
+
+`kind="equipment"` accepts a `BC:EQP:<code>` label (the grammar has had `EQP` since ADR-017), the machine number typed
+(any case, with or without dashes) and a tap. Server: `findPickCandidates` / `resolvePickRef` with kind `equipment`
+look in the caller's organisation at the current site only, for people holding `masterdata.equipment.view`,
+`production.equipment_use.create`, `production.dispense_record.create` or a maintenance work order or plan permission.
+**Not built:** the app does not print equipment labels yet (no `equipment` dataset in `label-templates.ts`); until
+then the number is typed from the machine's own plate or tapped. Equipment label printing is a follow-up; its content
+is not invented here.
 
 ## Re-audit B (2026-11-01)
 
