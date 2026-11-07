@@ -12,6 +12,7 @@ import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { QaStatusChip, fmtLotQty } from "../_ui";
 import { isAre, plural } from "@/lib/plural";
+import { plainDate } from "@/lib/plain-date";
 
 export const dynamic = "force-dynamic";
 
@@ -198,15 +199,49 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
               </Card>
             </div>
 
+            {/* ADR-124: orders the lot is set aside or taken off the shelf for, apart from the customers who got it. */}
+            {t.pendingOrders.length > 0 && (
+              <Card>
+                <CardTitle>Waiting to be sent to a customer</CardTitle>
+                <ul className="flex flex-col divide-y divide-line text-[14px]" data-testid="trace-pending-orders">
+                  {t.pendingOrders.map((p) => (
+                    <li key={`${p.stage}:${p.orderId}:${p.lotId}:${p.shipmentId ?? ""}`} className="flex flex-col gap-0.5 py-2">
+                      <span className="font-medium">
+                        {p.stage === "set_aside" ? "Set aside" : "Taken off the shelf"} for order{" "}
+                        <Link className="text-primary-text hover:underline" href={p.shipmentId ? `/sales/shipments/${p.shipmentId}` : `/sales/${p.orderId}`}>
+                          {p.orderNumber}
+                        </Link>{" "}
+                        ({p.customerName})
+                      </span>
+                      <span className="text-fg-2">
+                        {fmtLotQty(p.qty, p.uom)} of {p.productName}
+                        {p.since ? ` · since ${plainDate(p.since)}` : ""} · not sent yet
+                      </span>
+                      <span className="text-[12px] text-muted">
+                        lot{" "}
+                        <Link className="font-mono text-primary-text hover:underline" href={`/inventory/${p.lotId}`}>
+                          {p.lotNumber}
+                        </Link>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
             <Card>
               <CardTitle>Customers who got it</CardTitle>
               {t.affectedCustomers.length === 0 ? (
-                <EmptyState title="No customer has received this">Nothing of this lot, or made from it, has been sent to a customer.</EmptyState>
+                <EmptyState title="No customer has received this">
+                  {t.pendingOrders.length > 0 ? "Nothing of this lot, or made from it, has been sent to a customer yet. The orders it waits for are listed above." : "Nothing of this lot, or made from it, has been sent to a customer."}
+                </EmptyState>
               ) : (
                 <ul className="flex flex-col divide-y divide-line text-[14px]">
                   {t.affectedCustomers.map((c) => (
                     <li key={`${c.shipmentId}:${c.lotId}`} className="flex flex-col gap-0.5 py-2">
-                      <span className="font-medium">{c.customerName}</span>
+                      <span className="font-medium">
+                        Sent to {c.customerName} on {plainDate(c.dispatchedAt)}
+                      </span>
                       <span className="text-fg-2">
                         {fmtLotQty(c.qty, c.uom)} of {c.productName} · sent {fmtDateTime(c.dispatchedAt)}
                       </span>

@@ -342,7 +342,10 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
     order,
     customer,
     lines: lineViews,
-    allocations: allocations.map((a) => ({ ...a, sku: lineViews.find((l) => l.id === a.lineId)?.sku ?? "" })),
+    allocations: allocations.map((a) => {
+      const line = lineViews.find((l) => l.id === a.lineId);
+      return { ...a, sku: line?.sku ?? "", productName: line?.productName ?? "" };
+    }),
     shipments: shipmentRows,
     transitions: transitions.map((t) => ({ ...t.t, actorName: t.actorName })),
     shipTo: addresses.find((a) => a.id === o.order.shipToAddressId) ?? null,
@@ -356,7 +359,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
     order: typeof order & Partial<Pick<OrderRow, "subtotalAmount" | "taxAmount" | "totalAmount">>;
     customer: typeof customer & Partial<Pick<typeof o.customer, "creditLimitAmount" | "paymentTermsDays" | "taxIdentifier">>;
     lines: (typeof lineViews[number] & { unitPrice?: string; listUnitPrice?: string | null; discountPct?: string; priceSource?: string; value?: string })[];
-    allocations: (typeof allocations[number] & { sku: string })[];
+    allocations: (typeof allocations[number] & { sku: string; productName: string })[];
     shipments: typeof shipmentRows;
     transitions: (typeof transitions[number]["t"] & { actorName: string })[];
     shipTo: (typeof addresses)[number] | null;

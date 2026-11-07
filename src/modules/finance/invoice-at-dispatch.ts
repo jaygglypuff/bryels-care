@@ -120,12 +120,16 @@ export async function cancelDispatchDraftOnReversal(tx: Tx, ctx: AuthContext, sh
  * of the caller's sites (where they hold `finance.invoice.view`) that have no issued invoice yet — a draft,
  * submitted or approved invoice still counts as not invoiced, a voided one too. `withoutDraft` = how many of
  * them have no live invoice record at all (the draft at dispatch failed or was switched off): finance must
- * create those. `oldestDispatchedAt` = the dispatch time of the oldest one.
+ * create those. `oldestDispatchedAt` = the dispatch time of the oldest one. ADR-124: by invoice stage, the same stages
+ * as the delivery's next step (`billingStepOfShipment`) — `toMake` (no live invoice, or a draft), `waitingApproval`
+ * (sent for approval) and `toSave` (approved, not saved to the books); they add up to `count`.
  */
-export async function notInvoicedShipments(ctx: AuthContext): Promise<{ count: number; withoutDraft: number; oldestDispatchedAt: Date | null }> {
+export type NotInvoiced = { count: number; withoutDraft: number; toMake: number; waitingApproval: number; toSave: number; oldestDispatchedAt: Date | null };
+
+export async function notInvoicedShipments(ctx: AuthContext): Promise<NotInvoiced> {
   ctx.require("finance.invoice.view");
   const siteIds = ctx.allowedSiteIds.filter((s) => ctx.canAt("finance.invoice.view", s));
-  if (!siteIds.length) return { count: 0, withoutDraft: 0, oldestDispatchedAt: null };
+  if (!siteIds.length) return { count: 0, withoutDraft: 0, toMake: 0, waitingApproval: 0, toSave: 0, oldestDispatchedAt: null };
   const posted = sql.join(
     POSTED_INVOICE_STATUSES.map((s) => sql`${s}`),
     sql`, `,
@@ -134,6 +138,8 @@ export async function notInvoicedShipments(ctx: AuthContext): Promise<{ count: n
     .select({
       count: sql<number>`count(*)::int`,
       withoutDraft: sql<number>`count(*) filter (where not exists (select 1 from ${invoices} i where i.shipment_id = "shipments"."id" and i.status not in ('cancelled', 'voided')))::int`,
+      waitingApproval: sql<number>`count(*) filter (where exists (select 1 from ${invoices} i where i.shipment_id = "shipments"."id" and i.status = 'submitted'))::int`,
+      toSave: sql<number>`count(*) filter (where exists (select 1 from ${invoices} i where i.shipment_id = "shipments"."id" and i.status = 'approved'))::int`,
       oldest: sql<string | null>`min(${shipments.dispatchedAt})`,
     })
     .from(shipments)
@@ -145,7 +151,10 @@ export async function notInvoicedShipments(ctx: AuthContext): Promise<{ count: n
         sql`not exists (select 1 from ${invoices} i where i.shipment_id = "shipments"."id" and i.status in (${posted}))`,
       ),
     );
-  return { count: Number(r?.count ?? 0), withoutDraft: Number(r?.withoutDraft ?? 0), oldestDispatchedAt: r?.oldest ? new Date(r.oldest) : null };
+  const count = Number(r?.count ?? 0);
+  const waitingApproval = Number(r?.waitingApproval ?? 0);
+  const toSave = Number(r?.toSave ?? 0);
+  return { count, withoutDraft: Number(r?.withoutDraft ?? 0), toMake: Math.max(0, count - waitingApproval - toSave), waitingApproval, toSave, oldestDispatchedAt: r?.oldest ? new Date(r.oldest) : null };
 }
 
 /**

@@ -31,7 +31,7 @@ const peso = (v: string) => `₱${new Decimal(v).toDecimalPlaces(0).toNumber().t
  * deliveries and orders, late batches, quality checks, and the three stock alerts. The stock lines use
  * the SAME counts as the "Stock alerts" card (`listStockAlerts`), so the two can never disagree.
  */
-export function attentionItems(oc: OperationsCenter, approvals: number, stock: StockAlertCounts | null, stockHref: string, notInvoiced: { count: number; oldestDays: number | null } | null = null): AttentionItem[] {
+export function attentionItems(oc: OperationsCenter, approvals: number, stock: StockAlertCounts | null, stockHref: string, notInvoiced: { count: number; toMake?: number; waitingApproval?: number; toSave?: number; oldestDays: number | null } | null = null): AttentionItem[] {
   const st = (k: string) => oc.stages.find((s) => s.key === k);
   const items: AttentionItem[] = [];
   if (approvals > 0) items.push({ key: "approve", text: `${plural(approvals, "thing waits", "things wait")} for your decision`, href: "/approvals", urgent: true });
@@ -47,9 +47,15 @@ export function attentionItems(oc: OperationsCenter, approvals: number, stock: S
   if (qc && qc.count > 0) items.push({ key: "qc", text: `${plural(qc.count, "finished batch waits", "finished batches wait")} for the QA check`, href: qc.href });
   if (stock?.onHold) items.push({ key: "hold", text: `${plural(stock.onHold, "lot is", "lots are")} stopped by QA`, href: `${stockHref}#on-hold` });
   if (stock?.expiring) items.push({ key: "expiring", text: `${plural(stock.expiring, "lot expires", "lots expire")} within 30 days`, href: `${stockHref}#expiring` });
-  // ADR-086: shipments sent but not billed (oldest first in the invoice list).
-  if (notInvoiced && notInvoiced.count > 0)
-    items.push({ key: "invoice", text: `${plural(notInvoiced.count, "shipment is", "shipments are")} not billed yet${notInvoiced.oldestDays && notInvoiced.oldestDays > 1 ? ` (oldest ${notInvoiced.oldestDays} days ago)` : ""}`, href: "/finance/invoices", urgent: (notInvoiced.oldestDays ?? 0) > 7 });
+  // ADR-086: shipments sent but not billed (oldest first in the invoice list). ADR-124: by invoice stage, the same
+  // stages as the delivery's next step, so an invoice waiting for approval is never "Make the invoices".
+  if (notInvoiced) {
+    const toMake = notInvoiced.toMake ?? notInvoiced.count;
+    if (toMake > 0)
+      items.push({ key: "invoice", text: `${plural(toMake, "delivery is", "deliveries are")} not billed yet${notInvoiced.oldestDays && notInvoiced.oldestDays > 1 ? ` (oldest ${notInvoiced.oldestDays} days ago)` : ""}`, href: "/finance/invoices", urgent: (notInvoiced.oldestDays ?? 0) > 7 });
+    if (notInvoiced.waitingApproval) items.push({ key: "invoice_wait", text: `${plural(notInvoiced.waitingApproval, "invoice waits", "invoices wait")} for approval`, href: "/finance/invoices?status=submitted" });
+    if (notInvoiced.toSave) items.push({ key: "invoice_save", text: `${plural(notInvoiced.toSave, "approved invoice waits", "approved invoices wait")} to be saved to the books`, href: "/finance/invoices?status=approved" });
+  }
   return items;
 }
 

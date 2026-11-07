@@ -148,8 +148,13 @@ describe("notInvoicedShipments (owner Home)", () => {
     expect((await notInvoicedShipments(rvsOnly)).count).toBe(rvsBefore.count);
     // Issued → no longer counted.
     const [inv] = await invoicesOf(s.shipment.id);
+    // ADR-124: the Home splits the not-billed deliveries by invoice stage (to make, waiting for approval, to save).
+    expect(mid.toMake).toBe(before.toMake + 1);
     await submitInvoice(w.sales, inv.id);
+    const sent = await notInvoicedShipments(w.finance);
+    expect(sent).toMatchObject({ count: mid.count, toMake: before.toMake, waitingApproval: before.waitingApproval + 1, toSave: before.toSave });
     await approveInvoice(w.finance, inv.id);
+    expect(await notInvoicedShipments(w.finance)).toMatchObject({ count: mid.count, waitingApproval: before.waitingApproval, toSave: before.toSave + 1 });
     await issueInvoice(w.finance2, inv.id, { password: PW });
     expect((await notInvoicedShipments(w.finance)).count).toBe(before.count);
   });

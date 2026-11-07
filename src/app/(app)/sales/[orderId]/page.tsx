@@ -24,6 +24,9 @@ import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, Submi
 import { LateChip, MaskedNote, Money, salesWord } from "../orders/sales-ui";
 import { orderHistory } from "../orders/order-history";
 import { DoNext, whoDoes } from "../next-step";
+import { billingStepOfOrder } from "@/modules/finance";
+import { billingStepWords } from "@/lib/billing-step-words";
+import { LineName } from "@/ui/line-name";
 import { Help } from "@/ui/help/help";
 import { DeleteDraftButton } from "../../delete-draft-button";
 
@@ -136,13 +139,12 @@ export default async function OrderDetailPage({ params, searchParams }: { params
       ) : (
         <DoNext text="The box is checked." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.shipment.post", order.siteId, "the warehouse")} to send it out.`} />
       );
-    if (status === "shipped" || status === "partially_shipped")
-      return ctx.can("finance.invoice.create") ? (
-        <DoNext text="Next: send the invoice." action={{ label: "Send the invoice", href: "/finance/invoices" }} />
-      ) : (
-        <DoNext text="Sent out to the customer." waitingFor={`Waiting for ${await whoDoes(ctx, "finance.invoice.create", order.siteId, "finance")} to send the invoice.`} />
-      );
-    if (status === "invoiced") return <DoNext text="Billed. Nothing more to do on this order until the customer pays." />;
+    // ADR-124: once sent out, the order's next step follows the invoice of the delivery furthest behind.
+    if (status === "shipped" || status === "partially_shipped" || status === "invoiced") {
+      const fallback = { stage: status === "invoiced" ? ("billed" as const) : ("not_billed" as const), invoice: null, next: null };
+      const b = billingStepWords((await billingStepOfOrder(ctx, order.id).catch(() => null)) ?? fallback, "Sent out to the customer.");
+      return <DoNext text={b.text} waitingFor={b.waitingFor} action={b.action} />;
+    }
     if (status === "closed") return <DoNext text="Done. Nothing more to do." />;
     if (status === "cancelled") return <DoNext text="Cancelled. Nothing more to do; the reason is in the history below." />;
     return null;
@@ -354,8 +356,8 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                           {left !== null ? ` (${left} days left)` : ""}{" "}
                           {status !== "shipped" && a.qualityStatus !== "released" && <StatusChip status={a.qualityStatus} />}
                         </p>
-                        <p className="font-mono text-[12px] text-muted">
-                          {a.sku} · lot {a.lotNumber}
+                        <p className="text-[13px] text-fg-2">
+                          <LineName name={a.productName} code={a.sku} /> · lot <span className="font-mono text-[12px]">{a.lotNumber}</span>
                         </p>
                       </div>
                       <span className="whitespace-nowrap text-[16px] font-semibold tabular">{fmtQty(a.qtyUnits, "pcs", 0)}</span>

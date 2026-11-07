@@ -5,6 +5,7 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtMoney, fmtQty } from "@/lib/qty";
 import { getQuote } from "@/modules/sales";
 import { EmptyState } from "@/ui/core";
+import { LineName } from "@/ui/line-name";
 import { PrintButton } from "../../delivery-receipt/[shipmentId]/print-button";
 
 export const dynamic = "force-dynamic";
@@ -83,7 +84,7 @@ export default async function QuotationPrint({ params }: { params: Promise<{ id:
               <tr key={l.id} className="border-b border-[#ccc]">
                 <td className="py-1.5 pr-2">{l.lineNo}</td>
                 <td className="py-1.5 pr-2">
-                  {l.sku} · {l.productName}
+                  <LineName name={l.productName} code={l.sku} print />
                 </td>
                 <td className="py-1.5 pr-2 text-right">{fmtQty(l.qtyUnits, "pcs", 0)}</td>
                 <td className="py-1.5 pr-2 text-right">{fmtMoney(l.unitAmount)}</td>

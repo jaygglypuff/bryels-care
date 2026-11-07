@@ -14,6 +14,7 @@ import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
+import { LineName } from "@/ui/line-name";
 import { ApprovalCard, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
 
 export const metadata = { title: "Supplier bill" };
@@ -162,7 +163,7 @@ export default async function BillPage({ params, searchParams }: { params: Promi
                 <li key={l.id} className="flex flex-col gap-1 px-3 py-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <span className="min-w-0">
-                      <span className="block font-medium">{l.description}</span>
+                      <LineName description={l.description} className="block font-medium" />
                       <span className="text-[13px] text-fg-2">
                         {fmtQty(l.qty, l.uom ?? "", 2)} × <Money value={l.unitAmount} />
                         {l.taxCode ? ` · tax ${Number(l.taxRatePct)} %` : ""}
