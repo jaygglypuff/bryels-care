@@ -36,6 +36,9 @@ export const ATTENTION_ACT: Record<string, readonly string[]> = {
   hold: ["quality.disposition.approve"],
   expiring: ["quality.disposition.approve", "inventory.movement.post"],
   invoice: ["finance.invoice.create"],
+  // ADR-124: "invoice_wait" (waiting for approval) is never the viewer's step here: their own approvals are the
+  // "approve" line, so the key stays out of this table on purpose.
+  invoice_save: ["finance.invoice.post"],
   so_confirm: ["sales.sales_order.submit"],
   so_short: ["sales.sales_order.create"],
   so_set_aside: ["inventory.allocation.create"],

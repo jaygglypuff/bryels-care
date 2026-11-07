@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
+import { useClientKey } from "@/ui/use-client-key";
 import { recordCleaningAction } from "./flow-actions";
 
 export type BlockedEquipment = { id: string; code: string; name: string; usable: boolean; why: string[]; canRecordCleaning: boolean; fixHelp: string[] };
@@ -35,13 +35,13 @@ export function EquipmentWhy({ items, title }: { items: BlockedEquipment[]; titl
 }
 
 function RecordCleaning({ id, code }: { id: string; code: string }) {
-  const [key] = useState(() => crypto.randomUUID());
+  const key = useClientKey(); // after hydration (ADR-125): no random value in the server HTML
   const [state, action] = useInPlaceAction(recordCleaningAction);
   return (
     <form action={action} className="mt-2 flex flex-col gap-1">
       <input type="hidden" name="equipmentId" value={id} />
       <input type="hidden" name="code" value={code} />
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <SubmitButton variant="secondary" size="lg" pendingText="Saving…">
         {`Record cleaning of ${code}`}
       </SubmitButton>

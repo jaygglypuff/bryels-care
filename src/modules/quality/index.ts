@@ -4,7 +4,7 @@ export type { DecideLotInput, DecideBatchInput } from "./dispositions";
 export { recordTestResult } from "./tests";
 export type { RecordTestResultInput } from "./tests";
 export { traceGenealogy, genealogyExport, flattenTrace } from "./genealogy";
-export type { TraceNode, TraceResult, AffectedCustomer } from "./genealogy";
+export type { TraceNode, TraceResult, AffectedCustomer, PendingOrder } from "./genealogy";
 export * from "./rules";
 // Wave 2 W2C (US-3-14, US-3-15, US-3-21, US-2-23, US-2-24)
 export {

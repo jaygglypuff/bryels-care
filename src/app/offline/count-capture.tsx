@@ -4,7 +4,7 @@ import { syncAgent } from "@/lib/offline/agent";
 import type { OutboxEntry } from "@/lib/offline/store";
 import { parseScan } from "@/lib/scan/payload";
 import { Button, Card, CardTitle, EmptyState, Field, Input, Select, Textarea } from "@/ui/core";
-import { ScanOrPick } from "@/ui/scan-or-pick";
+import { ScanOrPick, type PickVia } from "@/ui/scan-or-pick";
 import { Chip, StatusChip } from "@/ui/status";
 import type { Ref } from "./workspace";
 
@@ -20,6 +20,8 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
   const [countId, setCountId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [lotId, setLotId] = useState<string | null>(null);
+  /** How the lot was given (scan, typed, tap): sent with the command and kept in the count audit `lotVia` (ADR-125). */
+  const [lotVia, setLotVia] = useState<PickVia | null>(null);
   const [unlabelled, setUnlabelled] = useState(false);
   const [description, setDescription] = useState("");
   const [qty, setQty] = useState("");
@@ -34,7 +36,7 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
   const lot = data.lots.find((l) => l.id === lotId) ?? null;
   const already = queue.filter((e) => e.type === "inventory.stock_count.record" && e.status !== "synced" && e.payload.countId === count?.id && e.payload.locationId === location?.id && e.payload.lotId === lot?.id && lot);
 
-  function onScan(raw: string) {
+  function onScan(raw: string, via: PickVia) {
     setMsg(null);
     const p = parseScan(raw);
     if (p.kind === "invalid") return setMsg({ ok: false, text: "That is not a label of ours. Scan the lot or shelf label, or tap the lot in the list." });
@@ -48,6 +50,7 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
     if (!found) return setMsg({ ok: false, text: `Lot ${lotNo} is not in this device's data for this site. Count it as unlabelled, or refresh offline data when connected.` });
     setUnlabelled(false);
     setLotId(found.id);
+    setLotVia(via);
   }
 
   async function save() {
@@ -66,11 +69,12 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
       await syncAgent().enqueue({
         type: "inventory.stock_count.record",
         siteId,
-        payload: { countId: count!.id, locationId: location!.id, lotId: unlabelled ? null : lot!.id, unlabelledDescription: unlabelled ? description.trim() : null, qty: qty.trim(), note: note.trim() || null },
+        payload: { countId: count!.id, locationId: location!.id, lotId: unlabelled ? null : lot!.id, unlabelledDescription: unlabelled ? description.trim() : null, qty: qty.trim(), note: note.trim() || null, lotVia: unlabelled ? null : lotVia },
         summary: `Count ${count!.countNumber} · ${location!.code} · ${unlabelled ? `unlabelled: ${description.trim()}` : lot!.lotNumber} · ${qty.trim()} ${lot?.baseUom ?? ""}`.trim(),
       });
       setMsg({ ok: true, text: navigator.onLine ? "Saved. Sending now…" : "Saved on this device. It will sync when you are back online." });
       setLotId(null);
+      setLotVia(null);
       setQty("");
       setNote("");
       setDescription("");
@@ -127,7 +131,7 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
             .map((l) => ({ value: `BC:LOT:${l.lotNumber}`, title: l.itemName ?? l.lotNumber, detail: `lot ${l.lotNumber}`, code: l.lotNumber, codes: [l.lotNumber] }))}
           candidatesLabel={location ? `Lots on ${location.code} (as saved on this phone)` : "Lots at this site (as saved on this phone)"}
           onlyCandidates
-          onEmit={(v) => onScan(v)}
+          onEmit={(v, _c, via) => onScan(v, via)}
         />
       </div>
       {lot && !unlabelled && (

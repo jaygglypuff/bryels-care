@@ -1,5 +1,6 @@
 "use server";
 import { requireContext } from "@/lib/auth/context";
+import { limitScanLookup } from "@/lib/rate-limit";
 import { masterSearch, MAX_QUERY_LENGTH, type MasterGroup } from "@/modules/scan";
 import { commonScreens, searchScreens, type ScreenHit } from "./search-screens";
 
@@ -14,10 +15,15 @@ export type MasterSearchResponse = {
   error?: string;
 };
 
+/** Plain answer when the person searched too often (same limiter and budget as the scan look-up, ADR-125). */
+const SEARCH_RATE_LIMITED = "Too many searches in a minute. Wait a moment, then search again.";
+
 /**
  * The master search behind the top-bar box, Ctrl/⌘+K and the Scan or search screen (owner request 2026-11-08).
  * Reads only. Screens come from the menu filtered by the person's permissions; records from `masterSearch`, which
- * checks the permission and sites of every record type on the server.
+ * checks the permission and sites of every record type on the server. Record look-ups count against the scan
+ * look-up limit (`limitScanLookup`, `platform.rate_limits.scan_lookups_per_minute` per person); over it the menu
+ * screens still show (no database) and the records wait.
  */
 export async function masterSearchAction(input: string): Promise<MasterSearchResponse> {
   const ctx = await requireContext();
@@ -25,6 +31,7 @@ export async function masterSearchAction(input: string): Promise<MasterSearchRes
   const can = (p: Parameters<typeof ctx.can>[0]) => ctx.can(p);
   if (!query) return { query, screens: [], groups: [], exactHref: null, common: commonScreens(can, ctx.roleCodes) };
   const screens = searchScreens(query, can, ctx.roleCodes);
+  if (!(await limitScanLookup(ctx.organizationId, ctx.userId)).allowed) return { query, screens, groups: [], exactHref: null, common: [], error: SEARCH_RATE_LIMITED };
   try {
     const r = await masterSearch(ctx, query);
     return { query, screens, groups: r.groups, exactHref: r.exactHref, common: [] };

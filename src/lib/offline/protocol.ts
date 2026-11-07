@@ -62,6 +62,11 @@ export const REASON_LABEL: Record<SyncConflictReason, string> = {
 
 const QTY = z.string().trim().regex(/^\d{1,12}(\.\d{1,6})?$/, "Enter a quantity like 1500 or 12.5 (up to 6 decimals).");
 const optText = (max: number) => z.string().trim().max(max).nullable().optional();
+/**
+ * How the operator gave the lot (A-SCAN-TYPED-01, ADR-120/125): `scan`, `typed` (the number printed on the label) or
+ * `tap` (chosen in the list). Optional so commands queued by an older app version still replay.
+ */
+const VIA = z.enum(["scan", "typed", "tap"]).nullable().optional();
 
 /**
  * Commands a device may queue (docs/offline-sync.md §3). Everything else is online-only: the server
@@ -86,6 +91,8 @@ export const OFFLINE_COMMANDS = {
         unlabelledDescription: optText(500),
         qty: QTY,
         note: optText(500),
+        /** Kept in the count audit `lotVia`, like the online count (a tap is allowed for counting). */
+        lotVia: VIA,
       })
       .strict(),
   },
@@ -98,6 +105,8 @@ export const OFFLINE_COMMANDS = {
         batchId: z.uuid(),
         batchMaterialId: z.uuid(),
         lotRef: z.string().trim().min(1, "Scan the lot.").max(120),
+        /** The lot field is the weighing's lot confirmation: `scan`/`typed` recorded in dispense audit `lotConfirmed`; `tap` is refused. */
+        lotVia: VIA,
         locationRef: optText(120),
         qty: z.string().trim().min(1, "Enter the weight.").max(30),
         uom: z.string().trim().max(10).optional(),

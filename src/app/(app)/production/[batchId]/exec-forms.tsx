@@ -163,22 +163,30 @@ export function WeighForm({
           Only {fmtQty(picked.qty, "g", 1)} in this lot; {fmtQty(stillNeeded, "g", 1)} still needed. Weigh what it has, tick &quot;Another lot follows&quot;, then weigh the rest from the next lot.
         </span>
       )}
-      <Field
-        label="2. Scale"
-        htmlFor={`scale-${ing.id}`}
-        error={fe.equipment ?? (scales.length > 0 && !firstUsable ? "No scale can be used now. Record the cleaning or calibration, or ask for a controlled override (CX-CAL)." : undefined)}
-      >
-        <Select id={`scale-${ing.id}`} name="equipmentRef" value={scale} onChange={(e) => setScale(e.target.value)}>
-          <option value="">{scales.length === 0 ? "No scale registered at this site" : "Choose a scale…"}</option>
-          {scales.map((s) => (
-            <option key={s.id} value={s.code} disabled={!s.usable}>
-              {s.code} · {s.name}
-              {s.calibrationDueDate ? ` · cal. due ${s.calibrationDueDate}` : ""}
-              {!s.usable ? ` · blocked: ${s.blocking.join("; ")}` : s.viaOverride ? " · under approved override" : s.reasons.length ? ` · warning: ${s.reasons.join("; ")}` : ""}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {scales.length === 0 ? (
+        <p className="text-[13px] text-[var(--warn-fg)]">2. Scale: no scale registered at this site.</p>
+      ) : (
+        <ScanOrPick
+          kind="equipment"
+          id={`scale-${ing.id}`}
+          name="equipmentRef"
+          submit="code"
+          label="2. Scale"
+          onlyCandidates
+          candidatesLabel="Scales at this site"
+          value={scale || null}
+          onChange={(v) => setScale(v ?? "")}
+          error={fe.equipment ?? (!firstUsable ? "No scale can be used now. Record the cleaning or calibration, or ask for a controlled override (CX-CAL)." : null)}
+          candidates={scales.map((s) => ({
+            value: s.id,
+            title: s.name,
+            detail: `${s.code}${s.calibrationDueDate ? ` · cal. due ${s.calibrationDueDate}` : ""}${s.usable && s.viaOverride ? " · under approved override" : s.usable && s.reasons.length ? ` · warning: ${s.reasons.join("; ")}` : ""}`,
+            code: s.code,
+            codes: [s.code],
+            disabledReason: s.usable ? undefined : `blocked: ${s.blocking.join("; ")}`,
+          }))}
+        />
+      )}
       <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
         <Field label={`3. Net weight (target ${fmtQty(ing.theoreticalQtyG, "g", 1)})`} htmlFor={`qty-${ing.id}`} error={fe.qty}>
           <Input id={`qty-${ing.id}`} name="qty" inputMode="decimal" autoComplete="off" value={qty} onChange={(e) => setQty(e.target.value)} className="min-h-[56px] text-[22px] tabular" required />

@@ -2799,6 +2799,12 @@ LEFT JOIN customers cu  ON cu.id = so.customer_id
 ORDER BY f.depth, l.lot_number, s.dispatched_at;
 ```
 
+**Not sent yet (ADR-124).** For every lot of the forward walk the trace also lists, apart from the customers who got
+it, the orders it waits for (`TraceResult.pendingOrders`, `src/modules/quality/genealogy.ts`):
+`picked` = `pick_lines` not voided, of a pick not cancelled, whose shipment is `draft | picked | packed`
+("Taken off the shelf for order SO-… (Customer)"); `set_aside` = open `stock_allocations` minus those pick lines
+("Set aside for order SO-… (Customer)"). Orders at sites outside `$allowed_site_ids` are counted as hidden, never shown.
+
 ### 10.4 Reverse trace (lot, box or complaint → suppliers, sibling batches, customers)
 
 Step 1 resolves the starting lot set from what the complaint names (`complaints.lot_id`, or

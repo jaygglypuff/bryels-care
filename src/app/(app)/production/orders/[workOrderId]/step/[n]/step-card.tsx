@@ -20,6 +20,7 @@ import {
 import { plainWords } from "@/modules/production/plain-words";
 import { PackagingBox } from "./packaging-box";
 import { EquipmentWhy } from "../../equipment-why";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 
 /**
  * The checker is signed in on THIS device (their own phone or tablet): one tap "Yes, I checked" in their
@@ -257,7 +258,7 @@ export function StepCard(p: Props) {
   );
 }
 
-/** The equipment used on this step (mixer, mould, pot): pick it from the list; warnings stay on record. */
+/** The equipment used on this step (mixer, mould, pot): tap it, scan its label or type its number (ADR-125); warnings stay on record. */
 function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> }) {
   const { step, equipment } = p;
   const [state, action] = useInPlaceAction(equipmentCardAction);
@@ -284,20 +285,24 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
           <form action={action} className="mt-3 grid gap-2">
             <input type="hidden" name="batchId" value={p.batchId} />
             <input type="hidden" name="stepNo" value={step.stepNo} />
-            <div className="grid gap-2 sm:grid-cols-2">
-              {equipment.options.map((o) => (
-                <label key={o.id} className={cx("flex min-h-[56px] cursor-pointer items-center gap-3 rounded-[14px] border px-3 py-2 text-[16px]", o.usable ? "border-line-strong bg-surface" : "border-line bg-surface-2 text-muted")}>
-                  <input type="radio" name="equipmentRef" value={o.code} disabled={!o.usable} required className="size-5" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-fg">{o.name}</span>
-                    <span className="block text-[13px] text-muted">
-                      {o.code}
-                      {!o.usable && o.why.length ? ` · cannot be used: ${o.why.join("; ")}` : !o.usable && o.blocking.length ? ` · cannot be used: ${o.blocking.join(", ")}` : o.reasons.length ? ` · ${o.reasons.join(", ")}` : ""}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
+            <ScanOrPick
+              kind="equipment"
+              id={`step-${step.stepNo}-equipment`}
+              label={`Which ${equipment.kind ?? "equipment"}?`}
+              name="equipmentRef"
+              submit="code"
+              required
+              onlyCandidates
+              candidatesLabel={`${equipment.kind ? `${equipment.kind[0].toUpperCase()}${equipment.kind.slice(1)}s` : "Equipment"} at this site`}
+              candidates={equipment.options.map((o) => ({
+                value: o.id,
+                title: o.name,
+                detail: `${o.code}${!o.usable ? "" : o.reasons.length ? ` · ${o.reasons.join(", ")}` : ""}`,
+                code: o.code,
+                codes: [o.code],
+                disabledReason: o.usable ? undefined : `cannot be used: ${o.why.length ? o.why.join("; ") : o.blocking.join(", ") || "not available"}`,
+              }))}
+            />
             <SubmitButton variant="secondary" size="lg" pendingText="Saving…">
               Use this equipment
             </SubmitButton>

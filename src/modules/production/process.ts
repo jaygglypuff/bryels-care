@@ -1,11 +1,12 @@
 import "server-only";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type DbOrTx, type Tx, db } from "@/db/client";
 import { batches, equipment, equipmentOverrideRequests, equipmentUses, processStepReadings, processStepRecords } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { findByCode } from "@/lib/scan/code-sql";
 import { equipmentAvailability } from "@/modules/masterdata";
 import { notifyRoles } from "@/modules/platform/notifications";
 import { DEVIATION_UNAVAILABLE, type DeviationKind, executionHooks } from "./execution-hooks";
@@ -26,11 +27,11 @@ async function resolveEquipment(q: DbOrTx, ctx: AuthContext, ref: string) {
   const v = (ref ?? "").trim();
   const isId = /^[0-9a-f-]{36}$/i.test(v);
   const code = v.toUpperCase().replace(/^BC:EQP:/, "");
-  const [e] = await q
-    .select()
-    .from(equipment)
-    .where(and(eq(equipment.organizationId, ctx.organizationId), isId ? eq(equipment.id, v) : eq(equipment.code, code)))
-    .limit(1);
+  // ADR-125: the machine number typed off the machine (any case, with or without dashes) finds it too; two machines
+  // that only differ by dashes match neither (findByCode). Searched in the caller's sites only.
+  const [e] = isId
+    ? await q.select().from(equipment).where(and(eq(equipment.organizationId, ctx.organizationId), eq(equipment.id, v))).limit(1)
+    : await findByCode(equipment.code, code, (w) => q.select().from(equipment).where(and(eq(equipment.organizationId, ctx.organizationId), inArray(equipment.siteId, ctx.allowedSiteIds), w)).limit(2));
   if (!e || !ctx.allowedSiteIds.includes(e.siteId)) throw new DomainError("not_found", `Equipment ${code || v} not found in your sites.`, { field: "equipment" });
   return e;
 }

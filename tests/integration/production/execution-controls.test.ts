@@ -123,6 +123,12 @@ describe("process parameters, CX-TOL, holds and checkers (US-3-11)", () => {
     await selectEquipment(operator, { batchId, stepNo: 3, equipmentRef: "MIX-01" });
   });
 
+  it("the machine number typed loosely (or its BC:EQP label) finds the same machine (ADR-125)", async () => {
+    expect((await selectEquipment(operator, { batchId, stepNo: 3, equipmentRef: "mix01" })).equipmentCode).toBe("MIX-01");
+    expect((await selectEquipment(operator, { batchId, stepNo: 3, equipmentRef: "BC:EQP:MIX-01" })).equipmentCode).toBe("MIX-01");
+    await expectCode(selectEquipment(operator, { batchId, stepNo: 3, equipmentRef: "MIX 9" }), "not_found");
+  });
+
   it("process.parameter_outside_limits: the reading is saved as out of limits and blocks completion", async () => {
     const temp = s[2].parameters!.find((p) => p.code === "temp")!;
     const r = await recordReading(operator, { batchId, stepNo: 3, parameterId: temp.id, value: "85" });

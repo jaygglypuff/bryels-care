@@ -258,6 +258,17 @@ Signing out deletes the device's offline data.
 8. **Device registration** is requested from the device (self-service, `pending`) and approved by `platform.device.admin` at the device's site; new permission strings `platform.device.view` / `platform.device.admin` (matrix §2.12).
 9. **Reference refresh is always full** (`full: true`); the master tables have no change cursor yet (A-W4D-04). `device_registrations.reference_cursor` stores the refresh time.
 
+### 11.3a How the lot was entered (ADR-125, 2026-11-07)
+
+Offline count and weighing commands carry an optional `lotVia` (`scan` | `typed` | `tap`, A-SCAN-TYPED-01). The
+server writes it where the online path does: count audit `inventory.stock_count.line_counted.lotVia`; weighing audit
+`production.dispense_record.recorded.lotConfirmed` (`scan` or `typed`). A weighing with `lotVia = "tap"` is refused
+(`checkEntryMode`, `validation_failed`): the lot field is the lot confirmation. The offline weighing screen does not
+offer the tap. Commands queued by an older app (no `lotVia`) replay as before (count `lotVia: null`, weighing
+`lotConfirmed: "typed_lot"`). Idempotency keys and ids are unchanged. Stock moves (`inventory.movement.transfer`)
+have no capture screen and no online "how" field, so they carry nothing. Tests:
+`tests/integration/platform/offline-sync.test.ts` ("offline captures record how the code was entered").
+
 ### 11.4 Not built in this stream
 
 - Offline capture screens for stock moves (the server accepts `inventory.movement.transfer` replays; the scan-to-move page is not wired to the outbox), process steps, receiving and pick/pack.

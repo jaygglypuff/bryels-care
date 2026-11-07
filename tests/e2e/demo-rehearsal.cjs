@@ -399,8 +399,9 @@ async function doStep(op, chk) {
     await allOk.click();
   } else {
     const eq = op.getByTestId('step-equipment');
-    if ((await eq.count()) && (await eq.locator('input[name=equipmentRef]:not([disabled])').count())) {
-      await eq.locator('input[name=equipmentRef]:not([disabled])').first().check();
+    // ADR-125: the equipment is a ScanOrPick field (tap, scan the machine label or type its number).
+    if ((await eq.count()) && (await eq.locator('button[data-testid=pick-option]:not([disabled])').count())) {
+      await eq.locator('button[data-testid=pick-option]:not([disabled])').first().click();
       await eq.getByRole('button', { name: 'Use this equipment' }).click();
       await eq.getByText(/^Using /).waitFor();
     }
@@ -662,8 +663,9 @@ section('n. proof of delivery: the customer signs on the phone', async () => {
   await page.mouse.up();
   await shot(page, 'proof-of-delivery-phone', { full: true });
   await page.getByRole('button', { name: 'Save proof of delivery' }).click();
-  await expectText(page, 'Delivered. Next: finance bills it.');
-  await expectText(page, 'Rosa Lim (Finance)');
+  // The invoice draft was made at dispatch (ADR-124: the next step follows the invoice and names who sends it).
+  await expectText(page, 'Delivered. Next: finance bills it');
+  await expectText(page, /Rosa \(finance\)/);
   log('proof of delivery saved (Liza Ramos)');
   await close();
 });
@@ -687,6 +689,11 @@ section('o. finance makes and sends the invoice from the delivery', async () => 
   // The small demo has one finance person (Rosa, who sent it), so the owner approves (owner override): the screen
   // must name her, not "Nobody can do it yet".
   await expectText(page, /Next: .*Ana \(owner\)/);
+  // ADR-124: the delivery now follows the invoice: no more "finance bills it" / "Open the invoice draft".
+  await openIslaDelivery(page);
+  await expectText(page, 'Delivered. The invoice is sent for approval.');
+  await expectText(page, /Waiting for Ana \(owner\) to approve the invoice/);
+  await shot(page, 'delivery-invoice-sent');
   await close();
 });
 
@@ -751,9 +758,10 @@ section('r. the warehouse gets the Luntian soap from the shelf by scanning its t
 section('s. QA traces the soap lot back to its supplier lots and forward to the customer (scene 7)', async () => {
   const { page, close } = await asUser(who('qa.nfd'));
   assert(facts.soapLot && facts.islaLot, 'the soap lot (scene 6) and the lotion lot sent to Isla Spa (section k)');
-  // Back: the soap lot to its batch and supplier lots. It is taken off the shelf but not sent yet: no customer.
+  // Back: the soap lot to its batch and supplier lots. It is taken off the shelf but not sent yet: no customer, but the
+  // trace names the order it waits for (ADR-124).
   await go(page, '/quality/trace?q=' + encodeURIComponent(facts.soapLot));
-  for (const t of ['Where it came from', 'Coconut Oil', 'Palm Oil', 'Laguna Oleo Supply', 'No customer has received this']) await expectText(page, t);
+  for (const t of ['Where it came from', 'Coconut Oil', 'Palm Oil', 'Laguna Oleo Supply', 'No customer has received this', 'Waiting to be sent to a customer', /Taken off the shelf for order SO-\d{2}-\d{5} \(Luntian Wellness Stores\)/]) await expectText(page, t);
   await shot(page, 'trace-soap-lot', { full: true });
   // Forward: the lotion lot sent out today names the customer, the order and the delivery receipt.
   await go(page, '/quality/trace?q=' + encodeURIComponent(facts.islaLot));

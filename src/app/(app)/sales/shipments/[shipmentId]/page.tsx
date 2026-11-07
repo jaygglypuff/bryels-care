@@ -5,7 +5,9 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getShipment, shipmentReconciliation } from "@/modules/sales";
-import { invoiceForShipment } from "@/modules/finance";
+import { billingStepOfShipment } from "@/modules/finance";
+import { billingStepWords } from "@/lib/billing-step-words";
+import { LineName } from "@/ui/line-name";
 import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton } from "@/ui/core";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -58,7 +60,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
   const canCancel = ["draft", "picked", "packed"].includes(s.status) && ctx.can("sales.shipment.edit");
   const canReverse = s.status === "dispatched" && ctx.can("sales.shipment.void");
   const canDraftDr = s.status === "packed" && ctx.can("sales.delivery_receipt.create") && ctx.can("documents.generated_document.create");
-  const invoice = s.status === "delivered" ? await invoiceForShipment(ctx, s.id) : null;
+  const billing = s.status === "delivered" ? billingStepWords((await billingStepOfShipment(ctx, s.id).catch(() => null)) ?? { stage: "not_billed", invoice: null, next: null }) : null;
 
   const next =
     s.status === "draft" && v.pick ? (
@@ -97,12 +99,9 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
         <DoNext text="Sent out." waitingFor="Waiting for the proof of delivery (signed delivery receipt)." />
       )
     ) : s.status === "delivered" ? (
-      // ADR-110 C10: after the proof of delivery, the next stage is the invoice (finance, two people).
-      invoice ? (
-        <DoNext text={`Delivered. Next: finance bills it${invoice.status === "draft" ? " — the invoice draft is ready" : ""}.`} action={{ label: invoice.status === "draft" ? "Open the invoice draft" : `Open invoice ${invoice.number}`, href: `/finance/invoices/${invoice.id}` }} />
-      ) : (
-        <DoNext text="Delivered. Next: finance bills it." waitingFor={`Waiting for ${await whoDoes(ctx, "finance.invoice.create", s.siteId, "finance")} to make and send the invoice.`} />
-      )
+      // ADR-110 C10 / ADR-124: after the proof of delivery the next step follows the invoice (draft, sent for approval,
+      // approved, saved to the books), with the next people by name.
+      <DoNext text={billing!.text} waitingFor={billing!.waitingFor} action={billing!.action} />
     ) : (
       <DoNext text={`${shipWord(s.status)}. Nothing more to do here.`} />
     );
@@ -217,8 +216,8 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
                     <p className="text-[13px] text-fg-2">
                       Expires {fmtDate(l.expiresOn)} · from <PlaceName name={l.locationName} code={l.locationCode} />
                     </p>
-                    <p className="font-mono text-[12px] text-muted">
-                      {l.sku} · lot {l.lotNumber}
+                    <p className="text-[13px] text-fg-2">
+                      <LineName name={l.productName} code={l.sku} /> · lot <span className="font-mono text-[12px]">{l.lotNumber}</span>
                     </p>
                   </div>
                   <span className="whitespace-nowrap text-[15px] font-semibold tabular">{fmtQty(l.qtyBase, l.baseUom, l.baseUom === "pcs" ? 0 : 3)}</span>

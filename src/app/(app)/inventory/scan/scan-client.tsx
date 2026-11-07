@@ -8,8 +8,11 @@ import { scanCardAction } from "./actions";
 
 type Recent = { payload: string; summary: string; at: string };
 
-/** `code`: a label handed over by the master search (?code=BC:…), resolved once on arrival. */
-export function ScanClient({ code = null }: { code?: string | null }) {
+/**
+ * `code`: a label handed over by the master search (?code=BC:…&n=…), looked up once per hand-over: `requestKey`
+ * changes every time (even for the same label), so entering it again shows its card again (ADR-125).
+ */
+export function ScanClient({ code = null, requestKey = null }: { code?: string | null; requestKey?: string | null }) {
   const [card, setCard] = useState<ScanCard | null>(null);
   const [recent, setRecent] = useState<Recent[]>([]);
   const [pending, start] = useTransition();
@@ -32,9 +35,10 @@ export function ScanClient({ code = null }: { code?: string | null }) {
     });
   }, []);
 
+  const handOver = requestKey ?? code;
   useEffect(() => {
-    if (code) onScan(code);
-  }, [code, onScan]);
+    if (handOver && code) onScan(code);
+  }, [handOver, code, onScan]);
 
   return (
     <div className="space-y-4">
