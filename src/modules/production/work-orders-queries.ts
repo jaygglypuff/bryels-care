@@ -4,6 +4,7 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import {
   auditEvents,
+  batchMaterialPicks,
   batchMaterialStagings,
   batchMaterials,
   batches,
@@ -31,6 +32,7 @@ import { getSetting } from "@/lib/settings";
 import { getEffectiveFormulaRevision, recipeReadiness } from "@/modules/masterdata";
 import { type FormulaSnapshot, manilaToday } from "./shared";
 import { WORK_ORDER_STATUSES } from "./work-orders-state";
+import { materialShort } from "./material-short";
 import { stagingKinds, workOrderCandidates, workOrderRequirements } from "./work-orders-reserve";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -135,6 +137,19 @@ export async function getWorkOrder(ctx: AuthContext, workOrderId: string) {
         .where(inArray(batchMaterials.batchId, bs.map((x) => x.b.id)))
         .groupBy(batchMaterials.materialId)
     : [];
+  // Get materials ticks (ADR-106): the latest tick per batch line; "taken" or "not needed" covers that line's amount.
+  const ticks = bs.length
+    ? await db
+        .select({ batchMaterialId: batchMaterialPicks.batchMaterialId, action: batchMaterialPicks.action, materialId: batchMaterials.materialId, qty: batchMaterials.theoreticalQtyG })
+        .from(batchMaterialPicks)
+        .innerJoin(batchMaterials, eq(batchMaterials.id, batchMaterialPicks.batchMaterialId))
+        .where(inArray(batchMaterialPicks.batchId, bs.map((x) => x.b.id)))
+        .orderBy(desc(batchMaterialPicks.pickedAt), desc(batchMaterialPicks.id))
+    : [];
+  const latestTick = new Map<string, (typeof ticks)[number]>();
+  for (const t of ticks) if (!latestTick.has(t.batchMaterialId)) latestTick.set(t.batchMaterialId, t);
+  const ticked = new Map<string, Decimal>();
+  for (const t of latestTick.values()) if ((t.action === "taken" || t.action === "not_needed") && t.materialId) ticked.set(t.materialId, (ticked.get(t.materialId) ?? new Decimal(0)).plus(t.qty ?? 0));
   const kinds = await stagingKinds(db, ctx.organizationId, wo.siteId);
   const showCandidates = ["draft", "planned", "released", "in_progress"].includes(wo.status) && ctx.can("inventory.lot.view");
   const materialsTab = [];
@@ -143,7 +158,7 @@ export async function getWorkOrder(ctx: AuthContext, workOrderId: string) {
     const reserved = active.reduce((a, x) => a.plus(x.r.qtyBase), new Decimal(0));
     const st = new Decimal(staged.find((x) => x.materialId === r.materialId)?.qty ?? 0);
     const cons = new Decimal(consumed.find((x) => x.materialId === r.materialId)?.qty ?? 0);
-    const short = Decimal.max(r.required.minus(reserved).minus(st), 0);
+    const short = materialShort({ required: r.required, reserved, staged: st, consumed: cons, ticked: ticked.get(r.materialId) ?? new Decimal(0) });
     const cands = showCandidates ? (await workOrderCandidates(db, wo, r, kinds)).candidates : [];
     const free = cands.filter((c) => c.eligible).reduce((a, c) => a.plus(c.available), new Decimal(0));
     materialsTab.push({

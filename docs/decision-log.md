@@ -2683,3 +2683,28 @@ Decision:
 Consequences: no migration. The database rule that the approver of a request is not its submitter is unchanged; the
 owner's change records no separate approver. Tests: `tests/integration/governance/owner-changes-settings-alone.test.ts`
 (new), `tests/integration/governance/settings-changes.test.ts` (the owner now administers settings).
+
+## ADR-128 Finish and the Materials tab: one checker rule, nothing "missing" once it is in the batch (owner 2026-11-07)
+
+Status: Accepted. Fixes two bugs from the owner's phone screenshots (Test Soap, WO-26-00005, made in the recipe
+wizard).
+
+1. **One checker rule at Finish.**
+   - The bug: Finish refused with "The checker must sign the transfer to quarantine." The screen never asked for a
+     checker, because the recipe has no move-to-QA step. The server assumed "needs a checker" when the step is missing
+     (`requiresChecker ?? true`), while the screen assumed "no" (ADR-080 §6 says the checker follows that step).
+   - The fix: both now read the step, and a recipe without it needs no checker.
+   - When the step needs a checker, the screen says "A second person checks your counts". It explains whom to ask, and
+     warns when nobody else from production can check at the site. The server's refusal reads "A second person must
+     check the counts. Choose who checked."
+   - The words "quarantine" in the Finish and move messages now read "QA waiting area".
+2. **Materials tab "Missing".**
+   - The bug: the tab showed "Missing 270 g" for an ingredient fully weighed in, and "Missing 10 pcs" for wrappers
+     ticked as taken. The shortage was needed − set aside − old staging, so it ignored what was weighed in and the
+     new Get materials ticks (`batch_material_picks`, which record no amount).
+   - The fix: `materialShort` (`src/modules/production/material-short.ts`). It counts what is in the batch once: the
+     largest of old staging, weighed in, and ticked as taken or not needed (at the batch line's amount). Anything still
+     set aside adds to that.
+
+Tests: `tests/unit/material-short.test.ts`; `tests/integration/production/finish-batch.test.ts` (checker follows the
+move step, both ways). No migration.

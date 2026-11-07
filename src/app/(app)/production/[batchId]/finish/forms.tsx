@@ -286,7 +286,9 @@ export function FinishForm(p: FinishFormProps) {
 
       {p.needsChecker && (
         <fieldset className="grid gap-3 rounded-[16px] border border-line p-4 sm:grid-cols-2">
-          <legend className="px-1 text-[14px] font-semibold">Checked by</legend>
+          <legend className="px-1 text-[14px] font-semibold">A second person checks your counts</legend>
+          <p className="text-[13px] text-fg-2 sm:col-span-2">The recipe asks for this. Ask someone from production to look at the counts above, then pick their name{p.requirePassword ? " and let them type their password" : ""}.</p>
+          {p.checkers.length === 0 && <p className="text-[14px] text-[var(--bad-fg)] sm:col-span-2">Nobody else from production can check at this site yet. Ask the site manager to add a second person.</p>}
           <Field label="Name" htmlFor="checkerId" error={fe.checkerId}>
             <Select id="checkerId" name="checkerId" required value={checkerId} onChange={(e) => setCheckerId(e.target.value)}>
               <option value="">Choose…</option>

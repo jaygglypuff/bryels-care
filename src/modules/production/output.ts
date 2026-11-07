@@ -85,7 +85,7 @@ export async function postBatchToQuarantineLocked(
   signers: { checker?: AuthContext | null } = {},
   opts: { finishDeviation?: boolean } = {},
 ) {
-  if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; only a batch in process can be posted to quarantine.`);
+  if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; only a batch being made can go to the QA waiting area.`);
   const steps = sortedSteps(batch.formulaSnapshot as FormulaSnapshot);
   const transfer = findStepOfKind(batch, ["transfer"]);
   const recs = await stepRecords(tx, batch.id);
@@ -95,7 +95,10 @@ export async function postBatchToQuarantineLocked(
   if (blockers.length) throw new DomainError("state", blockers.join(" "), { rule: "V-STATE", blockers });
 
   const checker = signers.checker ?? null;
-  if ((transfer?.requiresChecker ?? true) && !checker) throw new DomainError("validation", "The checker must sign the transfer to quarantine.", { field: "checkerId", rule: "V-SOD" });
+  // ADR-080 §6: the checker follows the frozen move-to-QA step's "needs a checker"; a recipe without that step needs
+  // none (the Finish screen reads the same rule, getFinishView.needsChecker). Owner 2026-11-07: the old default (yes)
+  // refused recipes made in the wizard with a message the screen never asked for.
+  if (transfer?.requiresChecker && !checker) throw new DomainError("validation", "A second person must check the counts. Choose who checked.", { field: "checkerId", rule: "V-SOD" });
   if (checker) {
     ctx.assertSeparation(checker.userId === ctx.userId, "The checker must be a different person from the operator.", { rule: "V-SOD" });
     checker.require("production.process_step_record.approve");
@@ -174,7 +177,7 @@ export async function postBatchToQuarantineLocked(
     lotId: lot.id,
     qtyBase: units,
     toLocationId: loc.id,
-    reason: `Output of batch ${batch.batchNumber} to quarantine pending QA`,
+    reason: `Batch ${batch.batchNumber} made, waiting for the QA check`,
     idempotencyKey: `batch-output:${batch.id}`,
     links: { batchOutputId: out.id },
     meta: { batchOutputId: out.id, location: loc.code },
@@ -215,7 +218,7 @@ export async function postBatchToQuarantineLocked(
   // 4. Batch → awaiting_qc with the output projection.
   const before = { status: batch.status };
   await transitionBatch(tx, ctx, batch, "awaiting_qc", {
-    reason: `Posted to quarantine ${loc.code}`,
+    reason: `Moved to the QA waiting area ${loc.code}`,
     set: { completedAt: now, actualUnits: units.toString(), actualOutputG: y.actualBase, yieldPct: y.yieldPct, outputLotId: lot.id },
   });
 
@@ -223,7 +226,7 @@ export async function postBatchToQuarantineLocked(
   const inspection = (await executionHooks().createFinishedProductInspection?.(tx, ctx, { batchId: batch.id, lotId: lot.id, inspectionPlanId: batch.inspectionPlanId, siteId: batch.siteId })) ?? null;
   await executionHooks().onBatchSubmitted?.(tx, ctx, { id: batch.id, batchNumber: batch.batchNumber, siteId: batch.siteId });
   // W2A: staged stock is consumed now, so its batch reservations end; the work order completes with its last batch.
-  const stagingReleased = await releaseBatchStagingReservations(tx, ctx, batch.id, `Batch ${batch.batchNumber} posted to quarantine; staged stock consumed`);
+  const stagingReleased = await releaseBatchStagingReservations(tx, ctx, batch.id, `Batch ${batch.batchNumber} moved to the QA waiting area; materials taken for it used up`);
   await syncWorkOrderProgress(tx, ctx, batch.workOrderId);
 
   const base = { entityNumber: batch.batchNumber, siteId: batch.siteId } as const;
@@ -241,7 +244,7 @@ export async function postBatchToQuarantineLocked(
     await audit(tx, ctx, { ...base, action: "production.process_step_record.completed", entityType: "process_step_record", entityId: batch.id, after: { stepNo: transfer.stepNo, name: transfer.name, status: "completed", checker: checker?.displayName ?? null } });
   }
   if (checker) {
-    await audit(tx, checker, { ...base, action: "production.process_step_record.checked", entityType: "process_step_record", entityId: batch.id, after: { stepNo: transfer?.stepNo ?? null, name: transfer?.name ?? "Transfer to quarantine", signedOn: "operator_device" } });
+    await audit(tx, checker, { ...base, action: "production.process_step_record.checked", entityType: "process_step_record", entityId: batch.id, after: { stepNo: transfer?.stepNo ?? null, name: transfer?.name ?? "Move to the QA waiting area", signedOn: "operator_device" } });
   }
   await audit(tx, ctx, {
     ...base,

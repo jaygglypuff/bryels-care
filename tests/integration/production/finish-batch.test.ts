@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import {
@@ -231,5 +231,38 @@ describe("Finish reads the packaging step counts (consultant review: count once)
     expect(r.goodUnits).toBe("60");
     const [row] = await db.select().from(packagingReconciliations).where(and(eq(packagingReconciliations.batchId, b.batchId), isNull(packagingReconciliations.voidedAt)));
     expect([row.usedQty, row.damagedQty, row.returnedQty].map((x) => new Decimal(x!).toString())).toEqual(["60", "1", "9"]);
+  });
+});
+
+/**
+ * Owner 2026-11-07 (screenshot, Test Soap from the recipe wizard): Finish refused with "The checker must sign the
+ * transfer to quarantine." while the screen asked for no checker. The checker follows the frozen move-to-QA step's
+ * "needs a checker" (ADR-080 §6); a recipe without that step needs no checker, on the screen and on the server alike.
+ */
+describe("Finish: who checks the counts follows the recipe's move step", () => {
+  const fullInput = (batchId: string, wrapperMaterialId: string) => ({ batchId, goodUnits: "60", packaging: [{ materialId: wrapperMaterialId, damaged: "0", leftOver: "10" }], idempotencyKey: key() });
+
+  it("a move step that needs a checker: the screen asks, and the server refuses without one in plain words", async () => {
+    const b = await directBatchReadyToFinish(kit, { manager, operator, checker });
+    expect((await getFinishView(operator, b.batchId)).needsChecker).toBe(true);
+    const e = await expectCode(finishBatch(operator, fullInput(b.batchId, b.wrapperMaterialId), {}), "validation");
+    expect(e.message).toBe("A second person must check the counts. Choose who checked.");
+  });
+
+  it("no move step in the recipe: the screen asks for no checker and Finish works without one", async () => {
+    const b = await directBatchReadyToFinish(kit, { manager, operator, checker });
+    const [row] = await db.select({ snap: batches.formulaSnapshot }).from(batches).where(eq(batches.id, b.batchId));
+    const snap = row.snap as { steps?: { stepKind: string }[] };
+    // Test fixture only: a recipe made without a move-to-QA step (the snapshot is frozen by a trigger, so skip it here).
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local session_replication_role = replica`);
+      await tx.update(batches).set({ formulaSnapshot: { ...snap, steps: (snap.steps ?? []).filter((s) => s.stepKind !== "transfer") } }).where(eq(batches.id, b.batchId));
+    });
+    const view = await getFinishView(operator, b.batchId);
+    expect(view.needsChecker).toBe(false);
+    const r = await finishBatch(operator, fullInput(b.batchId, b.wrapperMaterialId), {});
+    expect(r).toBeTruthy();
+    const [after] = await db.select({ status: batches.status }).from(batches).where(eq(batches.id, b.batchId));
+    expect(after.status).not.toBe("in_process");
   });
 });
