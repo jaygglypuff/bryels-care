@@ -26,6 +26,7 @@ import { orderHistory } from "../orders/order-history";
 import { DoNext, whoDoes } from "../next-step";
 import { billingStepOfOrder } from "@/modules/finance";
 import { billingStepWords } from "@/lib/billing-step-words";
+import { LineName } from "@/ui/line-name";
 import { Help } from "@/ui/help/help";
 import { DeleteDraftButton } from "../../delete-draft-button";
 
@@ -355,8 +356,8 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                           {left !== null ? ` (${left} days left)` : ""}{" "}
                           {status !== "shipped" && a.qualityStatus !== "released" && <StatusChip status={a.qualityStatus} />}
                         </p>
-                        <p className="font-mono text-[12px] text-muted">
-                          {a.sku} · lot {a.lotNumber}
+                        <p className="text-[13px] text-fg-2">
+                          <LineName name={a.productName} code={a.sku} /> · lot <span className="font-mono text-[12px]">{a.lotNumber}</span>
                         </p>
                       </div>
                       <span className="whitespace-nowrap text-[16px] font-semibold tabular">{fmtQty(a.qtyUnits, "pcs", 0)}</span>

@@ -12,6 +12,7 @@ import { waitingFor } from "../../../waiting-for";
 import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
 import { Banner } from "@/ui/status";
+import { LineName } from "@/ui/line-name";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
 import { ApprovalCard, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
@@ -138,7 +139,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             {d.lines.map((l) => (
               <li key={l.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
                 <span className="min-w-0">
-                  <span className="block font-medium">{l.description}</span>
+                  <LineName description={l.description} className="block font-medium" />
                   <span className="text-[13px] text-fg-2">
                     {fmtQty(l.qty, l.uom, 0)} × <Money value={l.unitAmount} />
                     {l.taxCode ? ` · tax ${Number(l.taxRatePct)} %` : ""}

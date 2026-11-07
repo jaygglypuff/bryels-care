@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getShipment, shipmentReconciliation } from "@/modules/sales";
 import { billingStepOfShipment } from "@/modules/finance";
 import { billingStepWords } from "@/lib/billing-step-words";
+import { LineName } from "@/ui/line-name";
 import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton } from "@/ui/core";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -215,8 +216,8 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
                     <p className="text-[13px] text-fg-2">
                       Expires {fmtDate(l.expiresOn)} · from <PlaceName name={l.locationName} code={l.locationCode} />
                     </p>
-                    <p className="font-mono text-[12px] text-muted">
-                      {l.sku} · lot {l.lotNumber}
+                    <p className="text-[13px] text-fg-2">
+                      <LineName name={l.productName} code={l.sku} /> · lot <span className="font-mono text-[12px]">{l.lotNumber}</span>
                     </p>
                   </div>
                   <span className="whitespace-nowrap text-[15px] font-semibold tabular">{fmtQty(l.qtyBase, l.baseUom, l.baseUom === "pcs" ? 0 : 3)}</span>

@@ -5,6 +5,7 @@ import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMoney, fmtQty } from "@/lib/qty";
 import { getInvoice } from "@/modules/finance";
 import { EmptyState } from "@/ui/core";
+import { LineName } from "@/ui/line-name";
 import { PrintButton } from "../../delivery-receipt/[shipmentId]/print-button";
 
 export const dynamic = "force-dynamic";
@@ -97,7 +98,7 @@ export default async function InvoicePrint({ params }: { params: Promise<{ id: s
             {d.lines.map((l) => (
               <tr key={l.id} className="border-b border-[#ccc]">
                 <td className="py-1.5 pr-2">{l.lineNo}</td>
-                <td className="py-1.5 pr-2">{l.description}</td>
+                <td className="py-1.5 pr-2"><LineName description={l.description} print /></td>
                 <td className="py-1.5 pr-2 text-right">{fmtQty(l.qty, l.uom, 0)}</td>
                 <td className="py-1.5 pr-2 text-right">{fmtMoney(l.unitAmount)}</td>
                 <td className="py-1.5 pr-2 text-right">{l.taxCode ? `${Number(l.taxRatePct)} %` : "—"}</td>

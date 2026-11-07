@@ -5,6 +5,7 @@ import { fmtMoney } from "@/lib/qty";
 import { Button, Card, CardTitle, Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
+import { LineName } from "@/ui/line-name";
 import { createBillAction } from "../../actions";
 
 type Receipt = { id: string; supplierId: string; label: string; lines: { id: string; lineNo: number | null; material: string; uom: string; qtyUnbilled: string }[] };
@@ -155,7 +156,7 @@ export function BillForm({
               return (
                 <div key={l.key} className="flex flex-col gap-2 rounded-[12px] border border-line p-3" data-testid="bill-line">
                   {l.goodsReceiptLineId ? (
-                    <p className="font-medium">{l.description}</p>
+                    <LineName description={l.description} className="block font-medium" />
                   ) : (
                     <Field label="What for" htmlFor={`bl-d-${l.key}`}>
                       <Input id={`bl-d-${l.key}`} value={l.description} onChange={(e) => set(l.key, { description: e.target.value })} placeholder="For example: delivery fee" />
