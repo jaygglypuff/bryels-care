@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getSupplier, lookupOptions } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, EmptyState, Table, Td } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
+import { EditDetails } from "@/ui/form-section";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { ReceiptStatusChip, SupplierStatusChip } from "@/ui/receiving";
 import { Banner, Chip } from "@/ui/status";
@@ -100,10 +101,10 @@ export default async function SupplierPage({ params, searchParams }: { params: P
         </Card>
       )}
       {ctx.can("masterdata.supplier.edit") && (
-        <div>
-          <h2 className="mb-3 font-display text-[17px] font-semibold">Change details</h2>
-          <SupplierForm initial={s} categories={await lookupOptions(db, ctx.organizationId, "supplier_category", { keep: s.category })} />
-        </div>
+        // ADR-123: folded so the next step keeps the one green button; same form, same action.
+        <EditDetails>
+          <SupplierForm plain initial={s} categories={await lookupOptions(db, ctx.organizationId, "supplier_category", { keep: s.category })} />
+        </EditDetails>
       )}
       {s.qualityStatus === "new" && (ctx.can("masterdata.supplier.edit") || ctx.can("masterdata.supplier.create")) && <DeleteDraftCard kind="supplier" id={s.id} what="supplier" note="This supplier is still new (not yet evaluated). If nothing uses it yet (no approved material, order, receipt or bill), you can delete it." />}
     </div>

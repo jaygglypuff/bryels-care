@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, HelpCircle, Hourglass } from "lucide-react";
+import { ArrowDown, ArrowRight, HelpCircle, Hourglass } from "lucide-react";
 import { buttonClass, cx } from "./core";
 import { IntroClamp } from "./intro-clamp";
 
@@ -49,11 +49,18 @@ export function NextStep({
           </p>
         )}
       </div>
-      {action && (
-        <Link href={action.href} className={cx(buttonClass("cta"), "w-full font-semibold min-[480px]:w-auto")}>
-          {action.label} <ArrowRight size={16} aria-hidden />
-        </Link>
-      )}
+      {action &&
+        (action.href.startsWith("#") ? (
+          // ADR-123: a jump to the form further down this page is not a second green button: the form's own button
+          // (Decide, Record service…) is the one green button, so the jump is an outlined button with a down arrow.
+          <Link href={action.href} className={cx(buttonClass("secondary"), "w-full font-semibold min-[480px]:w-auto")} data-jump="true">
+            {action.label} <ArrowDown size={16} aria-hidden />
+          </Link>
+        ) : (
+          <Link href={action.href} className={cx(buttonClass("cta"), "w-full font-semibold min-[480px]:w-auto")}>
+            {action.label} <ArrowRight size={16} aria-hidden />
+          </Link>
+        ))}
     </section>
   );
 }

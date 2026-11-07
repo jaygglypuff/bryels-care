@@ -233,8 +233,10 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             <Menu size={18} />
           </button>
           <Link href="/dashboard" className="grid min-h-11 min-w-11 shrink-0 place-items-center" aria-label="Bryel's Care home">
-            <LogoMark className="size-9 sm:hidden" />
-            <Logo className="hidden h-9 w-auto sm:block" />
+            {/* ADR-123: at 1280–1535 px the menu row shares the bar with the site selector, search, To approve and
+                Messages; the full logo (156 px) cut "Management" by 74 px for the owner, so the mark (36 px) shows there. */}
+            <LogoMark className="size-9 sm:hidden xl:block 2xl:hidden" />
+            <Logo className="hidden h-9 w-auto sm:block xl:hidden 2xl:block" />
           </Link>
           {/* Destinations. The five never fit with their one-line descriptions inside the 1480 px frame (measured: 1063 px
               needed, about 530 free), so each description is a tooltip and the open one leads the tab row below (UX audit R2). */}

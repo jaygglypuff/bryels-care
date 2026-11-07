@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Explain, MoreDetails } from "@/ui/guide";
+import { Explain } from "@/ui/guide";
+import { FormSection } from "@/ui/form-section";
 import { ChoiceField, Grid, SelectField, TextField, TextareaField } from "../_org/form";
 
 /**
@@ -84,63 +85,80 @@ export function MaterialFields({ options, d = {}, locked = false, creating = fal
   const packUnits = options.packUnits.filter((u) => !base || u.dimension === DIMENSION[base]);
   const packDefault = d.standardPackUom ?? buy?.pack ?? "";
   const isIngredient = kind === "raw_material" || kind === "intermediate";
+  // ADR-123: titled sections (FormSection); three questions on screen, the rest folded per section (round 4 rule).
   return (
     <>
-      <TextField name="name" label="What is it called?" defaultValue={d.name} placeholder="e.g. Shea butter" />
-      <ChoiceField name="materialKind" label="What kind is it?" options={kinds} value={kind} onChange={setKind} />
-      {locked ? (
-        <div>
-          <p className="text-[15px] font-semibold text-fg">We count it in</p>
-          <p className="mt-1 text-[14px] text-fg-2">
-            {{ g: "Grams.", mL: "Milliliters.", pcs: "Pieces." }[d.baseUom ?? ""] ?? d.baseUom} It is in use, so this can no longer change.
-          </p>
-          <input type="hidden" name="baseUom" value={d.baseUom} />
-        </div>
-      ) : (
-        <ChoiceField name="baseUom" label="How do you buy and count it?" options={COUNT} value={base} onChange={setBase} />
-      )}
-      {/* Round 4 (UX re-audit C #7): three questions on screen; the optional supplier and pack size are folded. */}
-      <details className="rounded-[14px] border border-line px-3" open={!!(d.standardPackQty || d.standardPackUom)}>
-        <summary className="flex min-h-[48px] cursor-pointer items-center text-[15px] font-semibold">Usual supplier and pack size (optional)</summary>
-      <fieldset className="pb-3">
-        <legend className="sr-only">Usual supplier and pack size (optional)</legend>
-        <p className="mb-3 text-[13px] text-muted">Filled in for you when ordering and receiving. You can still change them on each delivery.</p>
-        <Grid>
-          {creating && options.suppliers && options.suppliers.length > 0 && (
-            <SelectField name="usualSupplierId" label="Usual supplier" options={options.suppliers.map((s) => ({ value: s.id, label: s.name }))} emptyLabel="Not now" hint="QA still approves the supplier for this item." />
-          )}
-          <div className="grid grid-cols-[1fr_110px] gap-2">
-            <TextField name="standardPackQty" label="One pack holds" defaultValue={plainQty(d.standardPackQty)} inputMode="decimal" placeholder={buy?.pack === "pcs" ? "e.g. 500" : "e.g. 25"} hint="e.g. 25 kg sack, 18 L tin." />
-            <SelectField key={base} name="standardPackUom" label="Unit" defaultValue={packUnits.some((u) => u.code === packDefault) ? packDefault : undefined} options={packUnits.map((u) => ({ value: u.code, label: u.code }))} emptyLabel="—" />
-          </div>
-        </Grid>
-      </fieldset>
-      </details>
-      <MoreDetails>
-        <Grid>
+      <FormSection title="What it is" testId="material-section-what">
+        <TextField name="name" label="What is it called?" defaultValue={d.name} placeholder="e.g. Shea butter" />
+        <ChoiceField name="materialKind" label="What kind is it?" options={kinds} value={kind} onChange={setKind} />
+        {locked ? (
           <div>
-            <TextField name="inciName" label="INCI name" defaultValue={d.inciName} placeholder="Butyrospermum Parkii Butter" hint={isIngredient ? "From the supplier's papers; QA checks it." : "Only for ingredients."} />
-            <Explain term="inci" />
+            <p className="text-[15px] font-semibold text-fg">We count it in</p>
+            <p className="mt-1 text-[14px] text-fg-2">
+              {{ g: "Grams.", mL: "Milliliters.", pcs: "Pieces." }[d.baseUom ?? ""] ?? d.baseUom} It is in use, so this can no longer change.
+            </p>
+            <input type="hidden" name="baseUom" value={d.baseUom} />
           </div>
-          <TextField name="commonName" label="Other name people use" defaultValue={d.commonName} />
-          <SelectField name="category" label="Category (optional)" defaultValue={d.category} options={options.categories} emptyLabel="No category" hint="To add a category, go to Management › Master data › Choice lists." />
-          <TextField name="brand" label="Usual brand" defaultValue={d.brand} placeholder="e.g. Golden Palm" hint="Each delivery records the brand that arrived." />
-          <TextField name="shelfLifeDays" label="Good for (days)" defaultValue={d.shelfLifeDays} inputMode="numeric" hint="Sets the expiry date when it arrives; QA confirms." />
-          <TextField name="retestDays" label="Check again after (days)" defaultValue={d.retestDays} inputMode="numeric" />
-          <TextField name="storageConditions" label="How to store it" defaultValue={d.storageConditions} placeholder="Below 25 °C, away from light" />
-          <TextField name="code" label="Your own code (optional)" defaultValue={d.code} placeholder={d.code ? undefined : "The system gives one, e.g. MAT-0001"} mono readOnly={locked} hint={locked ? "In use: the code can no longer change." : "Leave empty and the system numbers it."} />
-        </Grid>
-        <Grid>
-          <TextareaField name="allergenNotes" label="Allergy notes (QA checks the wording)" defaultValue={d.allergenNotes} />
-          <TextareaField name="hazardNotes" label="Safety notes (QA checks the wording)" defaultValue={d.hazardNotes} />
-        </Grid>
-        <Grid>
-          <FollowBox name="requiresCoa" label="Each delivery needs a certificate (CoA)" value={coa ?? kd.requiresCoa} onChange={setCoa} />
-          <FollowBox name="requiresIncomingInspection" label="Arrives waiting for the QA check" value={qa ?? kd.requiresIncomingInspection} onChange={setQa} hint="On for ingredients and packaging, off for supplies, unless QA says otherwise." />
-        </Grid>
+        ) : (
+          <ChoiceField name="baseUom" label="How do you buy and count it?" options={COUNT} value={base} onChange={setBase} />
+        )}
         {creating && <SelectField name="status" label="Start as" defaultValue="active" options={[{ value: "active", label: "Ready to use" }, { value: "draft", label: "Draft (still being set up)" }]} />}
-        <p className="text-[13px] text-muted">The system always uses the lot that expires first.</p>
-      </MoreDetails>
+      </FormSection>
+      <FormSection
+        title="Buying"
+        hint="Filled in for you when ordering and receiving. You can still change them on each delivery."
+        moreTitle="Usual supplier and pack size (optional)"
+        open={!!(d.standardPackQty || d.standardPackUom)}
+        more={
+          <Grid>
+            {creating && options.suppliers && options.suppliers.length > 0 && (
+              <SelectField name="usualSupplierId" label="Usual supplier" options={options.suppliers.map((s) => ({ value: s.id, label: s.name }))} emptyLabel="Not now" hint="QA still approves the supplier for this item." />
+            )}
+            <div className="grid grid-cols-[1fr_110px] gap-2">
+              <TextField name="standardPackQty" label="One pack holds" defaultValue={plainQty(d.standardPackQty)} inputMode="decimal" placeholder={buy?.pack === "pcs" ? "e.g. 500" : "e.g. 25"} hint="e.g. 25 kg sack, 18 L tin." />
+              <SelectField key={base} name="standardPackUom" label="Unit" defaultValue={packUnits.some((u) => u.code === packDefault) ? packDefault : undefined} options={packUnits.map((u) => ({ value: u.code, label: u.code }))} emptyLabel="—" />
+            </div>
+            <TextField name="brand" label="Usual brand" defaultValue={d.brand} placeholder="e.g. Golden Palm" hint="Each delivery records the brand that arrived." />
+          </Grid>
+        }
+      />
+      <FormSection
+        title="Keeping it and quality"
+        moreTitle="How long it keeps, how to store it, QA (you can skip this)"
+        more={
+          <>
+            <Grid>
+              <TextField name="shelfLifeDays" label="Good for (days)" defaultValue={d.shelfLifeDays} inputMode="numeric" hint="Sets the expiry date when it arrives; QA confirms." />
+              <TextField name="retestDays" label="Check again after (days)" defaultValue={d.retestDays} inputMode="numeric" />
+              <TextField name="storageConditions" label="How to store it" defaultValue={d.storageConditions} placeholder="Below 25 °C, away from light" />
+            </Grid>
+            <Grid>
+              <FollowBox name="requiresCoa" label="Each delivery needs a certificate (CoA)" value={coa ?? kd.requiresCoa} onChange={setCoa} />
+              <FollowBox name="requiresIncomingInspection" label="Arrives waiting for the QA check" value={qa ?? kd.requiresIncomingInspection} onChange={setQa} hint="On for ingredients and packaging, off for supplies, unless QA says otherwise." />
+            </Grid>
+            <Grid>
+              <TextareaField name="allergenNotes" label="Allergy notes (QA checks the wording)" defaultValue={d.allergenNotes} />
+              <TextareaField name="hazardNotes" label="Safety notes (QA checks the wording)" defaultValue={d.hazardNotes} />
+            </Grid>
+            <p className="text-[13px] text-muted">The system always uses the lot that expires first.</p>
+          </>
+        }
+      />
+      <FormSection
+        title="Other names and code"
+        moreTitle="INCI name, other name, category, code (you can skip this)"
+        more={
+          <Grid>
+            <div>
+              <TextField name="inciName" label="INCI name" defaultValue={d.inciName} placeholder="Butyrospermum Parkii Butter" hint={isIngredient ? "From the supplier's papers; QA checks it." : "Only for ingredients."} />
+              <Explain term="inci" />
+            </div>
+            <TextField name="commonName" label="Other name people use" defaultValue={d.commonName} />
+            <SelectField name="category" label="Category (optional)" defaultValue={d.category} options={options.categories} emptyLabel="No category" hint="To add a category, go to Management › Master data › Choice lists." />
+            <TextField name="code" label="Your own code (optional)" defaultValue={d.code} placeholder={d.code ? undefined : "The system gives one, e.g. MAT-0001"} mono readOnly={locked} hint={locked ? "In use: the code can no longer change." : "Leave empty and the system numbers it."} />
+          </Grid>
+        }
+      />
     </>
   );
 }

@@ -6,6 +6,7 @@ import { fmtQty } from "@/lib/qty";
 import { PRODUCT_TRANSITIONS, daysToWholeMonths, getProduct, listFormulas, productFamilies, uomOptions, type ProductStatus } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
+import { EditDetails } from "@/ui/form-section";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
@@ -52,7 +53,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const stop = moves.includes("discontinued");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <RecordHeader
         back={{ href: "/masterdata/products", label: "Products" }}
         typeLabel={familyLabel ? `Product · ${familyLabel}` : "Product"}
@@ -99,7 +100,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       {ready && (
         <Card>
           <CardTitle>Ready to use?</CardTitle>
-          <ActionForm action={productStatusAction} submitLabel="Make it ready to use" variant="primary" hidden={{ _id: p.id, status: "active", reason: "" }}>
+          <ActionForm action={productStatusAction} submitLabel="Make it ready to use" variant="secondary" hidden={{ _id: p.id, status: "active", reason: "" }}>
             <p className="text-[14px] text-fg-2">It is a draft. When the facts below are right, make it ready so batches can make it and customers can order it.</p>
           </ActionForm>
         </Card>
@@ -140,16 +141,19 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         )}
       </Card>
 
-      <Card>
-        <CardTitle>Basic facts</CardTitle>
-        {canEdit ? (
+      {canEdit ? (
+        // ADR-123: folded so the next step keeps the one green button; same form, same action.
+        <EditDetails title="Change the basic facts">
           <ActionForm action={saveProductAction} submitLabel="Save" hidden={{ _id: p.id }}>
             <ProductFields families={families} d={{ ...p, code: p.code }} months={months} />
           </ActionForm>
-        ) : (
+        </EditDetails>
+      ) : (
+        <Card>
+          <CardTitle>Basic facts</CardTitle>
           <ReadOnlyNote what="this product" />
-        )}
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { getSite, listDepartments, listLines, listWarehouses } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
+import { EditDetails, FormSection } from "@/ui/form-section";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, CheckField, Grid, TextField } from "../../_org/form";
@@ -31,7 +32,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
   const canAdmin = ctx.can("masterdata.site.admin");
   const canDept = ctx.can("masterdata.department.admin") && inScope;
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <RecordHeader back={{ href: "/masterdata/sites", label: "Sites" }} typeLabel="Site" title={site.name} chip={<ActiveChip active={site.isActive} />} meta={[<span key="code" className="font-mono">{site.code}</span>]} />
       <PageIntro>One address where you work or keep stock, with its warehouses, making areas and teams.</PageIntro>
       <Saved show={saved === "1"} title="Site added">Next: add its warehouse (store room), then its making areas.</Saved>
@@ -44,27 +45,33 @@ export default async function SitePage({ params, searchParams }: { params: Promi
       ) : (
         <NextStep text="This site is set up. Nothing to do now." />
       )}
-      <MoreDetails title="Change the name or address">
+      {/* ADR-123: the shared fold and titled sections (same form, same action). */}
+      <EditDetails title="Change the name or address">
         {canAdmin ? (
           <ActionForm action={saveSiteAction} submitLabel="Save" hidden={{ _id: site.id }}>
-            <TextField name="name" label="Name of the place" defaultValue={site.name} />
-            <Grid>
-              <TextField name="addressLine1" label="Street address" defaultValue={site.addressLine1} />
-              <TextField name="city" label="Town or city" defaultValue={site.city} />
-            </Grid>
-            <MoreDetails>
+            <FormSection
+              title="Name and address"
+              moreTitle="Code, time zone, province, country (you can skip this)"
+              more={
+                <Grid>
+                  <TextField name="code" label="Your own code (optional)" defaultValue={site.code} mono hint="Appears in document numbers. Fixed once anything uses the site." />
+                  <TextField name="timezone" label="Time zone" defaultValue={site.timezone} />
+                  <TextField name="province" label="Province" defaultValue={site.province} />
+                  <TextField name="country" label="Country code" defaultValue={site.country} />
+                </Grid>
+              }
+            >
+              <TextField name="name" label="Name of the place" defaultValue={site.name} />
               <Grid>
-                <TextField name="code" label="Your own code (optional)" defaultValue={site.code} mono hint="Appears in document numbers. Fixed once anything uses the site." />
-                <TextField name="timezone" label="Time zone" defaultValue={site.timezone} />
-                <TextField name="province" label="Province" defaultValue={site.province} />
-                <TextField name="country" label="Country code" defaultValue={site.country} />
+                <TextField name="addressLine1" label="Street address" defaultValue={site.addressLine1} />
+                <TextField name="city" label="Town or city" defaultValue={site.city} />
               </Grid>
-            </MoreDetails>
+            </FormSection>
           </ActionForm>
         ) : (
           <ReadOnlyNote what="this site" />
         )}
-      </MoreDetails>
+      </EditDetails>
       {inScope && (
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
