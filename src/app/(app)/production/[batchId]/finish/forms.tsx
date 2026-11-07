@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { wrapperBalanceSentence, wrapperWord } from "@/modules/production/wrapper-words";
+import { packagingUsedFor, wrapperBalanceSentence, wrapperWord } from "@/modules/production/wrapper-words";
 import { Button, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { ScanOrPick } from "@/ui/scan-or-pick";
@@ -30,7 +30,7 @@ export type FinishFormProps = {
   samples: number;
   /** ADR-110 C6: pieces boxed at the packaging step (labels printed); good = boxed + samples is pre-filled. */
   boxedPieces?: number | null;
-  packaging: { materialId: string; materialName: string; uom: string; taken: string; counted: boolean; used: string; damaged: string; leftOver: string; step: { stepNo: number; used: string | null; damaged: string | null; leftOver: string | null } | null }[];
+  packaging: { materialId: string; materialName: string; uom: string; taken: string; counted: boolean; used: string; damaged: string; leftOver: string; perPiece?: number | null; step: { stepNo: number; used: string | null; damaged: string | null; leftOver: string | null } | null }[];
   rejectApproval: { limit: string | null; existingNeedsApproval: boolean; reportOpen: boolean };
   hold: { id: string; code: string; name: string } | null;
   holdOptions: { id: string; code: string; name: string }[];
@@ -90,7 +90,7 @@ export function FinishForm(p: FinishFormProps) {
   const balances = p.packaging.map((m) => {
     if (m.counted) return { ...m, used: n(m.used), damaged: n(m.damaged), left: n(m.leftOver), diff: n(m.taken) - n(m.used) - n(m.damaged) - n(m.leftOver) };
     const v = pkg[m.materialId];
-    const used = v.used ? n(v.used) : goodN + n(wrapped);
+    const used = v.used ? n(v.used) : packagingUsedFor(goodN + n(wrapped), m.perPiece);
     const diff = n(m.taken) - used - n(v.damaged) - n(v.leftOver);
     return { ...m, used, damaged: n(v.damaged), left: n(v.leftOver), diff };
   });
@@ -222,15 +222,21 @@ export function FinishForm(p: FinishFormProps) {
               <div key={b.materialId} className="mt-3" data-testid={`wrappers-${b.materialId}`}>
                 <p className="text-[16px]">
                   We took <b>{taken}</b> {word}
-                  {word === "wrappers" ? ` (${b.materialName})` : ""}.{" "}
+                  {word !== b.materialName ? ` (${b.materialName})` : ""}.{" "}
                   {goodN > 0 && !b.counted ? (
-                    <>
-                      You wrapped <b>{b.used}</b> {p.pieceWord}.
-                    </>
+                    b.perPiece && b.perPiece < 1 ? (
+                      <>
+                        You packed <b>{goodN + n(wrapped)}</b> {p.pieceWord}: that uses <b>{b.used}</b> {word}.
+                      </>
+                    ) : (
+                      <>
+                        You wrapped <b>{b.used}</b> {p.pieceWord}.
+                      </>
+                    )
                   ) : null}
                 </p>
                 {b.counted ? (
-                  <p className="text-[15px] text-fg-2">Counted at the wrapping step: {b.used} wrapped, {b.damaged} damaged, {b.left} left over.</p>
+                  <p className="text-[15px] text-fg-2">Counted at the packaging step: {b.used} used, {b.damaged} damaged, {b.left} left over.</p>
                 ) : (
                   <>
                     {b.step && !editStep[b.materialId] && (b.step.damaged !== null || b.step.leftOver !== null) && (
@@ -257,7 +263,7 @@ export function FinishForm(p: FinishFormProps) {
                       );
                     })()}
                     {goodN > 0 && b.step?.used !== null && b.step?.used !== undefined && Number(b.step.used) !== b.used && (
-                      <p className="mt-1 text-[14px] text-muted">Step {b.step.stepNo} says {Number(b.step.used)} used; here wrapped = good {p.pieceWord} + rejects already wrapped = {b.used}. If the step is right, put {Number(b.step.used)} under More details.</p>
+                      <p className="mt-1 text-[14px] text-muted">Step {b.step.stepNo} says {Number(b.step.used)} used; here we count {b.used} used for the good {p.pieceWord} and rejects already packed. If the step is right, put {Number(b.step.used)} under More details.</p>
                     )}
                   </>
                 )}

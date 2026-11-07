@@ -78,6 +78,21 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   label:has(input[type="radio"]):not([class*="flex"]):not([class*="grid"]):not([class*="block"]) { display: inline-flex; align-items: center; gap: 0.5rem; }
   input[type="checkbox"] + label, input[type="radio"] + label { display: inline-flex; min-height: 44px; align-items: center; cursor: pointer; }
 }
+/* Fold-open sections ("More details", owner 2026-11-07): the browser's own disclosure triangle was drawn as a blue
+   emoji on iPhone. Every <summary> loses it and gets one small chevron in the text colour that turns when open.
+   A summary with its own icon carries `list-none` and is left alone. */
+@layer base {
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary:not(.list-none)::before {
+    content: ""; display: inline-block; flex: none; width: 1rem; height: 1rem; margin-right: 0.5rem; vertical-align: -0.15em;
+    background-color: currentColor; opacity: 0.7;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform 0.15s ease;
+  }
+  details[open] > summary:not(.list-none)::before { transform: rotate(90deg); }
+}
 /* Form fields (owner 2026-11-07: "the rounded type for inputs is not suitable … may spill on mobile or tablets").
    Fields are plain rectangles with small corners (inputClass in src/ui/core.tsx). iPhone/iPad Safari gives date
    and time fields a fixed intrinsic width and its own rounded look, so they spilled out of their card: they take

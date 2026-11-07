@@ -129,7 +129,7 @@ describe("choose sizes (validation)", () => {
 describe("wrappers in plain words (ADR-106 §4)", () => {
   it("adds up with a tick, or says what to do", () => {
     expect(wrapperWord("Soap wrapper 135 g")).toBe("wrappers");
-    expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 2, left: 1, word: "wrappers" })).toBe("123 taken = 120 wrapped + 2 damaged + 1 left over ✓");
+    expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 2, left: 1, word: "wrappers" })).toBe("123 taken = 120 used + 2 damaged + 1 left over ✓");
     expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 0, left: 0, word: "wrappers" })).toContain("3 wrappers are missing — count the left-over ones again, or write what happened.");
     expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 2, left: 0, word: "wrappers" })).toContain("1 wrapper is missing");
     expect(wrapperBalanceSentence({ taken: 1, wrapped: 123, damaged: 0, left: 12, word: "wrappers" })).toContain("134 wrappers too many");

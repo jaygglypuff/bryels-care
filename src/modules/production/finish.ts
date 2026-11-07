@@ -3,7 +3,7 @@ import { packedOverDays } from "./batch-days-words";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type DbOrTx, type Tx, db } from "@/db/client";
-import { batches, locations, products, scrapReworkRecords, workOrders, yieldRecords } from "@/db/schema";
+import { batchMaterials, batches, locations, products, scrapReworkRecords, workOrders, yieldRecords } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
@@ -22,7 +22,7 @@ import { currentReadings } from "./process";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { currentYield, recordScrapReworkLocked, recordYieldLocked, yieldLimits } from "./yield";
 import { plainWords } from "./plain-words";
-import { wrapperBalanceSentence, wrapperWord } from "./wrapper-words";
+import { packagingUsedFor, wrapperBalanceSentence, wrapperWord } from "./wrapper-words";
 
 /**
  * Finish batch (ADR-080 §6, slice V2-6). ONE transaction that does what the five old commands did one
@@ -109,8 +109,18 @@ async function liveScrap(q: DbOrTx, batchId: string) {
 }
 
 /** Packaging components of the batch grouped by material: taken (issued), counted rows, open rows. */
-async function packagingGroups(q: DbOrTx, batchId: string) {
+async function packagingGroups(q: DbOrTx, batchId: string, expected: Decimal | null = null) {
   const rows = (await currentPackaging(q, batchId)).sort((a, b) => a.r.issuedAt.getTime() - b.r.issuedAt.getTime());
+  // Owner 2026-11-07: each item's share of one piece, from the batch's packaging lines (one wrapper per bar, one
+  // box per 24 bars). Packaging lines keep their quantity in pieces of the item in `theoretical_qty_g`.
+  const planned = new Map<string, Decimal>();
+  for (const l of await q.select({ materialId: batchMaterials.materialId, qty: batchMaterials.theoreticalQtyG }).from(batchMaterials).where(and(eq(batchMaterials.batchId, batchId), eq(batchMaterials.status, "packaging")))) {
+    planned.set(l.materialId, (planned.get(l.materialId) ?? new Decimal(0)).plus(l.qty));
+  }
+  const perPieceOf = (materialId: string) => {
+    const p = planned.get(materialId);
+    return p && expected && expected.gt(0) ? p.div(expected).toNumber() : null;
+  };
   const groups = new Map<string, { materialId: string; materialCode: string; materialName: string; uom: string; rows: typeof rows }>();
   for (const x of rows) {
     const g = groups.get(x.r.materialId) ?? { materialId: x.r.materialId, materialCode: x.materialCode, materialName: x.materialName, uom: x.r.baseUom, rows: [] as typeof rows };
@@ -128,6 +138,7 @@ async function packagingGroups(q: DbOrTx, batchId: string) {
       damaged: sum((r) => r.damagedQty),
       leftOver: sum((r) => r.returnedQty),
       variance: sum((r) => r.varianceQty),
+      perPiece: perPieceOf(g.materialId),
     };
   });
 }
@@ -220,7 +231,7 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
     samples: { enabled: samples.enabled, units: samples.enabled ? samples.units : 0 },
     /** When the rejects need a problem report: more than `limit` pieces, or earlier scrap already waiting for approval. */
     rejectApproval: { limit: rejectLimit?.toString() ?? null, existingNeedsApproval: scrap.some((r) => r.requiresApproval && r.status === "recorded"), reportOpen: !!y?.deviationId },
-    packaging: (await packagingGroups(db, batch.id)).map((g) => ({
+    packaging: (await packagingGroups(db, batch.id, expectedUnits(batch, product.unitNetMassG))).map((g) => ({
       materialId: g.materialId,
       materialCode: g.materialCode,
       materialName: g.materialName,
@@ -230,6 +241,7 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
       used: g.used.toString(),
       damaged: g.damaged.toString(),
       leftOver: g.leftOver.toString(),
+      perPiece: g.perPiece,
       step: stepCounts.get(g.materialId) ?? null,
     })),
     hold: hold ? { id: hold.id, code: hold.code, name: hold.name } : null,
@@ -370,7 +382,7 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
   }
 
   // 7. Packaging count (countPackaging body): only damaged and left over are typed.
-  const groups = await packagingGroups(tx, batch.id);
+  const groups = await packagingGroups(tx, batch.id, expectedUnits(batch, product.unitNetMassG));
   const pkgIn = new Map((input.packaging ?? []).map((p) => [p.materialId, p]));
   const wrapperProblems: string[] = [];
   const pkgSummary: { material: string; taken: string; used: string; damaged: string; leftOver: string; source: "finish" | "step" }[] = [];
@@ -384,7 +396,7 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
     if (!p) throw new DomainError("validation", `Count the ${g.materialName}: how many are damaged and how many are left over.`, { field, fieldErrors: { [field]: "Enter damaged and left over (0 if none)." } });
     const damaged = s(p.damaged) === "" ? new Decimal(0) : wholeNumber(p.damaged, `Damaged ${g.materialName}`, `${field}-damaged`);
     const leftOver = s(p.leftOver) === "" ? new Decimal(0) : wholeNumber(p.leftOver, `${g.materialName} left over`, `${field}-leftOver`);
-    const used = s(p.used) === "" ? good.plus(rejectsWrapped) : wholeNumber(p.used, `${g.materialName} used`, `${field}-used`);
+    const used = s(p.used) === "" ? new Decimal(packagingUsedFor(good.plus(rejectsWrapped).toNumber(), g.perPiece)) : wholeNumber(p.used, `${g.materialName} used`, `${field}-used`);
     // Spread over the open rows in issue order; rows already counted keep their counts.
     const open = g.rows.filter((x) => !x.r.countedAt);
     const fixed = g.rows.filter((x) => x.r.countedAt);
