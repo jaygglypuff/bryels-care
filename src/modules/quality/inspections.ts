@@ -44,6 +44,7 @@ import {
   type PlanTest,
 } from "./inspection-rules";
 import { assertUuid, isUuid, manilaToday, optionalText, reasonText, withIdempotency } from "./shared";
+import { pluralWord } from "@/lib/plural";
 
 /**
  * Inspections, sampling and append-only test results (US-3-14, process map W06-01..04).
@@ -578,7 +579,7 @@ export async function reviewInspection(ctx: AuthContext, input: { inspectionId: 
       reviewedOutcome = "fail";
     } else {
       const missing = missingRequiredTests(await planTests(tx, ins.inspectionPlanId), live);
-      if (missing.length) throw new DomainError("state", `Required test(s) without a result: ${missing.map((m) => m.name).join(", ")}. Return the inspection for testing.`);
+      if (missing.length) throw new DomainError("state", `Required ${pluralWord(missing.length, "test")} without a result: ${missing.map((m) => m.name).join(", ")}. Return the inspection for testing.`);
       const outcome = live.some((r) => !r.passed) ? "fail" : "pass";
       await moveInspection(tx, ctx, ins, "approved", note, { reviewedBy: ctx.userId, reviewedAt: new Date(), outcome, reviewNote: note });
       reviewedOutcome = outcome;

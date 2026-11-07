@@ -13,6 +13,7 @@ import { HoldChip, QaStatusChip, Timeline, qaWord } from "../../_ui";
 import { ActionForm, ReasonField } from "../../../inventory/receive/[grId]/forms";
 import { Forbidden } from "../../../forbidden";
 import { investigateHoldAction, liftHoldAction } from "../actions";
+import { isAre, plural } from "@/lib/plural";
 
 export const metadata = { title: "Stopped by QA" };
 
@@ -46,7 +47,7 @@ export default async function HoldPage({ params, searchParams }: { params: Promi
         ) : (
           <NextStep text="The lots stay stopped." waitingFor={h.can.liftBlockedReason ? "Waiting for a second QA person: you stopped it, so someone else lets it go." : "Waiting for QA to let it go."} />
         ))}
-      {placed && <Banner tone="hold" title="Stopped">{h.lots.length} lot(s) are stopped. Move them to the hold area; another QA person lets them go.</Banner>}
+      {placed && <Banner tone="hold" title="Stopped">{plural(h.lots.length, "lot")} {isAre(h.lots.length)} stopped. Move them to the hold area; another QA person lets them go.</Banner>}
       {active && h.locationCode && <Banner tone="warn" title={`Place ${h.locationCode} is blocked`}>Nothing can be put there while it is stopped.</Banner>}
 
       <Card>

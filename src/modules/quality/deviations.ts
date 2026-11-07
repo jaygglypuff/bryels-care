@@ -26,6 +26,7 @@ import { getSetting } from "@/lib/settings";
 import { holdReasonOptions, placeHold } from "@/modules/inventory";
 import { notifyRoles } from "@/modules/platform";
 import { assertUuid, isIsoDate, isUuid, optionalText, reasonText, requiredText } from "./shared";
+import { isAre, pluralWord } from "@/lib/plural";
 
 /**
  * Deviations from any step, lot or batch, containment holds and closure with separation of duties
@@ -308,7 +309,7 @@ export async function closeDeviation(ctx: AuthContext, input: CloseDeviationInpu
       .from(deviationHolds)
       .innerJoin(qualityHolds, eq(qualityHolds.id, deviationHolds.qualityHoldId))
       .where(and(eq(deviationHolds.deviationId, d.id), inArray(qualityHolds.status, ["open", "investigating"])));
-    if (open.length) throw new DomainError("state", `Containment hold(s) ${open.map((h) => h.n).join(", ")} are still open. Decide the held stock and lift the hold(s) first.`);
+    if (open.length) throw new DomainError("state", `Containment ${pluralWord(open.length, "hold")} ${open.map((h) => h.n).join(", ")} ${isAre(open.length)} still open. Decide the held stock and lift ${open.length === 1 ? "the hold" : "the holds"} first.`);
     const now = new Date();
     await move(tx, ctx, d, "closed", resolution, { rootCause, resolution, releasePermitted: input.releasePermitted, effectivenessCheckOn, closedBy: ctx.userId, closedAt: now });
     await audit(tx, ctx, {
@@ -480,7 +481,7 @@ export async function getDeviation(ctx: AuthContext, deviationId: string) {
           : !d.severity
             ? "Classify the severity first (start the investigation)."
             : openHolds.length
-              ? `Lift containment hold(s) ${openHolds.map((h) => h.number).join(", ")} first.`
+              ? `Lift containment ${pluralWord(openHolds.length, "hold")} ${openHolds.map((h) => h.number).join(", ")} first.`
               : null,
     },
   };

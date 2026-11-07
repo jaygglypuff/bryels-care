@@ -26,6 +26,7 @@ import {
   type VerifyState,
 } from "./w2c-actions";
 import { fmtLotQty } from "./_ui";
+import { plural } from "@/lib/plural";
 
 export function StartInspectionButton({ batchId, lotId, processStepRecordId }: { batchId?: string; lotId?: string; processStepRecordId?: string }) {
   return <ActionForm action={startInspectionAction} hidden={{ batchId, lotId, processStepRecordId }} submit="Start the quality check" pending="Starting…" variant="secondary" />;
@@ -366,7 +367,7 @@ export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: 
   const fe = state?.fieldErrors ?? {};
   const toggle = (id: string) => setPicked((p) => (p.has(id) ? new Set([...p].filter((x) => x !== id)) : new Set([...p, id])));
   return (
-    <form action={dispatch} className="flex flex-col gap-4" onSubmit={(e) => !window.confirm(`Save this decision for ${picked.size} lot(s)? Each lot is decided and saved one by one.`) && e.preventDefault()}>
+    <form action={dispatch} className="flex flex-col gap-4" onSubmit={(e) => !window.confirm(`Save this decision for ${plural(picked.size, "lot")}? Each lot is decided and saved one by one.`) && e.preventDefault()}>
       <div className="flex flex-wrap items-center gap-3 text-[13px]">
         <span>
           {picked.size} of {rows.length} selected
@@ -436,8 +437,8 @@ export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: 
         </p>
       )}
       <div>
-        <SubmitButton variant="cta" size="lg" pendingText={`Deciding ${picked.size} lot(s)… keep this page open`} disabled={picked.size === 0}>
-          Save for {picked.size} lot(s)
+        <SubmitButton variant="cta" size="lg" pendingText={`Deciding ${plural(picked.size, "lot")}… keep this page open`} disabled={picked.size === 0}>
+          Save for {plural(picked.size, "lot")}
         </SubmitButton>
       </div>
     </form>

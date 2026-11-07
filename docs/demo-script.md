@@ -139,8 +139,10 @@ so they change from month to month.
 ### Scene 7: Where did it come from? (1 min). `qa.nfd@` or `owner@`
 
 1. Open the soap lot of production order 1 (scan a box label or search its lot number).
-2. Show the trace: the coconut oil, palm oil and wrapper lots that went into it, and the customer
-   order it is set aside for.
+2. Show the trace: the coconut oil, palm oil and wrapper lots that went into it. The soap is not sent
+   out yet, so the trace says "No customer has received this" (it does not list orders it is only set
+   aside for). To show the way forward to a customer, trace a lot that was sent out: after the full
+   rehearsal, the lotion lot sent to Isla Spa Supplies lists the customer, the order and the delivery receipt.
 
 ### Scene 8: The owner sees what happened (1 min). `owner@`
 
@@ -188,4 +190,11 @@ so they change from month to month.
   changes so the next deploy reloads the demo.
 - Tests: `tests/integration/platform/demo-lite.test.ts` (storyline, version reload, guards),
   `tests/unit/demo-profile.test.ts`.
+- Browser rehearsal of the whole story (ADR-122): reset the demo, then
+  `BASE=http://localhost:PORT node tests/e2e/demo-rehearsal.cjs` (screenshots in `SHOTS_DIR`, default the system temp
+  folder). It runs scenes 1–8 and carries the lotion order on to the invoice: Get materials, Weigh (each lot label
+  scanned, Jun confirms on his own session), the steps, box labels, Finish, Check quality, set aside, get from shelf,
+  second check (Dino), send out, proof of delivery, invoice (Ana approves because Rosa sent it; Rosa saves it to the
+  books). `ONLY=d,e` runs single sections. The server needs `FILE_STORAGE` (the signature on the proof of delivery is a
+  file); a production build (`pnpm build && pnpm start`) is steadier than `next dev` for a full run.
 - The old screenshots of the full demo (`docs/demo/*.png`, 23 Oct) were removed on 2026-11-06 (ADR-115 §5): they no longer matched the app.

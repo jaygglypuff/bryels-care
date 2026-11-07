@@ -30,6 +30,7 @@ import { paperRecordBlockers } from "./bmr-paper";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
 import { syncWorkOrderProgress } from "./work-orders";
+import { plural } from "@/lib/plural";
 
 /**
  * Batch closure and controlled reopen / amendment (US-3-19; W05-20..21, CX-REOPEN,
@@ -108,7 +109,7 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
 
   if (b.status === "released") {
     const pending = await q.select({ id: batchMaterials.id }).from(batchMaterials).where(and(eq(batchMaterials.batchId, b.id), eq(batchMaterials.status, "pending")));
-    checks.push({ code: "weighing", label: "Every ingredient weighed", ok: pending.length === 0, blocking: true, detail: pending.length ? `${pending.length} ingredient line(s) not weighed.` : "All ingredient lines weighed or recorded as exceptions." });
+    checks.push({ code: "weighing", label: "Every ingredient weighed", ok: pending.length === 0, blocking: true, detail: pending.length ? `${plural(pending.length, "ingredient line")} not weighed.` : "All ingredient lines weighed or recorded as exceptions." });
     const snap = b.formulaSnapshot as FormulaSnapshot;
     const done = new Set((await q.select({ n: processStepRecords.stepNo }).from(processStepRecords).where(eq(processStepRecords.batchId, b.id))).map((r) => r.n));
     const open = snap.steps.filter((s) => !done.has(s.stepNo));

@@ -11,6 +11,7 @@ import { MoreMenu } from "@/ui/more-menu";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { QaStatusChip, fmtLotQty } from "../_ui";
+import { isAre, plural } from "@/lib/plural";
 
 export const dynamic = "force-dynamic";
 
@@ -167,7 +168,7 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
               </Banner>
             )}
             {t.hiddenCount > 0 && (
-              <Banner tone="warn" title={`${t.hiddenCount} linked record(s) are at sites you cannot see`}>
+              <Banner tone="warn" title={`${plural(t.hiddenCount, "linked record")} ${isAre(t.hiddenCount)} at sites you cannot see`}>
                 Ask someone with access to those sites (or the owner) to look too.
               </Banner>
             )}

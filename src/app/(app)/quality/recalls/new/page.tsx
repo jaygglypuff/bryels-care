@@ -5,6 +5,7 @@ import { NextStep, PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { OpenRecallForm } from "../forms";
+import { isAre, plural } from "@/lib/plural";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export default async function NewRecallPage({ searchParams }: { searchParams: Pr
             />
             {r.hiddenCount > 0 && (
               <div className="mt-3">
-                <Banner tone="warn" title={`${r.hiddenCount} linked record(s) are at sites you cannot see`}>They are not in this recall. Ask a QA person with access to those sites (or the owner) to look too.</Banner>
+                <Banner tone="warn" title={`${plural(r.hiddenCount, "linked record")} ${isAre(r.hiddenCount)} at sites you cannot see`}>They are not in this recall. Ask a QA person with access to those sites (or the owner) to look too.</Banner>
               </div>
             )}
           </Card>

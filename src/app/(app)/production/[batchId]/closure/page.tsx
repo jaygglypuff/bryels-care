@@ -11,6 +11,7 @@ import { Forbidden } from "../../../forbidden";
 import { AmendmentForm, AttachPaperForm, CloseBatchForm, DecideReopenForm, IssuePaperForm, ReopenRequestForm, ReviewPaperForm, VoidPaperForm, WithdrawReopenForm } from "./forms";
 import { Help } from "@/ui/help/help";
 import { PageIntro } from "@/ui/guide";
+import { plural } from "@/lib/plural";
 
 export const metadata = { title: "Batch closure and records" };
 export const dynamic = "force-dynamic";
@@ -92,7 +93,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
           ) : !v.can.close ? (
             <p className="text-[13px] text-muted">Closing needs a site manager (production.batch.approve).</p>
           ) : blockers.length ? (
-            <Banner tone="bad" title={`${blockers.length} item(s) block closure`}>
+            <Banner tone="bad" title={`${plural(blockers.length, "item")} ${blockers.length === 1 ? "blocks" : "block"} closure`}>
               Resolve the items marked “Blocks closure”, then close.
             </Banner>
           ) : (

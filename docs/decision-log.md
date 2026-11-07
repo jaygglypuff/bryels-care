@@ -2460,3 +2460,36 @@ Tests: `tests/unit/search-screens.test.ts`, `tests/unit/scan/master-search-numbe
 Known issues:
 - The owner's menu row at 1280 px is still 74 px too long; it was 110 px too long before this change.
 - The search has no rate limit. Input is capped at 80 characters and every query has a LIMIT.
+
+## ADR-122 Round 4 leftovers and the small-demo rehearsal (2026-11-07)
+
+Status: Accepted (UX leftovers, no owner decision needed). Extends ADR-073, ADR-109 and ADR-111.
+
+Decision:
+1. **Who acts next names the owner when nobody else can.** When no one holding the open step's role is left (the small
+   demo has one finance person, and she sent the invoice) and `governance.owner_override` is on, `nextActors` names the
+   organisation-wide owners instead of "Nobody can do it yet". The owner already could decide it (To approve offered
+   it). Never for independent rules (floor second-person checks, QA decisions). Screen hint and notification list only;
+   the deciding service re-checks as before.
+2. **The label on each piece says "piece".** `LABEL_KIND_WORDS.bar` read "bar" for every product, so the lotion said
+   "How many? (one for each bar)". The stored kind `bar` is unchanged; only the words are.
+3. **Leftovers done:** "(s)" plurals in production, quality and maintenance (test exclusion removed); To approve row
+   and side panel no longer share field ids (`useId`); Compare over time dots have an invisible 88-unit tap target;
+   one green button on Problems & alerts; recipe wizard progress bar before its intro.
+4. **`tests/e2e/demo-rehearsal.cjs`** now walks the small demo (docs/demo-script.md) through the current flow: QA check,
+   pour, put away by scan, Get materials, Weigh by scanning the lot label (the checker confirms on his own session), the
+   steps, box labels, Finish, Check quality, set aside, get from shelf by label, second check by another person, send
+   out, proof of delivery, invoice (the owner approves, finance saves it to the books), trace and the owner's Home.
+
+Consequences: no migration, no permission change. Tests: `tests/unit/round4-leftovers.test.ts`,
+`tests/unit/approvals-unique-ids.test.ts`, `tests/unit/no-jargon-messages.test.ts` (all areas),
+`tests/integration/governance/next-actors.test.ts` ("nobody left in the step's role"). The rehearsal needs
+`FILE_STORAGE` set (the proof-of-delivery signature is a file); without it the screen says "File storage isn't set
+up", which is the configured behaviour (docs/deployment-railway.md).
+
+Open:
+- The trace of a lot that is set aside or taken off the shelf but not sent yet says "No customer has received this"; it
+  does not name the order it is set aside for (docs/demo-script.md scene 7 now says so).
+- On the Isla Spa order the use-first rule set aside the older lotion lot (loose pieces) rather than the boxed new
+  batch; correct by FEFO, but the presenter should know the boxes stay on the shelf.
+- After the invoice is sent for approval, the delivery still reads "Next: finance bills it" with "Open invoice draft".

@@ -262,22 +262,21 @@ describe("receiving and purchasing words", () => {
 
 /**
  * Round 4 (UX re-audit C): counts in plain words, never "invoice(s)", "day(s)", "box(es)". Use `plural(n, "invoice")`
- * from src/lib/plural.ts. Scans every screen, message and printed paper except the production, quality and
- * maintenance files, which another change is rewriting (listed in docs/ux-audit/README.md, round 4).
+ * from src/lib/plural.ts. Scans every screen, message and printed paper, production, quality and maintenance included
+ * (their exclusion was removed with the round 4 leftovers, 2026-11-07).
  */
 describe("no \"(s)\" plurals in what people read", () => {
-  const EXCLUDED = /[\\/](production|quality|maintenance)[\\/]/;
   /** "word(s)" followed by text (a word, punctuation, the end of a string or JSX text), not a call `fn(s)` in code. */
   const PLURAL = /[A-Za-z]{2,}\((?:s|es|ies)\)(?= [a-z]| ?[A-Z]|\.(?:\s|["'`<]|$)|:|["'`<$])(?! (?:as|in|of)\b)/;
   const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : /\.tsx?$/.test(f) && !f.endsWith(".test.ts") ? [join(d, f)] : []));
-  const scanFiles = () => ["src/app", "src/modules", "src/ui", "src/lib", "src/db/seeds"].flatMap((d) => walk(join(ROOT, d))).filter((f) => !EXCLUDED.test(relative(ROOT, f)));
+  const scanFiles = () => ["src/app", "src/modules", "src/ui", "src/lib", "src/db/seeds"].flatMap((d) => walk(join(ROOT, d)));
 
   it("the pattern finds text plurals and skips code calls", () => {
     for (const t of ["`${n} invoice(s) are late`", "{n} day(s) late", "\"Lot(s)\"", "`${n} box(es).`", "scan(s): x"]) expect(PLURAL.test(t), t).toBe(true);
     for (const t of ["includes(s));", "syncLabel(s);", "btoa(s).replace(", "map((s) => s)", "cadenceOf(s))", "structuredClone(s), keep"]) expect(PLURAL.test(t), t).toBe(false);
   });
 
-  it("no screen, message or paper outside production/quality/maintenance says \"(s)\"", () => {
+  it("no screen, message or paper says \"(s)\"", () => {
     const bad: string[] = [];
     for (const file of scanFiles()) {
       readFileSync(file, "utf8")

@@ -7,6 +7,7 @@ import { MoreMenu } from "@/ui/more-menu";
 import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { HoldChip } from "../_ui";
 import { Forbidden } from "../../forbidden";
+import { plural } from "@/lib/plural";
 
 export const metadata = { title: "Stopped by QA" };
 
@@ -56,7 +57,7 @@ export default async function HoldsPage({ searchParams }: { searchParams: Promis
               status={<HoldChip status={h.status} />}
               facts={
                 <>
-                  {h.lotNumber ? `Lot ${h.lotNumber}` : `Place ${h.locationCode}`} · {h.lotCount} lot(s) · {h.openedByName}, {fmtDateTime(h.openedAt)}
+                  {h.lotNumber ? `Lot ${h.lotNumber}` : `Place ${h.locationCode}`} · {plural(h.lotCount, "lot")} · {h.openedByName}, {fmtDateTime(h.openedAt)}
                   {h.resolution ? ` · ${h.resolution === "released" ? "made OK again" : "not OK"}` : ""}
                 </>
               }

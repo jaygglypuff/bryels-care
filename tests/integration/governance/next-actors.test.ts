@@ -15,6 +15,7 @@ import { createPurchaseOrder, decidePurchaseOrder, procurementNextActors, sendPu
 import { batchQaNext, createBatch, createWorkOrder, myFloorTasks, productionOrderNext, recordDispense, startBatch, submitChecklist, type FormulaSnapshot } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 import { resetTestDatabase } from "../../support/db";
+import { setOrgSetting } from "../../support/w3d";
 import { type Kit, loadKit, loc, makeLot } from "../../support/kit";
 import { type FixtureStep, allowDirectBatches, cleanEquipment, makeExecutionFixture, manilaDay } from "../../support/w2b";
 
@@ -176,5 +177,34 @@ describe("QA decision and top-role self-approval", () => {
     expect(next?.viewer.can).toBe(false);
     expect(names(next)).toContain("Dino Reyes");
     expect(names(next)).not.toContain("Cora Villamor");
+  });
+});
+
+describe("nobody left in the step's role (demo rehearsal 2026-11-07)", () => {
+  // One finance person who sent the invoice: under the owner override (ADR-073) the owner may still approve it.
+  const rule = { kind: "invoice_test", permission: "finance.invoice.approve" as const, does: "approves the invoice", doBase: "approve the invoice", where: "in To approve", fallback: "finance", operational: true };
+  const record = () => ({ siteId: kit.nfd.id, roleCodes: ["no_such_role"] });
+
+  it("names the owner when the owner override is on", async () => {
+    await setOrgSetting(kit.orgId, "governance.owner_override", true);
+    const next = await nextActors(await ctx("finance@bryels-care.test"), rule, record());
+    expect(names(next)).toEqual(["Ana Villanueva"]);
+    expect(nextActorsSentence(next)).toMatch(/^Next: Ana \(owner\)/);
+    expect(nextActorsSentence(next)).not.toMatch(/Nobody can do it yet/);
+  });
+
+  it("the owner does not name themself, and independent checks never fall back to the owner", async () => {
+    await setOrgSetting(kit.orgId, "governance.owner_override", true);
+    expect(names(await nextActors(await ctx("owner@bryels-care.test"), rule, record()))).toEqual([]);
+    const independent = await nextActors(await ctx("finance@bryels-care.test"), { ...rule, operational: false, independent: true }, record());
+    expect(names(independent)).toEqual([]);
+    expect(nextActorsSentence(independent)).toMatch(/Nobody can do it yet/);
+  });
+
+  it("says nobody can do it yet when the owner override is off", async () => {
+    await setOrgSetting(kit.orgId, "governance.owner_override", false);
+    const next = await nextActors(await ctx("finance@bryels-care.test"), rule, record());
+    expect(names(next)).toEqual([]);
+    expect(nextActorsSentence(next)).toMatch(/Nobody can do it yet/);
   });
 });
