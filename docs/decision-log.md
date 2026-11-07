@@ -2494,6 +2494,42 @@ Open:
   batch; correct by FEFO, but the presenter should know the boxes stay on the shelf.
 - After the invoice is sent for approval, the delivery still reads "Next: finance bills it" with "Open invoice draft".
 
+## ADR-123 Harmony leftovers: menu fit, one record template, one green button, titled form sections (2026-11-07)
+
+Status: Accepted by the UX lead. The owner is to confirm on the live demo. Extends ADR-119 and ADR-121.
+
+Decision:
+1. **The menu row fits at every desktop width.** From 1280 to 1535 px the top bar shows the logo mark instead of the full
+   logo.
+   - The owner's menu row was 74 px too long at 1280 px. It now fits with 38 px to spare.
+   - Every role fits at 1280, 1366, 1440, 1536 and 1920 px, with nothing cut and the site selector and search visible.
+     `tests/e2e/top-bar-fit.cjs` checks this on the full demo.
+2. **Every page about one record uses `RecordHeader`.** This now includes the person and job pages under People &
+   access, which are setup-style (the name is the H1).
+3. **The status chip sits beside the identifier.**
+   - On the QA lot page it replaces the status banner. A plain sentence below appears only when the status stops people.
+   - On QA, maintenance and repair records it moved out of the first card.
+4. **One green button per page.**
+   - A page's own next-step card or button row folds into the header's `next`, `primary` and `waitingFor` slots, with the
+     same controls (production order, item page). `RecordHeader`'s next box accepts block content.
+   - A next step that jumps to a form on the same page is an outlined button; the form's own button is the green one.
+   - Controls that the next step does not point at are outlined.
+   - Setup pages fold their edit form in `EditDetails` ("Change the details").
+5. **Long forms use titled sections.** Forms with more than five fields on record and setup pages use the shared
+   `FormSection`: a title in `text-section`, at most five visible fields, and the rest folded. This applies to material,
+   product, supplier, reason, site and shelf/area.
+
+Behaviour, permissions, server actions and stored data are unchanged. There is no migration.
+
+Tests: `tests/unit/harmony-leftovers.test.ts`. `tests/unit/grade5-recipes-advanced.test.ts` now also accepts a
+`FormSection` fold as "More details".
+
+A survey of 57 record pages on the full demo, at 390, 820 and 1440 px, found:
+- no sideways scroll;
+- at most one visible green button per page;
+- at most five visible fields per form;
+- no text above 20 px except the `text-stat` token.
+
 ## ADR-124 Demo-rehearsal leftovers: billing follows the invoice, names on lines, trace names waiting orders (2026-11-07)
 
 Status: Accepted. These are UX leftovers of ADR-122 and need no owner decision. Extends ADR-108, ADR-109, ADR-110 and
