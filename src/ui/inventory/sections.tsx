@@ -40,7 +40,7 @@ export function SectionTile({ section, label, hint, lots, blockedLots, locations
       <SectionIcon section={section} size={22} />
       <span className="min-w-0 flex-1">
         <span className="block text-[16px] font-semibold leading-tight">{label}</span>
-        <span className="mt-1 block text-[22px] font-semibold tabular leading-none">
+        <span className="mt-1 block text-stat tabular leading-none">
           {lots} <span className="text-[14px] font-normal text-muted">{lots === 1 ? "lot" : "lots"}</span>
         </span>
         <span className="mt-1 block text-[12px] text-muted">

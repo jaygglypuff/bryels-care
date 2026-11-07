@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSite, listDepartments, listLines, listWarehouses } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, CheckField, Grid, TextField } from "../../_org/form";
@@ -31,7 +32,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
   const canDept = ctx.can("masterdata.department.admin") && inScope;
   return (
     <div className="space-y-5">
-      <PageHeader title={site.name} subtitle={<><span className="font-mono text-[12px] text-muted">{site.code}</span> · <ActiveChip active={site.isActive} /></>} actions={<LinkButton href="/masterdata/sites" variant="secondary">All sites</LinkButton>} />
+      <RecordHeader back={{ href: "/masterdata/sites", label: "Sites" }} typeLabel="Site" title={site.name} chip={<ActiveChip active={site.isActive} />} meta={[<span key="code" className="font-mono">{site.code}</span>]} />
       <PageIntro>One address where you work or keep stock, with its warehouses, making areas and teams.</PageIntro>
       <Saved show={saved === "1"} title="Site added">Next: add its warehouse (store room), then its making areas.</Saved>
       {!site.isActive ? (

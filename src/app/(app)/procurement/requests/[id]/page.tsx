@@ -3,12 +3,12 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getPurchaseRequest, procurementNextActors } from "@/modules/procurement";
 import { NextApprover } from "@/ui/next-approver";
-import { Card, CardTitle, Dl, EmptyState, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Input, LinkButton, Textarea } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { NextStepBox } from "@/ui/next-step-box";
-import { RecordNo } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { waitingFor } from "../../../waiting-for";
@@ -45,16 +45,15 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
   const title = v.lines.length ? v.lines.map((l) => l.materialName).slice(0, 3).join(", ") + (v.lines.length > 3 ? ` and ${v.lines.length - 3} more` : "") : "Request to buy";
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/procurement/requests", label: "Requests to buy" }}
+        typeLabel="Request to buy"
+        reference={r.requestNumber}
         title={title}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Request to buy · <RecordNo>{r.requestNumber}</RecordNo> <PrChip status={r.status} />
-          </span>
-        }
+        chip={<PrChip status={r.status} />}
         actions={
           v.can.cancel ? (
-            <MoreMenu>
+            <MoreMenu compact>
               <p className="mb-2 text-[13px] text-muted">Cancel only a request made by mistake or no longer needed. It stays on record.</p>
               <ActionForm action={cancelRequestAction} hidden={{ requestId: r.id }} submit="Cancel the request" variant="danger" confirm="Cancel this request? It stays on record as cancelled.">
                 <Textarea name="reason" rows={2} placeholder="Why" aria-label="Why" required />

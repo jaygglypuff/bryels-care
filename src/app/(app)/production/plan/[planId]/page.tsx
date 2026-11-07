@@ -5,7 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
 import { addDays, getProductionPlan, manilaToday, orderStateWord, type ProductionPlanDetail } from "@/modules/production";
-import { Card, Field, Input, LinkButton, PageHeader } from "@/ui/core";
+import { Card, Field, Input, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { planCommandAction } from "../../work-orders/actions";
@@ -32,15 +33,12 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
   const u = (v: string | null) => (v === null ? "—" : fmtQty(v, "", 0));
   return (
     <div>
-      <PageHeader
-        title={p.planNumber}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <StatusChip status={p.status} />
-            <span>{fmtDate(p.periodStart)} – {fmtDate(p.periodEnd)}</span>
-          </span>
-        }
-        actions={<LinkButton href="/production/plan" variant="secondary">All plans</LinkButton>}
+      <RecordHeader
+        back={{ href: "/production/plan", label: "Production plan" }}
+        typeLabel="Production plan"
+        reference={p.planNumber}
+        status={p.status}
+        meta={[`${fmtDate(p.periodStart)} – ${fmtDate(p.periodEnd)}`]}
       />
       <PageIntro>One plan: what to make for each product. Turn a line into a production order when it is right.</PageIntro>
       {d.approvalRequired && p.status === "draft" && (

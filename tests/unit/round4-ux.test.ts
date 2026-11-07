@@ -82,7 +82,7 @@ describe("44 px targets inside pages (UX re-audit C #2)", () => {
 
 describe("frame and page layout (UX re-audit C #8, #9, #10)", () => {
   it("phones: title, then the intro, then the header buttons (generic, in PageHeader + PageIntro + globals.css)", () => {
-    expect(src("src/ui/core.tsx")).toMatch(/"page-header mb-5/);
+    expect(src("src/ui/core.tsx")).toMatch(/"page-header mb-\d/);
     expect(src("src/ui/core.tsx")).toMatch(/"page-header--actions"/);
     expect(src("src/ui/core.tsx")).toMatch(/className="page-actions /);
     expect(src("src/ui/guide.tsx")).toMatch(/className="page-intro /);

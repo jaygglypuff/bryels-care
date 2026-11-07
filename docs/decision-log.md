@@ -2369,3 +2369,53 @@ small plans), only metadata is stored in `email_outbox` (never the body or the k
 change and is shown as failed, `none` stays the default. Set-up: in Brevo, verify the sender domain or address (SPF and
 DKIM records at the domain's DNS) and create an API key; in Railway (web and worker services) set EMAIL_PROVIDER=brevo,
 BREVO_API_KEY and EMAIL_FROM. Test `tests/unit/email-brevo.test.ts`.
+
+## ADR-119 One calm type scale and one record page template (owner 2026-11-08)
+
+Status: Accepted (UX lead; owner to confirm on the live demo). Amends ADR-082 §5 (record header) and ADR-088 §1
+(PageIntro shown compact, wording unchanged).
+
+Owner, with phone screenshots of "Check quality: Aloe Hand Lotion 250 mL": "big fonts but the focus is not on the batch
+number. The summary is ugly too … it is not harmonious."
+
+Decision:
+1. **Type scale as tokens** (`@theme` in `src/app/globals.css`, table in `docs/ux-system.md` §2.8): `text-id` 26→30 px
+   (record identifier), `text-title` 22→26 px (page titles, was 26→32), `text-section` 16→17 px (card titles),
+   body 15 px below 1024 px, `text-meta` 13, `text-label` 12, `text-value` 18 (summary values), `text-stat` 26 (KPI and
+   count numbers, were 26–34), `text-readout` 40 (weigh screen only). No page uses an ad-hoc `text-[NNpx]` above 20 px
+   (print layouts and the keypad excepted). Spacing on an 8 px grid; cards 16/24 padding, radius 16/20 (§2.7).
+2. **One record page template** (`docs/ux-system.md` Rules: 5.2): `RecordHeader` puts the identifier first as the H1
+   (large, dark; `data-testid="record-number"` kept for tests and e2e), the status chip beside it, Help "?" and
+   ⋯ More as compact icon buttons on the same row, the product/customer/supplier name as the subtitle, one meta line,
+   then the progress strip and "What to do next". Setup records keep the name as the H1 (ADR-103/108) with the code in
+   the meta line. `PageIntro` keeps its sentence but shows one line on phones with "more". Summaries use `SummaryGrid`
+   (2 columns on phones, 3–4 when wide; bold numbers with units, one small line under each); "nothing went wrong"
+   becomes one `QuietLine` instead of a card. Applied to the record pages listed in `docs/ux-audit/harmony-review.md`.
+3. Behaviour, permissions, server actions and words are unchanged; only layout and type. No migration, no permission,
+   no new dependency.
+
+Consequences: unit test `round4-ux` (page header margin) and the redirect helpers of the grade-5 tests (now also accept
+`RecordHeader`) were updated; e2e scripts read `record-number`/`record-reference`, which the new header keeps. Open:
+forms are not yet regrouped into titled sections; lists kept their row anatomy; print layouts unchanged (see the review).
+
+## ADR-120 Typing the code printed on a label counts as reading it (owner 2026-11-08)
+
+Status: Accepted by the owner; A-SCAN-TYPED-01 needs QA to confirm. Supersedes in part the ADR-098 sentence
+"Verification scans … cannot be tapped" and the ADR-100/105/106 rule "type the last 4 only for a damaged label".
+
+Decision: every field that asks to scan a lot, box, shelf, batch or item also accepts the number printed on its label,
+typed in. Case does not matter, and the number can be typed with or without dashes or the `BC:` prefix. Typing only the
+last 3 or more characters works when exactly one expected item ends with them. The typing box sits under the Scan button
+and never opens the keyboard on its own. A typed entry is saved as `typed`, in the same record a scan would write:
+`pick_lines.entry_mode`, `pack_verification_scans.entry_mode`, `label_verifications.entry_mode`,
+`batch_material_picks.lot_entry_mode`, dispense `lotConfirmed`, put-away `meta.locationVia`, count `lotVia`
+(migration 0039). Typing counts for the verification checks (second check, boxing check, label verification, and lot
+confirmation at weighing and Get materials), because the person reads the real label. Picking from a list still does
+not count, and the server refuses it. The server matches a typed number exactly first, then ignoring case, dashes and
+spaces. If two records would match, it matches neither. A wrong number gets a plain refusal.
+
+Consequences:
+- The second-check screen lists the boxes first, and asks how many loose pieces only after a lot label is scanned or typed.
+- `docs/SCAN_INPUTS.md` has a new "Type the code" column.
+- New tests: `tests/unit/scan/typed-codes.test.ts` and `tests/integration/scan/typed-codes.test.ts`.
+- Risk: a checker could type the number from the pick list instead of the label (A-SCAN-TYPED-01).

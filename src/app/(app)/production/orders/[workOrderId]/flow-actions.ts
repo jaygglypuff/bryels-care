@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { type AuthContext, requireContext } from "@/lib/auth/context";
 import { coSign } from "@/lib/auth/co-sign";
+import { parseVia } from "@/lib/scan/pick";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
@@ -71,7 +72,7 @@ export async function pickAction(_: ActionState, fd: FormData): Promise<ActionSt
     const r = await confirmPicked(ctx, {
       batchId,
       all,
-      lines: all ? [] : [{ batchMaterialId: uuid.parse(str(fd, "batchMaterialId")), action, reason: opt(fd, "reason"), lotCode: opt(fd, "lotCode") }],
+      lines: all ? [] : [{ batchMaterialId: uuid.parse(str(fd, "batchMaterialId")), action, reason: opt(fd, "reason"), lotCode: opt(fd, "lotCode"), lotVia: parseVia(opt(fd, "lotVia")) }],
       toLocationCode: opt(fd, "toLocationCode"),
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
@@ -95,6 +96,7 @@ export async function weighAction(_: FlowActionState, fd: FormData): Promise<Flo
       lotRef: lotId,
       lotPreselected: true,
       lotConfirm: opt(fd, "lotConfirm"),
+      lotConfirmVia: parseVia(opt(fd, "lotConfirmVia")),
       locationRef: opt(fd, "locationId"),
       qty: opt(fd, "qty"),
       uom: "g",

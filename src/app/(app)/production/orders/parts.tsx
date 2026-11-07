@@ -97,15 +97,15 @@ export function DefectTables({ summary, showProduct = true }: { summary: DefectS
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-[14px] border border-line p-3">
           <p className="text-[12px] text-muted">Good pieces</p>
-          <p className="text-[20px] font-semibold tabular">{n(summary.totals.good)}</p>
+          <p className="text-value tabular">{n(summary.totals.good)}</p>
         </div>
         <div className="rounded-[14px] border border-line p-3">
           <p className="text-[12px] text-muted">Rejects</p>
-          <p className="text-[20px] font-semibold tabular">{n(summary.totals.defects)}</p>
+          <p className="text-value tabular">{n(summary.totals.defects)}</p>
         </div>
         <div className="rounded-[14px] border border-line p-3">
           <p className="text-[12px] text-muted">Reject rate</p>
-          <p className="text-[20px] font-semibold tabular">{summary.totals.defectPct ? `${summary.totals.defectPct}%` : "—"}</p>
+          <p className="text-value tabular">{summary.totals.defectPct ? `${summary.totals.defectPct}%` : "—"}</p>
         </div>
       </div>
       {summary.totals.byType.length > 0 && (

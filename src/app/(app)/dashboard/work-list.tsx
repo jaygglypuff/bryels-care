@@ -42,7 +42,7 @@ export function WorkList({ title, lines, counts, testId }: { title: string; line
           const age = c.count > 0 ? ageWords(c.oldestAt) : null;
           return (
             <li key={l.key} data-testid={`work-${l.key}`} className={cx("flex flex-wrap items-center gap-3 px-4 py-3", c.untold > 0 && "border-l-4 border-l-[var(--bad-bd)]")}>
-              <span className={cx("tabular w-10 shrink-0 text-[26px] font-semibold leading-none", c.count > 0 ? "text-fg" : "text-muted")}>{c.count}</span>
+              <span className={cx("tabular w-10 shrink-0 text-stat leading-none", c.count > 0 ? "text-fg" : "text-muted")}>{c.count}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-semibold text-fg">{l.title}</span>
                 <span className="block text-[13px] text-fg-2">

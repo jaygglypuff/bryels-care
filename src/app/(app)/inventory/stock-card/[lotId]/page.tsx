@@ -5,6 +5,7 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { type StockCard, getStockCard, manilaToday } from "@/modules/inventory";
 import { Card, Dl, EmptyState, Input, LinkButton, PageHeader, buttonClass } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
@@ -60,17 +61,15 @@ export default async function StockCardPage({ params, searchParams }: { params: 
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={`History: ${card.lot.itemName}`}
-        subtitle={
-          <>
-            Lot <RecordNo>{card.lot.lotNumber}</RecordNo> · {card.location ? `only ${card.location.name}` : "all shelves"} · {fmtDate(from)} to {fmtDate(to)}
-          </>
-        }
+      <RecordHeader
+        back={{ href: `/inventory/${card.lot.id}`, label: "Open this lot" }}
+        typeLabel="History of this lot"
+        reference={card.lot.lotNumber}
+        title={card.lot.itemName}
+        meta={[card.location ? `Only ${card.location.name}` : "All shelves", `${fmtDate(from)} to ${fmtDate(to)}`]}
         actions={
           <>
-            <LinkButton href={`/inventory/${card.lot.id}`} variant="secondary">Open this lot</LinkButton>
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-2">
                 <PrintButton />
                 {ctx.can("inventory.movement.export") && (

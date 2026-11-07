@@ -4,13 +4,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getCreditNote } from "@/modules/finance";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
 import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
@@ -53,15 +53,14 @@ export default async function CreditNotePage({ params, searchParams }: { params:
   );
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/finance/credit-notes", label: "Credits (money back)" }}
+        typeLabel="Credit (money back)"
+        reference={c.creditNoteNumber ?? "No number yet"}
         title={d.customer.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Credit (money back) · <RecordNo>{c.creditNoteNumber ?? "no number yet"}</RecordNo> <FinanceStatus status={c.status} />
-          </span>
-        }
+        chip={<FinanceStatus status={c.status} />}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               {c.creditNoteNumber && (
                 <LinkButton href={`/print/credit-note/${c.id}`} target="_blank" variant="secondary">
@@ -110,7 +109,7 @@ export default async function CreditNotePage({ params, searchParams }: { params:
       )}
       <div className="flex flex-col gap-4">
         <Card>
-          <CardTitle action={<Money value={c.amount} className="text-[20px] font-semibold" />}>Money back</CardTitle>
+          <CardTitle action={<Money value={c.amount} className="text-value" />}>Money back</CardTitle>
           <Dl
             items={[
               ["On invoice", <Link key="i" className="text-primary-text hover:underline" href={`/finance/invoices/${d.invoice.id}`}>{d.invoice.invoiceNumber}</Link>],

@@ -84,6 +84,8 @@ export function PutAwayForm({
         kind="location"
         name="location"
         id="putaway-dest"
+        viaName="locationVia"
+        notListed="That shelf is not one this lot may go to now. Check the shelf label and type it again."
         label={fromTask && toCode ? `Put it on ${toCode}, or tap another place` : "Where does it go?"}
         candidates={destCands}
         candidatesLabel="Places it may go now"

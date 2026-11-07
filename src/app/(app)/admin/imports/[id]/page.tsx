@@ -5,7 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { IMPORT_STATUS_LABELS, getImportJob, issueImportFileUrl, listImportRows, previewRows, type ImportJobDetail, type ImportJobStatus } from "@/modules/imports";
-import { Card, CardTitle, Dl, EmptyState, Kpi, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Kpi, Table, Td } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
@@ -91,14 +92,13 @@ export default async function ImportPage({ params, searchParams }: { params: Pro
   const missingPerms = d.handler.entityPermissions.filter((p) => !ctx.canAt(p, j.siteId));
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={`${d.handler.label}: ${j.fileName}`}
-        subtitle={
-          <>
-            <Chip tone={STATUS_TONE[s] ?? "neu"}>{IMPORT_STATUS_LABELS[s] ?? s}</Chip> <span className="ml-1">{d.siteCode} · uploaded by {d.uploadedByName} {fmtDateTime(j.uploadedAt)} · </span>
-            <RecordNo>{j.importNumber}</RecordNo>
-          </>
-        }
+      <RecordHeader
+        typeLabel={`Import · ${d.handler.label}`}
+        siteCode={d.siteCode}
+        reference={j.importNumber}
+        title={j.fileName}
+        chip={<Chip tone={STATUS_TONE[s] ?? "neu"}>{IMPORT_STATUS_LABELS[s] ?? s}</Chip>}
+        meta={[`Uploaded by ${d.uploadedByName} ${fmtDateTime(j.uploadedAt)}`]}
       />
       <PageIntro>This screen is for loading one spreadsheet: match the columns, let the system check every row, decide the rows it is unsure about, get an OK, then save it for good. Nothing is saved for good before the last step.</PageIntro>
       <NextStepFor d={d} canApprove={can("platform.import_job.approve")} canSubmit={can("platform.import_job.submit")} canPost={can("platform.import_job.post") && missingPerms.length === 0} editable={editable} isPreparer={ctx.userId === j.uploadedBy || ctx.userId === j.submittedBy} />

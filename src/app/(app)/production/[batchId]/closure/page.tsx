@@ -4,7 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { type ClosureView, canOpenClosure, getClosureView, listPaperRecords, paperScanDownloadUrl } from "@/modules/production";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { AmendmentForm, AttachPaperForm, CloseBatchForm, DecideReopenForm, IssuePaperForm, ReopenRequestForm, ReviewPaperForm, VoidPaperForm, WithdrawReopenForm } from "./forms";
@@ -42,19 +43,22 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader
-        title={`Close the batch · ${v.batch.number}`}
-        subtitle={`${v.batch.productName} · site ${v.batch.siteCode}${v.reopenCount ? ` · reopened ${v.reopenCount} ${v.reopenCount === 1 ? "time" : "times"}` : ""}`}
+      <RecordHeader
+        back={{ href: `/production/${v.batch.id}`, label: "Back to batch" }}
+        typeLabel="Close the batch"
+        reference={v.batch.number}
+        title={v.batch.productName}
+        siteCode={v.batch.siteCode}
+        meta={[v.reopenCount ? `Reopened ${v.reopenCount} ${v.reopenCount === 1 ? "time" : "times"}` : null]}
         actions={
           <>
             <Help screen="production.bmr" />
-            <LinkButton href={`/production/${v.batch.id}`} variant="secondary">
-              Back to batch
-            </LinkButton>
-            <LinkButton href={`/print/bmr/${v.batch.id}`} variant="secondary" target="_blank">
-              Print batch record
-            </LinkButton>
           </>
+        }
+        secondary={
+          <LinkButton href={`/print/bmr/${v.batch.id}`} variant="secondary" size="sm" target="_blank">
+            Print batch record
+          </LinkButton>
         }
       />
       <PageIntro>Last check after QA: every record is complete, then the batch is closed for good.</PageIntro>

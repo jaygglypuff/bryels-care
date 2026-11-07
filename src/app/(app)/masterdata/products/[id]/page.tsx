@@ -4,7 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtQty } from "@/lib/qty";
 import { PRODUCT_TRANSITIONS, daysToWholeMonths, getProduct, listFormulas, productFamilies, uomOptions, type ProductStatus } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
@@ -52,18 +53,16 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
   return (
     <div className="space-y-5">
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/masterdata/products", label: "Products" }}
+        typeLabel={familyLabel ? `Product · ${familyLabel}` : "Product"}
         title={p.name}
-        subtitle={
-          <>
-            {familyLabel} · {pieceSizeWords(p)} · {shelfText(p.shelfLifeDays)} · {p.unitsPerBox} in a box, {labellingText(p.labelling)} · <RecordNo>{p.code}</RecordNo> <PlainItemChip status={p.status} />
-          </>
-        }
+        chip={<PlainItemChip status={p.status} />}
+        meta={[pieceSizeWords(p), shelfText(p.shelfLifeDays), `${p.unitsPerBox} in a box, ${labellingText(p.labelling)}`, <RecordNo key="code">{p.code}</RecordNo>]}
         actions={
           <>
-            <LinkButton href="/masterdata/products" variant="secondary">All products</LinkButton>
             {(stop || (p.status === "draft" && (ctx.can("masterdata.product.edit") || ctx.can("masterdata.product.create")))) && (
-              <MoreMenu>
+              <MoreMenu compact>
                 <div className="flex flex-col gap-4">
                   {stop && (
                     <ActionForm action={productStatusAction} submitLabel="No longer made" variant="danger" hidden={{ _id: p.id, status: "discontinued" }}>

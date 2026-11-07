@@ -4,7 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { D, fmtDate, fmtDateTime } from "@/lib/qty";
 import { AREAS, AREAS_WORDS, EQUIPMENT_KINDS, STEP_KINDS, approvedWorkInstructionOptions, businessToday, getRoutingRevision, listFormulas, waitText } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
@@ -80,16 +81,15 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
         <Link href={`/masterdata/routings/${v.routing.id}`} className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
           ← Steps for {v.product.name}
         </Link>
-        <PageHeader
-          title={`Version ${r.revisionNo} of the steps for ${v.product.name}`}
-          subtitle={
-            <>
-              Steps (advanced) · <RecordNo>{v.routing.code}</RecordNo> <PlainVersionChip status={r.status} label={r.label} />
-            </>
-          }
+        <RecordHeader
+          back={{ href: `/masterdata/routings/${v.routing.id}`, label: "Back to the steps" }}
+          typeLabel={`Steps (advanced) · ${v.routing.code}`}
+          reference={`Version ${r.revisionNo}`}
+          title={`Steps for ${v.product.name}`}
+          chip={<PlainVersionChip status={r.status} label={r.label} />}
           actions={
             hasMore ? (
-              <MoreMenu>
+              <MoreMenu compact>
                 <div className="flex flex-col gap-3">
                   {v.can.withdraw && <CommandForm action={withdrawRoutingAction} hidden={{ id: r.id }} label="Take it back to change it" variant="secondary" />}
                   {v.can.edit && r.status === "draft" && !r.submittedAt && <DeleteDraftButton kind="routing_revision" id={r.id} what="this draft version and its steps (steps with no other version are removed too)" />}

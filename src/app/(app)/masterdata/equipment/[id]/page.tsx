@@ -6,7 +6,8 @@ import { D, fmtDate, fmtDateTime } from "@/lib/qty";
 import { equipmentMaintenanceSummary } from "@/modules/maintenance";
 import { businessToday, getEquipment } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { waitingFor } from "../../../waiting-for";
 import { EQUIPMENT_KIND_WORDS } from "../words";
@@ -34,7 +35,7 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
         <Link href="/masterdata/equipment" className="text-[13px] text-primary-text hover:underline">
           ← Equipment
         </Link>
-        <PageHeader title={e.name} subtitle={<><span className="font-mono text-[12px] text-muted">{e.code}</span> · {EQUIPMENT_KIND_WORDS[e.equipmentKind] ?? e.equipmentKind} · {v.site.name}{e.lineLabel ? ` · ${e.lineLabel}` : ""}</>} actions={<AvailabilityChip a={a} />} />
+        <RecordHeader back={{ href: "/masterdata/equipment", label: "Equipment" }} typeLabel={EQUIPMENT_KIND_WORDS[e.equipmentKind] ?? e.equipmentKind} title={e.name} chip={<AvailabilityChip a={a} />} meta={[<span key="code" className="font-mono">{e.code}</span>, v.site.name, e.lineLabel]} />
         <PageIntro>This machine&apos;s checks, cleaning and repairs. Record each one here so the system knows whether it may be used.</PageIntro>
       </div>
       {!a.selectable && (

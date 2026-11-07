@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
+import { parseVia } from "@/lib/scan/pick";
 import { toActionState, type ActionState } from "@/lib/errors";
 import { putAwayLot } from "@/modules/inventory/receiving-putaway";
 
@@ -14,6 +15,7 @@ export async function putAwayAction(_p: ActionState, fd: FormData): Promise<Acti
     const r = await putAwayLot(ctx, {
       lotRef: String(fd.get("lot") ?? ""),
       locationRef: location,
+      locationVia: parseVia(fd.get("locationVia")),
       fromLocationId: String(fd.get("fromLocationId") ?? "") || null,
       qty: String(fd.get("qty") ?? "") || null,
       qtyUom: String(fd.get("qtyUom") ?? "") || null,

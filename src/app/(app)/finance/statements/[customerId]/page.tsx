@@ -5,7 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate } from "@/lib/qty";
 import { AGING_BUCKETS, customerStatement } from "@/modules/finance";
-import { Card, CardTitle, EmptyState, Input, LinkButton, PageHeader, buttonClass } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Input, LinkButton, buttonClass } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow } from "@/ui/plain-list";
@@ -32,11 +33,13 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const canPrint = ctx.can("finance.invoice.export");
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/finance/statements", label: "Customer statements" }}
+        typeLabel="Statement"
         title={st.customer.name}
-        subtitle={`Statement · as of ${fmtDate(st.asOf)}`}
+        meta={[["As of", fmtDate(st.asOf)]]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/finance/statements" variant="secondary">
                 All customers
@@ -62,7 +65,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[13px] text-muted">They owe us</p>
-            <p className="text-[28px] font-semibold tabular-nums">
+            <p className="text-stat tabular-nums">
               <Money value={st.balanceDue} />
             </p>
           </div>

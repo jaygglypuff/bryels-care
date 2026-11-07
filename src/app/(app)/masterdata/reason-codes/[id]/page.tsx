@@ -2,7 +2,8 @@ import { REASON_CATEGORIES } from "@/db/schema/org";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { REASON_CATEGORY_LABELS, getReasonCode } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner } from "@/ui/status";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
@@ -28,7 +29,7 @@ export default async function ReasonCodePage({ params, searchParams }: { params:
   const options = REASON_CATEGORIES.map((c) => ({ value: c, label: REASON_CATEGORY_LABELS[c] }));
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader title={r.name} subtitle={<ActiveChip active={r.isActive} />} actions={<LinkButton href="/masterdata/reason-codes" variant="secondary">All reasons</LinkButton>} />
+      <RecordHeader back={{ href: "/masterdata/reason-codes", label: "Reasons" }} typeLabel="Reason" title={r.name} chip={<ActiveChip active={r.isActive} />} />
       <PageIntro>Change the words people see or where the reason is offered. Old records keep it.</PageIntro>
       <NextStep text={r.isActive ? `Offered when: ${r.appliesTo.map((c) => REASON_CATEGORY_LABELS[c as keyof typeof REASON_CATEGORY_LABELS] ?? c).join(", ")}. Nothing to do unless people do not understand the words.` : "Not offered on new records. Old records keep it."} />
       {created === "1" && <Banner tone="ok" title="Reason added">It is offered from now on where you ticked it.</Banner>}

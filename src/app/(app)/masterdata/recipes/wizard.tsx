@@ -315,7 +315,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
         </ol>
         {intro && <p className="max-w-[70ch] text-[13px] leading-snug text-fg-2" data-testid="wizard-intro">{intro}</p>}
         {/* The page's H1 is "New recipe" (or the product); each screen's title is its H2. */}
-        <h2 className="font-display text-[26px] font-semibold tracking-tight sm:text-[30px]">
+        <h2 className="font-display text-title tracking-tight sm:text-title-lg">
           <span className="text-muted">{screen}.</span> {TITLES[screen - 1]}
         </h2>
       </nav>
@@ -573,7 +573,7 @@ function ProductScreen({
     return (
       <Card>
         <p className="text-[15px]">This recipe is for</p>
-        <p className="mt-1 text-[20px] font-semibold">{lockedName}</p>
+        <p className="mt-1 text-value">{lockedName}</p>
         <p className="mt-2 text-[13px] text-muted">The product of a recipe can&apos;t change. Press Next.</p>
       </Card>
     );

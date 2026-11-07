@@ -37,14 +37,14 @@ export function TokenPasswordForm({ mode, check, submit }: Props) {
   if (info === "error")
     return (
       <Card>
-        <h1 className="font-display text-[22px] font-semibold">The link could not be checked</h1>
+        <h1 className="font-display text-title">The link could not be checked</h1>
         <p className="mt-2 text-[13px] text-muted">Check your connection and open the link from the email again.</p>
       </Card>
     );
   if (info.state !== "valid")
     return (
       <Card>
-        <h1 className="font-display text-[22px] font-semibold">{info.state === "expired" ? "This link has expired" : info.state === "used" ? "This link was already used" : "This link is not valid"}</h1>
+        <h1 className="font-display text-title">{info.state === "expired" ? "This link has expired" : info.state === "used" ? "This link was already used" : "This link is not valid"}</h1>
         <p className="mt-2 text-[13px] text-muted">Links work once and for a limited time. {again}</p>
         <Link href={mode === "invite" ? "/sign-in" : "/forgot-password"} className="mt-4 inline-block text-[14px] font-medium text-primary-text hover:underline">
           {mode === "invite" ? "Go to sign-in" : "Request a new link"}
@@ -53,7 +53,7 @@ export function TokenPasswordForm({ mode, check, submit }: Props) {
     );
   return (
     <Card>
-      <h1 className="font-display text-[24px] font-semibold">{mode === "invite" ? `Welcome, ${info.displayName}` : "Choose a new password"}</h1>
+      <h1 className="font-display text-title">{mode === "invite" ? `Welcome, ${info.displayName}` : "Choose a new password"}</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">
         {mode === "invite" ? "Choose the password for " : "New password for "}
         <span className="font-medium text-fg">{info.email}</span>. Use at least 12 characters; a short sentence is easy to remember and hard to guess.

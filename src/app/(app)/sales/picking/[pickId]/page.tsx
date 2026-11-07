@@ -6,10 +6,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getPick } from "@/modules/sales";
-import { Card, CardTitle, EmptyState, Field, Input, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Field, Input, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { cancelPickAction, completePickAction, generatePickListAction, pickScanAction, voidPickLineAction } from "../../fulfilment-actions";
@@ -67,18 +67,15 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader
-        title={`Get from shelf: ${v.customerName}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Link href="/sales/picking" className="text-primary-text hover:underline">To get from shelf</Link>
-            <ShipChip status={v.pick.status} />
-            <span>deliver by {fmtDate(v.order.requestedDeliveryOn)}</span>
-            <RecordNo>{v.pick.pickNumber}</RecordNo>
-          </span>
-        }
+      <RecordHeader
+        back={{ href: "/sales/picking", label: "To get from shelf" }}
+        typeLabel="Get from shelf"
+        reference={v.pick.pickNumber}
+        title={v.customerName}
+        chip={<ShipChip status={v.pick.status} />}
+        meta={[["Deliver by", fmtDate(v.order.requestedDeliveryOn)]]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href={`/print/pick-list/${v.pick.id}`} variant="secondary" target="_blank">Print the list</LinkButton>
               {ctx.can("documents.generated_document.create") && (
@@ -107,7 +104,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
         {canScan && short.length > 0 && (
           <Card>
             <CardTitle>Scan the box</CardTitle>
-            <ScanPanel scan={pickScanAction.bind(null, v.pick.id)} label="Scan the box label (or the lot label for loose pieces)" hint="A box that is not on this list is refused. Scanning the same box twice counts once." withQty allowManual candidates={short.filter((r) => !r.blocked).map((r) => ({ value: r.boxNumber ? `BC:BOX:${r.boxNumber}` : `BC:LOT:${r.lotNumber}`, title: r.productName, detail: `${placeWords(r.locationName, r.locationCode)} · ${r.boxNumber ? `box ${r.boxNumber}` : `${q(String(Number(r.qty) - Number(r.picked)), r.baseUom)} loose`} · lot ${r.lotNumber}`, codes: [r.boxNumber ?? r.lotNumber] }))} />
+            <ScanPanel scan={pickScanAction.bind(null, v.pick.id)} label="Scan the box label, or type the number printed on it" hint="For loose pieces, scan or type the lot label, then say how many. A box that is not on this list is refused. The same box twice counts once." withQty allowManual qtyAction="Take these pieces" candidates={short.filter((r) => !r.blocked).map((r) => ({ value: r.boxNumber ? `BC:BOX:${r.boxNumber}` : `BC:LOT:${r.lotNumber}`, title: r.productName, detail: `${placeWords(r.locationName, r.locationCode)} · ${r.boxNumber ? `box ${r.boxNumber}` : `${q(String(Number(r.qty) - Number(r.picked)), r.baseUom)} loose`} · lot ${r.lotNumber}`, codes: [r.boxNumber ?? r.lotNumber] }))} />
           </Card>
         )}
 

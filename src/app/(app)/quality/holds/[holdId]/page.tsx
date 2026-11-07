@@ -4,11 +4,11 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getHold } from "@/modules/inventory/holds";
-import { Card, CardTitle, Dl, EmptyState, Field, PageHeader, Select } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Select } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { fmtLotQty } from "@/ui/inventory/bits";
 import { Banner } from "@/ui/status";
 import { NextStep, PageIntro } from "@/ui/guide";
-import { RecordNo } from "@/ui/plain-list";
 import { HoldChip, QaStatusChip, Timeline, qaWord } from "../../_ui";
 import { ActionForm, ReasonField } from "../../../inventory/receive/[grId]/forms";
 import { Forbidden } from "../../../forbidden";
@@ -32,13 +32,13 @@ export default async function HoldPage({ params, searchParams }: { params: Promi
   const active = h.status !== "closed";
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <PageHeader
-        title={`Stopped by QA: ${h.lots[0]?.itemName ?? (h.locationName ? `place ${h.locationName}` : "")}${h.lots.length > 1 ? ` and ${h.lots.length - 1} more` : ""}`}
-        subtitle={
-          <>
-            <Link href="/quality/holds" className="text-primary-text hover:underline">Stopped by QA</Link> · {h.lotNumber ? `lot ${h.lotNumber}` : `place ${h.locationCode}`} · <RecordNo>{h.holdNumber}</RecordNo> · <HoldChip status={h.status} />
-          </>
-        }
+      <RecordHeader
+        back={{ href: "/quality/holds", label: "Stopped by QA" }}
+        typeLabel="Stopped by QA"
+        reference={h.holdNumber}
+        title={`${h.lots[0]?.itemName ?? (h.locationName ? `Place ${h.locationName}` : "")}${h.lots.length > 1 ? ` and ${h.lots.length - 1} more` : ""}`}
+        chip={<HoldChip status={h.status} />}
+        meta={[h.lotNumber ? ["Lot", h.lotNumber] : ["Place", h.locationCode]]}
       />
       <PageIntro>This screen is for QA: see what is stopped and why, and let it go (or say not OK) when QA has finished looking.</PageIntro>
       {active &&

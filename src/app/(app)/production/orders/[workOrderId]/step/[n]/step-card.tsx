@@ -32,7 +32,7 @@ function OwnCheck(p: Props) {
   const [bState, bAction] = useInPlaceAction(returnStepCardAction);
   return (
     <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
-      <h2 className="text-[22px] font-semibold text-fg">
+      <h2 className="text-title text-fg">
         {p.viewer.displayName}, did you check {plainWords(step.name)}
         {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
       </h2>
@@ -78,7 +78,7 @@ function StepCheck(p: Props) {
   if (!who)
     return (
       <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check">
-        <h2 className="text-[22px] font-semibold text-fg">Second check needed</h2>
+        <h2 className="text-title text-fg">Second check needed</h2>
         <p className="mt-1 text-[16px] text-muted">Ask someone to check {plainWords(step.name)}. They pick their name here, or open this step on their own phone (My work shows &quot;Check {step.name.toLowerCase()}&quot;).</p>
         {others.length ? (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -99,7 +99,7 @@ function StepCheck(p: Props) {
       <input type="hidden" name="stepNo" value={step.stepNo} />
       <input type="hidden" name="stepKind" value={step.kind} />
       <input type="hidden" name="checkerId" value={who.id} />
-      <h2 className="text-[22px] font-semibold text-fg">
+      <h2 className="text-title text-fg">
         {who.displayName}, you checked {plainWords(step.name)}
         {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
       </h2>
@@ -491,12 +491,12 @@ function WaitCard(p: Props) {
     >
       <Hourglass size={56} className="mx-auto text-muted" aria-hidden />
       {step.status === "pending" ? (
-        <p className="mt-2 text-[20px] font-semibold">
+        <p className="mt-2 text-value">
           The wait has not started.
         </p>
       ) : (
         <>
-          <p className="mt-2 font-display text-[30px] font-semibold text-fg">
+          <p className="mt-2 font-display text-stat text-fg">
             {step.waitingLabel ?? "Ready now"}
           </p>
           {step.waiting && (

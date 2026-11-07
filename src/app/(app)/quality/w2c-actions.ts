@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
  */
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
+import { parseVia } from "@/lib/scan/pick";
 import { toActionState, type ActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import {
@@ -293,7 +294,7 @@ export async function verifyLabelAction(_p: VerifyState, fd: FormData): Promise<
   const locationId = str(fd, "locationId");
   try {
     const ctx = await requireContext();
-    const r = await verifyLabelScan(ctx, { locationId, scan: str(fd, "scan") });
+    const r = await verifyLabelScan(ctx, { locationId, scan: str(fd, "scan"), via: parseVia(str(fd, "via")) });
     refreshCurrentPage();
     return {
       ok: true,

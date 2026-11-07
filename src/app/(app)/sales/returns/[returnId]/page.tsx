@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getCustomerReturn } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { QaStatusChip, fmtLotQty } from "../../../quality/_ui";
@@ -75,23 +75,23 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
 
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader
-        title={`Customer return: ${h.customerName}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Link href="/sales/returns" className="text-primary-text hover:underline">Customer returns</Link>
-            <RecordNo>{h.returnNumber}</RecordNo>
-            <ReturnStatusChip status={h.status} />
-          </span>
+      <RecordHeader
+        back={{ href: "/sales/returns", label: "Customer returns" }}
+        typeLabel="Customer return"
+        reference={h.returnNumber}
+        title={h.customerName}
+        chip={<ReturnStatusChip status={h.status} />}
+        secondary={
+          h.receivedAt ? (
+            <LinkButton href={`/print/return-receipt/${h.id}`} variant="secondary" size="sm">
+              Print return receipt
+            </LinkButton>
+          ) : undefined
         }
         actions={
           <>
-            {h.receivedAt && (
-              <LinkButton href={`/print/return-receipt/${h.id}`} variant="secondary">
-                Print return receipt
-              </LinkButton>
-            )}
-            <MoreMenu>
+            <Help screen="sales.return" />
+            <MoreMenu compact>
               <div className="flex flex-col gap-3">
                 {v.can.sendBack && !v.can.approve && <SendBackForm returnId={h.id} />}
                 {v.can.cancel && (
@@ -100,7 +100,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
                     <CancelReturnForm returnId={h.id} />
                   </div>
                 )}
-                <Help screen="sales.return" />
+                {!(v.can.sendBack && !v.can.approve) && !v.can.cancel && <p className="text-[14px] text-fg-2">Nothing else to do on this return.</p>}
               </div>
             </MoreMenu>
           </>

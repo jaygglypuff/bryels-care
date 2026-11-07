@@ -5,12 +5,12 @@ import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getSupplierReturn, procurementNextActors, returnableLots } from "@/modules/procurement";
 import { NextApprover } from "@/ui/next-approver";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, Textarea } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { ActionForm } from "@/ui/form";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { NextStepBox } from "@/ui/next-step-box";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, StatusChip } from "@/ui/status";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
@@ -42,16 +42,15 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
   const lots = can.edit ? (await returnableLots(ctx, v.supplier.id)).filter((l) => l.returnable) : [];
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/procurement/returns", label: "Send back to supplier" }}
+        typeLabel="Return to supplier"
+        reference={sr.returnNumber}
         title={v.supplier.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Return to supplier · <RecordNo>{sr.returnNumber}</RecordNo> <SrChip status={sr.status} />
-          </span>
-        }
+        chip={<SrChip status={sr.status} />}
         actions={
           can.cancel ? (
-            <MoreMenu>
+            <MoreMenu compact>
               <p className="mb-2 text-[13px] text-muted">Cancel only a return started by mistake. It stays on record.</p>
               <ActionForm action={cancelReturnAction} hidden={{ returnId: sr.id }} submit="Cancel the return" variant="danger" confirm="Cancel this return? It stays on record as cancelled.">
                 <Textarea name="reason" rows={2} placeholder="Why" aria-label="Why" required />

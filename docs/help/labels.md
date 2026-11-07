@@ -1,8 +1,8 @@
 ---
 key: inventory.labels
 title: Print and scan labels
-version: 4
-updated_at: 2026-11-06
+version: 5
+updated_at: 2026-11-08
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -37,6 +37,8 @@ To keep a copy as a file, pick **Save as PDF** in the print window. The PDF look
 3. If the lot's QA status changed (for example from waiting to OK), print a **new** label and throw the old one away.
 
 ## Scan a label
+
+A label will not scan? Type the number printed on it under the Scan button, for example BX-00000005. The app saves that you typed it.
 
 1. Every label has a square code (some shelf labels have a striped code).
 2. Point the phone's Scan screen at it, or use the handheld scanner.

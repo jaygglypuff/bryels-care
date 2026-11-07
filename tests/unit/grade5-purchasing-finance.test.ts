@@ -20,7 +20,7 @@ function files(dir: string, out: string[] = []): string[] {
 
 const all = [...files(join(ROOT, "procurement")), ...files(join(ROOT, "finance"))];
 const pages = all.filter((p) => p.endsWith("page.tsx"));
-const isRedirect = (src: string) => /redirect\(/.test(src) && !/<PageHeader/.test(src);
+const isRedirect = (src: string) => /redirect\(/.test(src) && !/<(PageHeader|RecordHeader)/.test(src);
 
 describe("grade-5 purchasing and finance screens", () => {
   it("covers the 36 screens listed in PAGE_REVIEW.md (17 purchasing + 19 finance)", () => {

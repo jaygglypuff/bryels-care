@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getItemStock, type ItemStock } from "@/modules/inventory";
 import { LinkButton, cx } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner } from "@/ui/status";
 import { PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -57,18 +58,13 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   return (
     <div className="space-y-5">
       <div>
-        <nav aria-label="Breadcrumb" className="text-[13px] text-muted">
-          <Link href={`/inventory?kind=${it.kind}`} className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">
-            {isMat ? "Raw materials" : "Finished goods"}
-          </Link>
-        </nav>
-        <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-fg sm:text-[34px]">{it.name}</h1>
-        <div className="mt-4">
-          <PageIntro>This screen is for everything about {it.name}: how much we have, from whom, where it is, and which one to use first.</PageIntro>
-        </div>
-        <p className="mt-1 text-[12px] text-muted">
-          {[it.group, it.usualBrand ? `usual brand ${it.usualBrand}` : null, it.shelfLifeDays ? `keeps about ${it.shelfLifeDays} days` : null, it.storageConditions, `code ${it.code}`].filter(Boolean).join(" · ")}
-        </p>
+        <RecordHeader
+          back={{ href: `/inventory?kind=${it.kind}`, label: isMat ? "Raw materials" : "Finished goods" }}
+          typeLabel={isMat ? "Raw material" : "Finished product"}
+          title={it.name}
+          meta={[it.group, it.usualBrand ? `usual brand ${it.usualBrand}` : null, it.shelfLifeDays ? `keeps about ${it.shelfLifeDays} days` : null, it.storageConditions, `code ${it.code}`]}
+        />
+        <PageIntro>This screen is for everything about {it.name}: how much we have, from whom, where it is, and which one to use first.</PageIntro>
       </div>
 
       {(r.scope.canAll || actions.length > 0) && (

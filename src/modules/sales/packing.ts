@@ -28,6 +28,8 @@ import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { D, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
+import { cleanTyped, type PickVia } from "@/lib/scan/pick";
+import { checkEntryMode, findByCode, TYPED_NOT_ON_ORDER } from "@/lib/scan/code-sql";
 import { assertLotUsable, claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { auditDenied, notifyNextActors, requireReauthentication } from "@/modules/governance";
 import { lockOrder } from "./orders";
@@ -136,14 +138,17 @@ type ScanFailure = { packId: string; siteId: string; containerId: string | null;
  * One verification scan. Refusals (OVER_SHIPMENT, unknown box) are thrown as 409 after their
  * evidence row is written in its own transaction (the refused scan never adds the box).
  */
-export async function scanPackVerification(ctx: AuthContext, shipmentId: string, input: { payload: string; qty?: string | null; idempotencyKey: string }): Promise<VerifyScanResult> {
+export async function scanPackVerification(ctx: AuthContext, shipmentId: string, input: { payload: string; qty?: string | null; idempotencyKey: string; via?: PickVia | null }): Promise<VerifyScanResult> {
   ctx.require("inventory.pack.approve");
   ctx.require("sales.shipment.edit");
   if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new DomainError("validation", "The scan is missing its key. Reload the page and try again.");
-  const parsed = parseScan(input.payload);
-  if (parsed.kind === "invalid") throw new DomainError("validation", "That is not a box or lot label. Scan the box label (BC:BOX) or the lot label (BC:LOT).", { field: "payload" });
+  // A-SCAN-TYPED-01: the second check reads the label, by scan or by typing its number; a tap in a list is refused.
+  const entryMode = checkEntryMode(input.via);
+  const typed = entryMode === "typed";
+  const parsed = parseScan(typed ? cleanTyped(input.payload) : input.payload);
+  if (parsed.kind === "invalid") throw new DomainError("validation", typed ? TYPED_NOT_ON_ORDER : "That is not a box or lot label. Scan the box label (BC:BOX) or the lot label (BC:LOT).", { field: "payload" });
   const key = `pack_verify:${input.idempotencyKey}`;
-  const body = { shipmentId, payload: input.payload, qty: input.qty ?? null };
+  const body = { shipmentId, payload: input.payload, qty: input.qty ?? null, via: entryMode };
   let failure: ScanFailure | null = null;
   try {
     return await db.transaction(async (tx) => {
@@ -162,10 +167,10 @@ export async function scanPackVerification(ctx: AuthContext, shipmentId: string,
       const lines = await linesOf(tx, s.id);
       const active = await tx.select().from(pickLines).where(and(eq(pickLines.pickId, pick.id), isNull(pickLines.voidedAt)));
       const scan = async (result: string, containerId: string | null, lotId: string | null, qty: string | null, note: string | null) => {
-        await tx.insert(packVerificationScans).values({ organizationId: ctx.organizationId, siteId: s.siteId, packId: pack.id, containerId, lotId, qtyBase: qty, scanPayload: input.payload.slice(0, 200), scannedBy: ctx.userId, result, note, idempotencyKey: key });
+        await tx.insert(packVerificationScans).values({ organizationId: ctx.organizationId, siteId: s.siteId, packId: pack.id, containerId, lotId, qtyBase: qty, scanPayload: input.payload.slice(0, 200), scannedBy: ctx.userId, result, note, idempotencyKey: key, entryMode });
       };
       const tryBox = parsed.kind === "untyped" || parsed.type === "BOX";
-      const [box] = tryBox ? await tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), eq(containers.containerNumber, value), eq(containers.siteId, s.siteId))).limit(1) : [];
+      const [box] = tryBox ? await findByCode(containers.containerNumber, value, (w) => tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), w, eq(containers.siteId, s.siteId))).limit(2)) : [];
       let out: VerifyScanResult;
       if (box) {
         if (lines.some((l) => l.containerId === box.id)) {
@@ -197,16 +202,16 @@ export async function scanPackVerification(ctx: AuthContext, shipmentId: string,
         }
       } else {
         const tryLot = parsed.kind === "untyped" || parsed.type === "LOT";
-        const [lot] = tryLot ? await tx.select().from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.lotNumber, value), eq(inventoryLots.siteId, s.siteId))).limit(1) : [];
+        const [lot] = tryLot ? await findByCode(inventoryLots.lotNumber, value, (w) => tx.select().from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), w, eq(inventoryLots.siteId, s.siteId))).limit(2)) : [];
         if (!lot) {
-          failure = { packId: pack.id, siteId: s.siteId, containerId: null, payload: input.payload, result: "unknown_box", note: "Not a box or lot of this site." };
-          throw new DomainError("conflict", `${value} is not a box or lot of this site. Put it aside and check the label.`, { code: "UNKNOWN_BOX" });
+          failure = { packId: pack.id, siteId: s.siteId, containerId: null, payload: input.payload, result: "unknown_box", note: typed ? "Typed number: not a box or lot of this site." : "Not a box or lot of this site." };
+          throw new DomainError("conflict", typed ? TYPED_NOT_ON_ORDER : `${value} is not a box or lot of this site. Put it aside and check the label.`, { code: "UNKNOWN_BOX" });
         }
         const loosePicked = active.filter((l) => l.lotId === lot.id && !l.containerId);
         const verified = lines.filter((l) => l.lotId === lot.id && !l.containerId);
         const remaining = loosePicked.reduce((a, l) => a.plus(l.qtyBase), new Decimal(0)).minus(verified.reduce((a, l) => a.plus(l.qtyBase), new Decimal(0)));
         const raw = (input.qty ?? "").trim();
-        if (!/^\d{1,12}(\.\d{1,6})?$/.test(raw) || D(raw).lte(0)) throw new DomainError("validation", `Enter how many loose units of lot ${lot.lotNumber} you counted.`, { field: "qty" });
+        if (!/^\d{1,12}(\.\d{1,6})?$/.test(raw) || D(raw).lte(0)) throw new DomainError("validation", `Enter how many loose units of lot ${lot.lotNumber} you counted.`, { field: "qty", code: "NEEDS_QTY", lotNumber: lot.lotNumber });
         let qty = D(raw);
         if (remaining.lte(0) || qty.gt(remaining)) {
           failure = { packId: pack.id, siteId: s.siteId, containerId: null, payload: input.payload, result: "not_in_pack", note: `Loose ${qty.toString()} of ${lot.lotNumber}; picked and not yet verified: ${Decimal.max(remaining, 0).toString()}.` };
@@ -246,7 +251,7 @@ export async function scanPackVerification(ctx: AuthContext, shipmentId: string,
     const f = failure as ScanFailure | null;
     if (f && e instanceof DomainError) {
       await db.transaction(async (tx) => {
-        await tx.insert(packVerificationScans).values({ organizationId: ctx.organizationId, siteId: f.siteId, packId: f.packId, containerId: f.containerId, scanPayload: f.payload.slice(0, 200), scannedBy: ctx.userId, result: f.result, note: f.note.slice(0, 500) });
+        await tx.insert(packVerificationScans).values({ organizationId: ctx.organizationId, siteId: f.siteId, packId: f.packId, containerId: f.containerId, scanPayload: f.payload.slice(0, 200), scannedBy: ctx.userId, result: f.result, note: f.note.slice(0, 500), entryMode });
         await tx.update(packs).set({ verificationFailureCount: sql`${packs.verificationFailureCount} + 1` }).where(eq(packs.id, f.packId));
       }).catch(() => undefined); // the pack row may not exist when its creating transaction rolled back
     }

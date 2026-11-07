@@ -9,7 +9,7 @@ export function ForgotForm({ emailReady }: { emailReady: boolean }) {
   const [state, action] = useActionState(requestReset, null);
   return (
     <Card>
-      <h1 className="font-display text-[24px] font-semibold">Forgot your password?</h1>
+      <h1 className="font-display text-title">Forgot your password?</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">Enter your work email. If the account exists we send a link that works once, for 30 minutes.</p>
       {!emailReady && (
         <p className="mb-4 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">

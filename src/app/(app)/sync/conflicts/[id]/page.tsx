@@ -7,7 +7,8 @@ import { getConflict } from "@/lib/offline/server/conflicts";
 import { REASON_LABEL, commandLabel, type SyncConflictReason } from "@/lib/offline/protocol";
 import { fmtDateTime } from "@/lib/qty";
 import { reasonCodeOptions } from "@/modules/masterdata";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { ResolveForms } from "./resolve-forms";
@@ -76,10 +77,13 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <PageHeader
-        title={`${commandLabel(c.commandType)}${c.relatedEntityNumber ? ` · ${c.relatedEntityNumber}` : ""}`}
-        subtitle={`Made without signal by ${c.userName}${c.deviceLabel ? ` on ${c.deviceLabel}` : ""} at ${fmtDateTime(c.command.clientCreatedAt)} · arrived ${fmtDateTime(c.command.receivedAt)} · ${c.siteCode}`}
-        actions={<LinkButton href={ctx.can("platform.sync_conflict.view") ? "/sync/conflicts" : "/sync"} variant="secondary">Back</LinkButton>}
+      <RecordHeader
+        back={{ href: ctx.can("platform.sync_conflict.view") ? "/sync/conflicts" : "/sync", label: "Back" }}
+        typeLabel={commandLabel(c.commandType)}
+        siteCode={c.siteCode}
+        reference={c.relatedEntityNumber}
+        title={c.relatedEntityNumber ? undefined : commandLabel(c.commandType)}
+        meta={[`Made without signal by ${c.userName}${c.deviceLabel ? ` on ${c.deviceLabel}` : ""} at ${fmtDateTime(c.command.clientCreatedAt)}`, `arrived ${fmtDateTime(c.command.receivedAt)}`]}
       />
       <PageIntro>This screen is for the supervisor: one change made on a phone without signal that the system could not save. Compare “on the phone” with “in the system now”, then choose what to do at the bottom.</PageIntro>
       {c.status === "open" && (

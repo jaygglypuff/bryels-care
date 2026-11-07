@@ -9,7 +9,7 @@ export function PortalVerifyForm() {
   const [state, action] = useActionState(portalVerifyCode, null);
   return (
     <Card>
-      <h1 className="font-display text-[24px] font-semibold">Enter your code</h1>
+      <h1 className="font-display text-title">Enter your code</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">Open your authenticator app and type the 6-digit code for the Bryel&apos;s Care portal. Lost your phone? Ask your Bryel&apos;s Care representative to reset two-step sign-in.</p>
       <form action={action} className="flex flex-col gap-4">
         <Field label="Code" htmlFor="code" error={state?.fieldErrors?.code}>

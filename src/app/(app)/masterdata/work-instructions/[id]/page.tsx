@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { businessToday, getWorkInstruction } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
 import { Forbidden } from "../../../forbidden";
@@ -90,13 +91,11 @@ export default async function WorkInstructionPage({ params }: { params: Promise<
         <Link href="/masterdata/work-instructions" className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
           ← All how-to sheets
         </Link>
-        <PageHeader
+        <RecordHeader
+          back={{ href: "/masterdata/work-instructions", label: "How-to sheets" }}
+          typeLabel="How-to sheet"
           title={w.wi.name}
-          subtitle={
-            <>
-              How-to sheet · <RecordNo>{w.wi.code}</RecordNo>
-            </>
-          }
+          meta={[<RecordNo key="code">{w.wi.code}</RecordNo>]}
         />
       </div>
       <PageIntro>

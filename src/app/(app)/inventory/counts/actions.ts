@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
+import { parseVia } from "@/lib/scan/pick";
 import type { ActionState } from "@/lib/errors";
 import { COUNT_KINDS } from "@/db/schema";
 import {
@@ -97,7 +98,7 @@ export async function recordCountAction(id: string, _p: ActionState, fd: FormDat
     } else if (!unlabelled) {
       return { ok: false, message: "Scan the lot label, or describe the unlabelled item.", fieldErrors: { lotCode: "Scan or type the lot." } };
     }
-    const r = await recordCount(ctx, { countId: id, locationId, lotId, unlabelledDescription: lotId ? null : unlabelled, qty, qtyUom: unitOf(fd), idempotencyKey: str(fd, "idempotencyKey") });
+    const r = await recordCount(ctx, { countId: id, locationId, lotId, unlabelledDescription: lotId ? null : unlabelled, qty, qtyUom: unitOf(fd), idempotencyKey: str(fd, "idempotencyKey"), lotVia: parseVia(str(fd, "lotVia")) });
     return done(id, r.previous ? "Saved. Your new amount replaces your earlier one; the earlier one is kept in the history." : "Saved. Scan the next sack.");
   } catch (e) {
     return actionError(e);

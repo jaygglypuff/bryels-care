@@ -8,7 +8,8 @@ import { batchQaNext, productionOrderNext } from "@/modules/production";
 import { NextApprover } from "@/ui/next-approver";
 import type { NextActors } from "@/lib/next-actors-words";
 import { assigneeChoices, auditSentence, batchPlanWords, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, orderStateWord, plainReason, workOrderFormOptions, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, cx } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { Help } from "@/ui/help/help";
 import { WhoCanHelp } from "@/ui/who-can-help";
@@ -204,40 +205,39 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
   return (
     <div>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/production/orders", label: "Production orders" }}
+        typeLabel="Production order"
+        reference={wo.workOrderNumber}
         title={d.product.name}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
+        chip={
+          <>
             <OrderStatusChip status={v.status} label={v.statusLabel} subtitle={v.statusView.subtitle} warn={v.statusView.warn} />
             <OrderWarning text={v.statusView.warning} />
-            {/* ADR-110 C19: one story for the header and the body — pieces made so far and batches finished, not "4 batches made". */}
-            <span className="font-medium text-fg" data-testid="order-pieces">
-              {headerPieces(v)}
-            </span>
-            <span className="font-mono">{wo.workOrderNumber}</span>
-            <NeededBy date={v.neededBy} late={v.late} />
-            <span>{v.assignee ? (v.assignee.id === ctx.userId ? "Assigned to you" : `Assigned to ${v.assignee.name}`) : "Anyone can take it"}</span>
-            {d.salesOrder && (
-              <span>
-                For{" "}
-                {ctx.can("sales.sales_order.view") ? (
-                  <Link href={`/sales/${d.salesOrder.id}`} className="underline">
-                    {d.salesOrder.number}
-                  </Link>
-                ) : (
-                  d.salesOrder.number
-                )}{" "}
-                ({d.salesOrder.customerName})
-              </span>
-            )}
-          </span>
-        }
-        actions={
-          <>
-            <Help screen="production.production_order" />
-            <LinkButton href="/production/orders" variant="secondary">All orders</LinkButton>
           </>
         }
+        meta={[
+          // ADR-110 C19: one story for the header and the body — pieces made so far and batches finished, not "4 batches made".
+          <span key="pieces" className="font-medium text-fg" data-testid="order-pieces">
+            {headerPieces(v)}
+          </span>,
+          v.neededBy ? <NeededBy key="needed" date={v.neededBy} late={v.late} /> : null,
+          v.assignee ? (v.assignee.id === ctx.userId ? "Assigned to you" : `Assigned to ${v.assignee.name}`) : "Anyone can take it",
+          d.salesOrder ? (
+            <span key="so">
+              For{" "}
+              {ctx.can("sales.sales_order.view") ? (
+                <Link href={`/sales/${d.salesOrder.id}`} className="underline">
+                  {d.salesOrder.number}
+                </Link>
+              ) : (
+                d.salesOrder.number
+              )}{" "}
+              ({d.salesOrder.customerName})
+            </span>
+          ) : null,
+        ]}
+        actions={<Help screen="production.production_order" />}
       />
       <PageIntro>One production order: what to make, its batches, and the one thing to do next.</PageIntro>
 

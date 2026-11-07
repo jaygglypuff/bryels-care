@@ -103,7 +103,7 @@ export function SyncPanel({ userId, sites, currentSiteId }: { userId: string; si
           ).map(([k, v]) => (
             <div key={k}>
               <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{k}</dt>
-              <dd className="mt-0.5 font-display text-[22px] font-semibold tabular">{v}</dd>
+              <dd className="mt-0.5 font-display text-stat tabular">{v}</dd>
             </div>
           ))}
         </dl>

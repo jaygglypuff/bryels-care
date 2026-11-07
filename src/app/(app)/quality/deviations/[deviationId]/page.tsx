@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getDeviation, listCapas } from "@/modules/quality";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -39,15 +39,13 @@ export default async function DeviationPage({ params, searchParams }: { params: 
   const capaRows = ctx.can("quality.capa.view") ? await listCapas(ctx, { deviationId: d.id, status: "all" }) : null;
   return (
     <>
-      <PageHeader
-        title="Problem report"
-        subtitle={
-          <>
-            {v.batch ? `Batch ${v.batch.number}` : v.lot ? `Lot ${v.lot.number}` : d.sourceLabel} · <RecordNo>{d.deviationNumber}</RecordNo>
-          </>
-        }
+      <RecordHeader
+        back={{ href: "/quality/deviations", label: "Problem reports" }}
+        typeLabel="Problem report"
+        reference={d.deviationNumber}
+        title={v.batch ? `Batch ${v.batch.number}` : v.lot ? `Lot ${v.lot.number}` : d.sourceLabel}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               {capaRows && ctx.can("quality.capa.create") && (
                 <LinkButton href={`/quality/capa/new?deviationId=${d.id}`} variant="secondary">

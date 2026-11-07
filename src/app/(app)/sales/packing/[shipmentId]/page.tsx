@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { plural } from "@/lib/plural";
 import { NextApprover } from "@/ui/next-approver";
 import { packCheckNext } from "@/modules/sales";
 import { PlaceName } from "@/ui/inventory/place-name";
@@ -7,10 +8,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime, fmtQty } from "@/lib/qty";
 import { getPackingView } from "@/modules/sales";
-import { Card, CardTitle, EmptyState, Field, Input, LinkButton, PageHeader, Select } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Field, Input, LinkButton, Select } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { approveExceptionAction, completePackingAction, removeShipmentLineAction, verifyScanAction } from "../../fulfilment-actions";
@@ -22,6 +23,8 @@ import { Help } from "@/ui/help/help";
 export const metadata = { title: "Second check of the box" };
 
 const q = (v: string, uom = "pcs") => fmtQty(v, uom, uom === "pcs" ? 0 : 3);
+/** "1 piece", "6 pieces"; other units unchanged ("2.500 kg"). */
+const qWords = (v: string, uom = "pcs") => (uom === "pcs" ? plural(fmtQty(v, "", 0), "piece") : q(v, uom));
 
 /**
  * Second check of the box (pack verification, W09-07, US-4-11), phone first: someone who did not take the items
@@ -62,24 +65,21 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
     ) : !canVerify ? (
       <DoNext text="Waiting for the second check of the box." waitingFor={<NextApprover next={await packCheckNext(ctx, { shipmentId: s.id })} inline />} />
     ) : unverified.length > 0 ? (
-      <DoNext text={`Next: scan each box (${unverified.length} left). A box that is not on the order is refused.`} />
+      <DoNext text={`Next: scan or type each box label (${unverified.length} left). A box that is not on the order is refused.`} />
     ) : (
       <DoNext text="Every box is checked. Next: say how many boxes go on the truck and press “Finish the check” below." />
     );
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader
-        title={`Second check: ${v.customerName}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <ShipChip status={s.status} />
-            <RecordNo>{s.shipmentNumber ?? ""}</RecordNo>
-            <span className="font-mono text-[12px] text-muted">{v.order.orderNumber}</span>
-          </span>
-        }
+      <RecordHeader
+        typeLabel="Second check"
+        reference={s.shipmentNumber ?? ""}
+        title={v.customerName}
+        chip={<ShipChip status={s.status} />}
+        meta={[["Order", v.order.orderNumber]]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               <LinkButton href={`/sales/shipments/${s.id}`} variant="secondary">Open the delivery</LinkButton>
               <Help screen="sales.fulfilment" />
@@ -101,13 +101,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
       )}
 
       <div className="flex flex-col gap-4">
-        {checking && unverified.length > 0 && (
-          <Card>
-            <CardTitle>Scan the box</CardTitle>
-            <ScanPanel scan={verifyScanAction.bind(null, s.id)} label="Scan each box (or the lot label with the loose pieces you counted)" hint="A box that is not on the order, or more than ordered, is refused and not added." withQty />
-          </Card>
-        )}
-
+        {/* Owner screenshot 2026-11-08: the boxes to check come first (the next one marked), then the scan/type area. */}
         {!gone && (
         <Card>
           <CardTitle>
@@ -117,7 +111,9 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
             <EmptyState title="Nothing taken off the shelf yet">The boxes show here after they are taken off the shelf.</EmptyState>
           ) : (
             <ul className="flex flex-col gap-2">
-              {v.picked.map((p) => (
+              {v.picked.map((p) => {
+                const isNext = checking && p.id === unverified[0]?.id;
+                return (
                 <li
                   key={p.id}
                   data-testid="picked-row"
@@ -125,22 +121,40 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
                   data-box={p.boxNumber ?? ""}
                   data-qty={String(Number(p.qtyBase))}
                   data-verified={p.verified ? "yes" : "no"}
-                  className={`flex flex-wrap items-center justify-between gap-2 rounded-[14px] border p-3 ${p.verified ? "border-[var(--ok-bd)] bg-[var(--ok-bg)]" : "border-line"}`}
+                  data-next={isNext ? "yes" : "no"}
+                  aria-current={isNext ? "step" : undefined}
+                  className={`flex flex-wrap items-center justify-between gap-2 rounded-[14px] border p-3 ${p.verified ? "border-[var(--ok-bd)] bg-[var(--ok-bg)]" : isNext ? "border-2 border-primary bg-primary-soft" : "border-line"}`}
                 >
                   <span className="min-w-0">
+                    {isNext && <span className="mb-0.5 block text-[12px] font-semibold uppercase tracking-wide text-primary-text">Next to check</span>}
                     <span className="block text-[15px] font-semibold">{p.boxNumber ? <>Box <span className="font-mono">{p.boxNumber}</span></> : <>Loose pieces, lot <span className="font-mono">{p.lotNumber}</span></>}</span>
                     <span className="block text-[12px] text-muted">
                       <PlaceName name={p.locationName} code={p.locationCode} /> · taken by {p.pickedByName}
                     </span>
                   </span>
                   <span className={p.verified ? "text-[15px] font-semibold text-[var(--ok-fg)]" : "text-[15px] text-fg-2"}>
-                    {q(p.qtyBase, p.baseUom)} {p.verified ? "✓ checked" : "to check"}
+                    {qWords(p.qtyBase, p.baseUom)} {p.verified ? "✓ checked" : "to check"}
                   </span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </Card>
+        )}
+
+        {checking && unverified.length > 0 && (
+          <Card>
+            <CardTitle>Scan or type the box label</CardTitle>
+            <ScanPanel
+              scan={verifyScanAction.bind(null, s.id)}
+              label="Scan each box label, or type the number printed on it"
+              hint="For loose pieces, scan or type the lot label, then say how many. A box that is not on the order, or more than ordered, is refused and not added."
+              withQty
+              candidates={unverified.map((p) => ({ value: p.boxNumber ? `BC:BOX:${p.boxNumber}` : `BC:LOT:${p.lotNumber}`, title: p.boxNumber ? `Box ${p.boxNumber}` : `Loose pieces`, code: p.boxNumber ?? p.lotNumber, codes: [p.boxNumber ?? p.lotNumber] }))}
+              showCandidates={false}
+            />
+          </Card>
         )}
 
         {!gone && (
@@ -171,7 +185,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
             <CardTitle>Finish the check</CardTitle>
             {unverified.length > 0 && (
               <div className="mb-3">
-                <Banner tone="warn" title={`${unverified.length === 1 ? "1 box is" : `${unverified.length} boxes are`} not checked yet`}>Scan them first.</Banner>
+                <Banner tone="warn" title={`${unverified.length === 1 ? "1 box is" : `${unverified.length} boxes are`} not checked yet`}>Scan or type them first.</Banner>
               </div>
             )}
             {overLines.length > 0 ? (
@@ -267,7 +281,8 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
             <ul className="flex flex-col divide-y divide-line text-[12px]">
               {v.scans.map((x) => (
                 <li key={x.id} className="py-1.5">
-                  {fmtDateTime(x.scannedAt)} · {x.scannedByName} · <span className="font-mono">{x.scanPayload}</span> · {x.result.replace(/_/g, " ")}
+                  {fmtDateTime(x.scannedAt)} · {x.scannedByName} · <span className="font-mono">{x.scanPayload}</span>
+                  {x.entryMode === "typed" ? " (typed)" : ""} · {x.result.replace(/_/g, " ")}
                   {x.note ? ` · ${x.note}` : ""}
                 </li>
               ))}

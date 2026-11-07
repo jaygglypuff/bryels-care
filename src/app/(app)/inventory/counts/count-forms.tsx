@@ -130,6 +130,7 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
         <ScanOrPick
           kind="lot"
           name="lotCode"
+          viaName="lotVia"
           submit="code"
           id={id("lot")}
           label="What are you counting?"

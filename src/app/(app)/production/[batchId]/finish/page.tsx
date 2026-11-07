@@ -5,7 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { batchRecordHref, type FinishView, getFinishView, pieceWord } from "@/modules/production";
-import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { WhoCanHelp } from "@/ui/who-can-help";
@@ -43,15 +44,15 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader
-        title={`Finish · ${v.batch.number}`}
-        subtitle={`${v.product.name}${v.order ? ` · order ${v.order.number}` : ""}`}
+      <RecordHeader
+        back={{ href: back, label: v.order ? "Back to the order" : "Back to batch" }}
+        typeLabel="Finish the batch"
+        reference={v.batch.number}
+        title={v.product.name}
+        meta={[v.order ? ["Order", v.order.number] : null]}
         actions={
           <>
             <Help screen="production.finish" />
-            <LinkButton href={back} variant="secondary">
-              Back
-            </LinkButton>
           </>
         }
       />

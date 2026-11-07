@@ -5,7 +5,7 @@ import { batches, containerContents, containers, inventoryBalances, inventoryLot
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate } from "@/lib/qty";
-import { classifyPickInput, notFoundMessage, type PickCandidate, type PickKind } from "@/lib/scan/pick";
+import { classifyPickInput, codeKey, notFoundMessage, type PickCandidate, type PickKind } from "@/lib/scan/pick";
 import { fmtFriendly } from "@/lib/units";
 import { isPastExpiry } from "@/modules/inventory";
 import { searchTerms } from "./search";
@@ -238,6 +238,18 @@ export async function resolvePickRef(ctx: AuthContext, kind: PickKind, raw: stri
     case "item":
       hits = await itemCandidates(ctx, null, code, id);
       break;
+  }
+  // A typed number may come without its dashes or in small letters (A-SCAN-TYPED-01): same letters and digits, one record only.
+  if (!hits[0] && code && kind !== "item") {
+    const k = codeKey(code);
+    const loose = (col: AnyColumn) => sql`regexp_replace(upper(${col}::text), '[^A-Z0-9]', '', 'g') = ${k}`;
+    if (k) {
+      if (kind === "lot") hits = await lotCandidates(ctx, [loose(inventoryLots.lotNumber)]);
+      else if (kind === "container") hits = await containerCandidates(ctx, [loose(containers.containerNumber)]);
+      else if (kind === "location") hits = await locationCandidates(ctx, [loose(locations.code)]);
+      else hits = await batchCandidates(ctx, [or(loose(batches.batchNumber), loose(batches.outputLotNumber))!]);
+      if (hits.length > 1) hits = [];
+    }
   }
   if (!hits[0]) throw new DomainError("not_found", notFoundMessage(kind, false), { field: kind });
   return hits[0];

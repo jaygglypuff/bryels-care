@@ -45,7 +45,7 @@ export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTil
                 </span>
                 <span className="mt-1 block text-[13px] text-fg-2">{t.description}</span>
                 <span className="mt-3 flex items-baseline gap-2">
-                  <span className="tabular text-[28px] font-semibold leading-none text-fg">{t.count.toLocaleString("en-PH")}</span>
+                  <span className="tabular text-stat leading-none text-fg">{t.count.toLocaleString("en-PH")}</span>
                   <span className="text-[13px] text-muted">{t.countLabel}</span>
                 </span>
               </span>
@@ -73,7 +73,7 @@ function WarehouseTiles({ tiles, siteLabel, updated }: { tiles: OperatorTile[]; 
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="grid size-12 shrink-0 place-items-center rounded-[12px] bg-primary-soft text-primary-text">{ICON[t.key]}</span>
-                <span className="tabular text-[30px] font-semibold leading-none text-fg">{t.count.toLocaleString("en-PH")}</span>
+                <span className="tabular text-stat leading-none text-fg">{t.count.toLocaleString("en-PH")}</span>
               </span>
               <span className="text-[19px] font-semibold leading-tight text-fg">{t.title}</span>
               <span className="text-[13px] leading-snug text-fg-2">{t.countLabel}</span>
@@ -120,7 +120,7 @@ export function TasksToday({ tasks, counts, tiles, canDailyCount, messages = [] 
         <ul className="mb-5 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Your tasks in numbers">
           {COUNT.map(([label, n]) => (
             <li key={label} className="rounded-[16px] border border-line bg-surface px-3 py-3 sm:px-4">
-              <p className="tabular text-[26px] font-semibold leading-none text-fg">{n}</p>
+              <p className="tabular text-stat leading-none text-fg">{n}</p>
               <p className="mt-1.5 text-[12.5px] leading-tight text-fg-2 sm:text-[13px]">{label}</p>
             </li>
           ))}

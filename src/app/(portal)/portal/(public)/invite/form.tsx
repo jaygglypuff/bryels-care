@@ -35,14 +35,14 @@ export function PortalInviteForm() {
   if (info === "error")
     return (
       <Card>
-        <h1 className="font-display text-[22px] font-semibold">The link could not be checked</h1>
+        <h1 className="font-display text-title">The link could not be checked</h1>
         <p className="mt-2 text-[13px] text-muted">Check your connection and open the link from the email again.</p>
       </Card>
     );
   if (info.state !== "valid")
     return (
       <Card>
-        <h1 className="font-display text-[22px] font-semibold">{info.state === "expired" ? "This link has expired" : info.state === "used" ? "This link was already used" : "This link is not valid"}</h1>
+        <h1 className="font-display text-title">{info.state === "expired" ? "This link has expired" : info.state === "used" ? "This link was already used" : "This link is not valid"}</h1>
         <p className="mt-2 text-[13px] text-muted">Invitation links work once and for a limited time. Ask your Bryel&apos;s Care sales representative to send a new one.</p>
         <Link href="/portal/sign-in" className="mt-4 inline-block text-[14px] font-medium text-primary-text hover:underline">
           Go to the portal sign-in
@@ -51,7 +51,7 @@ export function PortalInviteForm() {
     );
   return (
     <Card>
-      <h1 className="font-display text-[24px] font-semibold">Welcome, {info.displayName}</h1>
+      <h1 className="font-display text-title">Welcome, {info.displayName}</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">
         Portal access for <span className="font-medium text-fg">{info.customerName}</span>. Choose the password for <span className="font-medium text-fg">{info.email}</span>: at least 12
         characters; a short sentence is easy to remember and hard to guess.
