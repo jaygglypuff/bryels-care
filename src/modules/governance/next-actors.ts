@@ -151,6 +151,17 @@ async function candidates(q: DbOrTx, organizationId: string, permission: string,
   return [...out.values()].filter((c) => c.granting.size > 0);
 }
 
+/** Active owners with an organization-wide assignment: under the owner override they may decide any step (ADR-073). */
+async function overrideOwners(q: DbOrTx, organizationId: string): Promise<{ userId: string; name: string; roleName: string }[]> {
+  const rows = await q
+    .selectDistinct({ userId: users.id, name: users.displayName, roleName: roles.name })
+    .from(userSiteAssignments)
+    .innerJoin(roles, eq(roles.id, userSiteAssignments.roleId))
+    .innerJoin(users, eq(users.id, userSiteAssignments.userId))
+    .where(and(eq(users.organizationId, organizationId), eq(users.status, "active"), eq(roles.status, "active"), eq(roles.code, "owner_director"), eq(userSiteAssignments.isOrganizationWide, true), activeAssignment()));
+  return rows.sort((a, z) => a.name.localeCompare(z.name));
+}
+
 /**
  * The people who can do the next step of `kind` on `record`, the viewer's own position, and the words
  * (see `nextActorsSentence` in src/lib/next-actors-words.ts). Never throws for a missing record: an empty list
@@ -184,6 +195,15 @@ export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHan
     }
     const best = matching.sort((a, z) => rank(a) - rank(z))[0];
     people.push({ userId: c.userId, name: c.name, role: personRole(best, c.roles.get(best)), rank: rank(best) });
+  }
+  // ADR-073 owner override: when nobody holding the step's role is left (the small demo has one finance person, who
+  // sent the invoice), the owner may still decide it. Name the owner instead of "Nobody can do it yet" (demo rehearsal
+  // 2026-11-07). Never for independent checks (GMP floor checks, QA decisions), where the listed people stay as configured.
+  if (!people.length && !owners.length && !rule.independent && (await getSetting(q, ctx.organizationId, "governance.owner_override"))) {
+    for (const o of await overrideOwners(q, ctx.organizationId)) {
+      if (o.userId === ctx.userId) continue;
+      people.push({ ...o, role: personRole("owner_director", o.roleName), rank: 0 });
+    }
   }
   people.sort((a, z) => a.rank - z.rank || a.name.localeCompare(z.name));
   owners.sort((a, z) => a.name.localeCompare(z.name));

@@ -72,3 +72,14 @@ describe("Recipe wizard: the progress bar comes first", () => {
     expect(w.slice(w.lastIndexOf("<p", intro), intro)).toMatch(/text-\[13px\]/);
   });
 });
+
+describe("label on each piece (demo rehearsal 2026-11-07)", () => {
+  it("says piece, not bar, so a lotion bottle never reads \"one for each bar\"", async () => {
+    const { LABEL_KIND_WORDS } = await import("@/ui/labels/words");
+    const w = LABEL_KIND_WORDS.bar;
+    expect(w.one).toBe("piece");
+    expect(w.many).toBe("pieces");
+    expect(w.title).toBe("Label for each piece");
+    expect(`${w.stick} ${w.scan}`).not.toMatch(/\bbars?\b/);
+  });
+});

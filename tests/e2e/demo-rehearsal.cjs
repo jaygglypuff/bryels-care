@@ -66,6 +66,8 @@ async function asUser(email, viewport = DESK) {
   context.setDefaultTimeout(T);
   context.setDefaultNavigationTimeout(Math.max(T, 300000));
   await context.addInitScript(autoConfirm);
+  // The label and BMR pages open the print dialog by themselves; a rehearsal has no printer.
+  await context.addInitScript(() => { window.print = () => {}; });
   const page = await context.newPage();
   const tag = email.split('@')[0];
   const watch = (p) => {
@@ -106,6 +108,13 @@ async function ok(page) {
   if (problems.length) throw new Error('Problems detected:\n' + problems.join('\n'));
 }
 
+/** Waits for an address only (a client-side navigation may never fire "load" again). */
+async function waitUrl(page, re) {
+  current = page;
+  await page.waitForURL(re, { waitUntil: 'commit' });
+  await ok(page);
+}
+
 async function go(page, url) {
   current = page;
   await page.goto(BASE + url);
@@ -131,6 +140,14 @@ async function scanBurst(page, text) {
   await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
   await page.keyboard.type(text, { delay: 4 });
   await page.keyboard.press('Enter');
+}
+
+/** The on-page confirmation (ADR-083): press its "Yes" unless auto-confirm already did. */
+async function confirmOnPage(page, name) {
+  const yes = page.getByRole('button', { name, exact: true });
+  await yes.waitFor({ timeout: 5000 }).catch(() => {});
+  await yes.click({ timeout: 3000 }).catch(() => {});
+  await yes.waitFor({ state: 'detached' });
 }
 
 /** Types a number on the on-screen keypad (weighing, counts). */
@@ -202,8 +219,9 @@ section('b. QA checks the lotion batch (scene 2)', async () => {
   await go(page, '/quality');
   const row = page.getByTestId('qa-batch-row').filter({ hasText: 'Aloe Hand Lotion 250 mL' }).first();
   await row.locator('a').first().click();
-  await page.waitForURL(/\/quality\/check\//);
-  await expectText(page, 'Check quality: Aloe Hand Lotion 250 mL');
+  await waitUrl(page, /\/quality\/check\//);
+  await expectText(page, 'Aloe Hand Lotion 250 mL');
+  await expectText(page, 'Tests (quality check)');
   await shot(page, 'qa-check-lotion');
   await passQualityCheck(page);
   await shot(page, 'qa-lotion-ok');
@@ -227,7 +245,7 @@ section('c. operator pours the soap; the cure waits (scene 3)', async () => {
   const card = await homeTask(page, 'Pour into moulds');
   await shot(page, 'operator-home-phone');
   await card.getByRole('link').first().click();
-  await page.waitForURL(/\/step\/\d+\?batch=/);
+  await waitUrl(page, /\/step\/\d+\?batch=/);
   await expectText(page, 'Pour into moulds');
   await page.getByRole('button', { name: 'Step done' }).click();
   await expectText(page, 'Cure');
@@ -240,7 +258,7 @@ section('d. warehouse puts the coconut oil away (scene 4)', async () => {
   const { page, close } = await asUser(who('warehouse.nfd'));
   await expectText(page, /Next: put away Coconut Oil lot L-\d{4}-\d{5}/);
   await page.getByRole('link', { name: 'Put it away' }).click();
-  await page.waitForURL(/\/inventory\/receive\/put-away/);
+  await waitUrl(page, /\/inventory\/receive\/put-away/);
   const row = page.getByTestId('pick-option').filter({ hasText: 'Coconut Oil' }).first();
   facts.coconutLot = (await row.innerText()).match(/L-\d{4}-\d{5}/)[0];
   // The handheld scanner reads the lot label (ADR-017 payload); the shelf is suggested, the warehouse only confirms.
@@ -263,7 +281,7 @@ section('e. operator gets the materials for the lotion order (scene 5)', async (
   const { page, close } = await asUser(who('operator.nfd'), PHONE);
   const card = await homeTask(page, 'Aloe Hand Lotion 250 mL');
   await card.getByRole('link').first().click();
-  await page.waitForURL(/\/materials\?batch=/);
+  await waitUrl(page, /\/materials\?batch=/);
   const url = new URL(page.url());
   facts.lotionOrderId = url.pathname.split('/')[3];
   facts.lotionBatchId = url.searchParams.get('batch');
@@ -278,13 +296,474 @@ section('e. operator gets the materials for the lotion order (scene 5)', async (
   await expectText(page, 'Every line is taken. Next: Start.');
   await shot(page, 'materials-taken-phone');
   await page.getByRole('link', { name: 'Start', exact: true }).click();
-  await page.waitForURL(/\/step\/\d+\?batch=/);
-  await ok(page);
-  console.log(await describe(page));
+  await waitUrl(page, /\/step\/\d+\?batch=/);
+  await expectText(page, 'Check the area is clean');
+  log('materials taken for', facts.lotionOrderId);
   await close();
 });
 
-// @@NEXT@@
+// ---------------------------------------------------------------- f.–h. The batch, screen by screen
+const continueUrl = () => `/production/orders/${facts.lotionOrderId}/continue?batch=${facts.lotionBatchId}`;
+const CHECKER = 'Jun Dela Cruz';
+
+/** When a section runs on its own (ONLY=…): the lotion batch from the operator's Home card. */
+async function findLotionBatch(page) {
+  if (facts.lotionBatchId) return;
+  const card = await homeTask(page, 'Aloe Hand Lotion 250 mL');
+  const u = new URL(BASE + (await card.getByRole('link').first().getAttribute('href')));
+  const fin = u.pathname.match(/^\/production\/([0-9a-f-]{36})\/finish/);
+  if (fin) {
+    // At Finish the card opens /production/<batch>/finish; the order is on the batch record's back link.
+    facts.lotionBatchId = fin[1];
+    await go(page, u.pathname);
+    const back = await page.getByRole('link', { name: 'Back to the order' }).getAttribute('href');
+    facts.lotionOrderId = back.split('/')[3];
+    return;
+  }
+  facts.lotionOrderId = u.pathname.split('/')[3];
+  facts.lotionBatchId = u.searchParams.get('batch');
+}
+
+/** The second person confirms on their OWN session (ADR-100): the same screen, "Yes, I checked it". */
+async function checkerConfirms(chk, url, what) {
+  await go(chk, url);
+  const own = chk.getByRole('button', { name: /Yes, I checked it/ }).first();
+  await own.waitFor();
+  await own.click();
+  await own.waitFor({ state: 'detached' });
+  log('  checked by Jun on his own phone:', what);
+}
+
+/** After Step done: when the step waits for the second person, the checker opens the check on his own session. */
+async function secondCheck(op, chk, url, what) {
+  if (!(await op.getByText(/Second check needed|Waiting for the second check|waiting for the checker/).count())) return;
+  const link = op.getByRole('link', { name: 'Open the check' });
+  const target = (await link.count()) ? await link.first().getAttribute('href') : url;
+  await checkerConfirms(chk, target, what);
+}
+
+/** Reads "OK 65 – 75 °C" style limits and returns the middle (or the one bound). */
+function middle(text) {
+  const m = text.replace(/,/g, '').match(/OK\s*([\d.]+)\s*[–-]\s*([\d.]+)/);
+  if (m) return String(Math.round(((Number(m[1]) + Number(m[2])) / 2) * 10) / 10);
+  const one = text.match(/([\d.]+)/);
+  return one ? one[1] : '1';
+}
+
+/** Weigh: one card at a time; the lot is confirmed by scanning the label payload, the weight on the keypad. */
+async function weighAll(op, chk) {
+  const weighUrl = op.url().replace(BASE, '');
+  for (let guard = 0; guard < 12; guard++) {
+    await ok(op);
+    const card = op.getByTestId('weigh-card').first();
+    if (!(await card.count())) break;
+    const name = ((await card.getAttribute('aria-label')) || '').replace(/^Weigh /, '');
+    // Get materials told which lot to take; the weigh card proposes it ("from L-…: 17,919 g").
+    const proposal = await card.getByTestId('weigh-proposal').innerText();
+    const lot = proposal.match(/L-\d{4}-\d{5}/)[0];
+    const target = (await card.locator('p.font-display').first().innerText()).replace(/,/g, '').match(/([\d.]+)\s*(kg|g)\b/);
+    const grams = String(Math.round(Number(target[1]) * (target[2] === 'kg' ? 1000 : 1) * 10) / 10);
+    await scanBurst(op, `BC:LOT:${lot}`);
+    await card.getByText(`Label scanned: lot ${lot}`).waitFor();
+    await card.getByRole('button', { name: 'Weight' }).click().catch(() => {});
+    await keypad(card, grams);
+    await card.getByText('OK', { exact: true }).first().waitFor();
+    if (guard === 0) await shot(op, 'weigh-card-scanned-phone');
+    await card.getByRole('button', { name: 'Save', exact: true }).click();
+    // The weighing waits for the second person, who confirms on their own phone.
+    await op.getByText(/Second check needed|Check .*'s weighing|waits for/).first().waitFor();
+    await checkerConfirms(chk, weighUrl, `weighing of ${name} (${grams} g from ${lot})`);
+    await go(op, weighUrl);
+    (facts.weighed ??= []).push(`${name} ${grams} g ${lot}`);
+  }
+  // Everything weighed: the summary's Step done closes the weighing step.
+  await op.getByTestId('weigh-summary').getByRole('button', { name: 'Step done' }).click();
+  await op.waitForLoadState('networkidle').catch(() => {});
+  await op.waitForTimeout(500);
+  await secondCheck(op, chk, weighUrl, 'the weighing step');
+  log('  step done: Weigh');
+}
+
+/** One making step: equipment if asked, readings in the middle of their limits, Step done, the second check. */
+async function doStep(op, chk) {
+  const url = op.url().replace(BASE, '');
+  const title = (await op.locator('h1').first().innerText()).trim();
+  // Clean-area / before-packing checks: Yes on every row, then All OK.
+  const allOk = op.getByRole('button', { name: 'All OK', exact: true });
+  if (await allOk.count()) {
+    await allOk.click();
+  } else {
+    const eq = op.getByTestId('step-equipment');
+    if ((await eq.count()) && (await eq.locator('input[name=equipmentRef]:not([disabled])').count())) {
+      await eq.locator('input[name=equipmentRef]:not([disabled])').first().check();
+      await eq.getByRole('button', { name: 'Use this equipment' }).click();
+      await eq.getByText(/^Using /).waitFor();
+    }
+    await boxLabels(op);
+    for (const field of await op.locator('button[id^="f-"]').all()) {
+      const hint = await field.locator('xpath=..').innerText();
+      await field.click();
+      await keypad(op, middle(hint.split('\n').find((l) => /^OK /.test(l)) || hint));
+    }
+    await op.locator('button[id^="done-"]').first().click();
+  }
+  await op.waitForLoadState('networkidle').catch(() => {});
+  await op.waitForTimeout(500);
+  await secondCheck(op, chk, url, title);
+  log('  step done:', title);
+}
+
+/** Packaging step: the box plan, "Print N box labels", the print page and "Yes, they printed" (ADR-104 §2, ADR-108). */
+async function boxLabels(op) {
+  const box = op.getByTestId('box-labels');
+  if (!(await box.count())) return;
+  const back = op.url();
+  const print = box.getByRole('button', { name: /^Print .*box label/ });
+  if (await print.count()) {
+    facts.boxSplit = (await box.getByTestId('box-split').innerText()).trim();
+    await print.click();
+    await box.getByTestId('open-box-labels').waitFor();
+  }
+  const open = box.getByTestId('open-box-labels');
+  if (await open.count()) {
+    await open.click();
+    await waitUrl(op, /\/print\/labels\//);
+    await shot(op, 'box-labels-print');
+    await op.getByRole('button', { name: /^Yes, (it|they) printed$/ }).click();
+    await op.getByTestId('printed-ok').waitFor();
+    await op.goto(back);
+    await ok(op);
+    log('  box labels printed:', facts.boxSplit);
+  }
+  // Labels on each bottle (the lotion has one label per piece): the batch's label job, printed the same way.
+  const pieces = op.getByRole('button', { name: /^Print \d+ labels?$/ });
+  if (await pieces.count()) {
+    facts.pieceLabels = (await pieces.first().innerText()).trim();
+    await pieces.first().click();
+    await waitUrl(op, /\/print\/labels\//);
+    await shot(op, 'piece-labels-print');
+    await op.getByRole('button', { name: /^Yes, (it|they) printed$/ }).click();
+    await op.getByTestId('printed-ok').waitFor();
+    await op.goto(back);
+    await ok(op);
+    log('  labels for each bottle printed:', facts.pieceLabels);
+  }
+}
+
+section('f. weigh by scanning the lot labels; the checker confirms on his own session; the steps; packaging', async () => {
+  const op = await asUser(who('operator.nfd'), PHONE);
+  const chk = await asUser(who('checker.nfd'), PHONE);
+  await findLotionBatch(op.page);
+  for (let guard = 0; guard < 20; guard++) {
+    await go(op.page, continueUrl());
+    const u = op.page.url();
+    if (/\/finish/.test(u)) break;
+    if (/\/weigh(\?|$)/.test(u)) await weighAll(op.page, chk.page);
+    else if (/\/step\/\d+/.test(u)) await doStep(op.page, chk.page);
+    else throw new Error('unexpected screen on Continue: ' + u);
+  }
+  assert(/\/finish/.test(op.page.url()), 'every step done: Continue opens Finish, got ' + op.page.url());
+  if (!process.env.ONLY) assert((facts.weighed ?? []).length >= 4, 'every ingredient weighed: ' + JSON.stringify(facts.weighed));
+  await op.close();
+  await chk.close();
+});
+
+// ---------------------------------------------------------------- i. Finish
+section('i. finish: good pieces and the packaging count', async () => {
+  const { page, close } = await asUser(who('operator.nfd'), PHONE);
+  await findLotionBatch(page);
+  await go(page, continueUrl());
+  await waitUrl(page, /\/finish/);
+  const checker = page.locator('#checkerId');
+  if (await checker.count()) await checker.selectOption({ label: CHECKER });
+  const pw = page.locator('#checkerPassword');
+  if (await pw.count()) await pw.fill(PW);
+  await shot(page, 'finish-phone', { full: true });
+  await page.getByTestId('finish-batch').click();
+  const yes = page.getByRole('button', { name: 'Yes, finish' });
+  await yes.click({ timeout: 5000 }).catch(() => {}); // auto-confirm may have pressed it already
+  await waitUrl(page, /\/production\/orders\/[0-9a-f-]{36}\?finished=B-/); // back on the order page, the batch is with QA
+  await shot(page, 'finished');
+  log('lotion batch finished');
+  await close();
+});
+
+// ---------------------------------------------------------------- j. QA checks the new lotion batch
+section('j. QA: Check quality of the new batch, OK to use', async () => {
+  const { page, close } = await asUser(who('qa.nfd'));
+  await go(page, '/quality');
+  const row = page.getByTestId('qa-batch-row').filter({ hasText: 'Aloe Hand Lotion 250 mL' }).first();
+  facts.lotionBatchNumber = (await row.innerText()).match(/B-\d{2}-\d{4}/)[0];
+  await row.locator('a').first().click();
+  await waitUrl(page, /\/quality\/check\//);
+  await passQualityCheck(page);
+  facts.lotionLot = (await page.locator('main').innerText()).match(/Lot\s+(L-\d{4}-\d{5})/)[1];
+  // The order it was made for is named as the next step.
+  await expectText(page, /Isla Spa Supplies\) can now be set aside/);
+  facts.islaOrderHref = await page.getByRole('link', { name: /^Open SO-/ }).getAttribute('href');
+  await shot(page, 'qa-new-batch-ok');
+  log('batch', facts.lotionBatchNumber, 'lot', facts.lotionLot, 'OK to use');
+  await close();
+});
+
+/**
+ * Get from shelf: every line of the list by scanning its label. A box: its box label (BC:BOX:…). Loose pieces:
+ * the lot label (BC:LOT:…), then "How many loose pieces of this lot?" (ADR-120: the count is asked after the label).
+ */
+async function pickEverything(page) {
+  for (let guard = 0; guard < 12; guard++) {
+    await ok(page);
+    const next = page.getByText(/^Next: go to /).first();
+    if (!(await next.count())) break;
+    const opt = (await page.getByTestId('pick-option').first().innerText()).replace(/\s+/g, ' ');
+    const box = opt.match(/\bBX-\d+/);
+    const lot = opt.match(/lot (L-\d{4}-\d{5})/);
+    const loose = opt.match(/([\d,]+) pcs loose/);
+    if (box) {
+      await scanBurst(page, `BC:BOX:${box[0]}`);
+      await page.getByText(new RegExp(`Scans so far \\(${guard + 1}\\)`)).waitFor().catch(() => {});
+      log('  scanned box', box[0]);
+    } else if (lot && loose) {
+      await scanBurst(page, `BC:LOT:${lot[1]}`);
+      const qty = page.locator('#scan-qty');
+      await qty.waitFor();
+      await qty.fill(loose[1].replace(/,/g, ''));
+      await page.getByTestId('loose-qty-send').click();
+      await qty.waitFor({ state: 'detached' });
+      (facts.pickedLots ??= []).push(lot[1]);
+      log('  scanned lot', lot[1], 'and counted', loose[1], 'loose pieces');
+    } else throw new Error('cannot read the pick line: ' + opt);
+    await page.waitForLoadState('networkidle').catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------- k. Set aside and get from the shelf
+/** The customer order page of a customer (from the Customer orders list). */
+async function openOrder(page, customer) {
+  await go(page, '/sales');
+  await page.locator('main a[href^="/sales/"]').filter({ hasText: customer }).first().click();
+  await waitUrl(page, /\/sales\/[0-9a-f-]{36}$/);
+}
+
+section('k. the Isla Spa order is set aside (use first); the warehouse gets it from the shelf by scanning labels', async () => {
+  const { page, close } = await asUser(who('warehouse.nfd'));
+  if (facts.islaOrderHref) await go(page, facts.islaOrderHref);
+  else await openOrder(page, 'Isla Spa Supplies');
+  facts.islaOrderHref = page.url().replace(BASE, '');
+  const setAside = page.getByRole('button', { name: 'Set aside the stock' });
+  if (await setAside.count()) {
+    await expectText(page, 'Next: set aside the stock for this order');
+    await setAside.click();
+    await expectText(page, 'set aside 48 of 48');
+    await shot(page, 'isla-set-aside');
+  }
+  const start = page.getByRole('button', { name: 'Get from shelf' });
+  if (await start.count()) await start.first().click();
+  else await page.locator('main a[href^="/sales/picking/"]').first().click();
+  await waitUrl(page, /\/sales\/picking\/[0-9a-f-]{36}/);
+  facts.islaPickUrl = page.url().replace(BASE, '');
+  facts.islaLot = ((await page.getByTestId('pick-option').first().innerText()).match(/L-\d{4}-\d{5}/) || [])[0];
+  await pickEverything(page);
+  await expectText(page, 'Everything is scanned.');
+  await shot(page, 'isla-picked');
+  await page.getByRole('button', { name: 'Finish getting from shelf' }).click();
+  await waitUrl(page, /\/sales\/shipments\/[0-9a-f-]{36}\?done=picked/);
+  await expectText(page, 'Next: second check of the box, by someone who did not take the items off the shelf.');
+  facts.islaShipmentUrl = page.url().replace(BASE, '').split('?')[0];
+  facts.islaShipment = (await page.locator('main').innerText()).match(/SH-\d{2}-\d{5}/)[0];
+  log('delivery', facts.islaShipment, 'waits for the second check');
+  await close();
+});
+
+/** The Isla Spa delivery (from section k, or from the Deliveries list when a section runs on its own). */
+async function openIslaDelivery(page) {
+  if (!facts.islaShipmentUrl) {
+    await go(page, '/sales/shipments');
+    await page.locator('main a[href^="/sales/shipments/"]').filter({ hasText: 'Isla Spa Supplies' }).first().click();
+    await waitUrl(page, /\/sales\/shipments\/[0-9a-f-]{36}/);
+    facts.islaShipmentUrl = page.url().replace(BASE, '').split('?')[0];
+  }
+  await go(page, facts.islaShipmentUrl);
+}
+
+// ---------------------------------------------------------------- l. Second check, send out, proof of delivery
+section('l. a second person checks; send out; proof of delivery', async () => {
+  const { page, close } = await asUser(who('manager.nfd'));
+  await openIslaDelivery(page);
+  await page.getByRole('link', { name: 'Check the box' }).click();
+  await waitUrl(page, /\/sales\/packing\/[0-9a-f-]{36}/);
+  await expectText(page, 'taken by Lito Pascual');
+  // Each box (or the loose pieces of a lot) is scanned again by the second person.
+  for (let guard = 0; guard < 12; guard++) {
+    await ok(page);
+    if (!(await page.getByText(/^Next: scan or type each box label/).count())) break;
+    const nextBox = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
+    const loose = nextBox.match(/NEXT TO CHECK Loose pieces, lot (L-\d{4}-\d{5}).*? ([\d,]+) pieces to check/i);
+    const box = nextBox.match(/NEXT TO CHECK.*?\b(BX-\d+)/i);
+    if (loose) {
+      await scanBurst(page, `BC:LOT:${loose[1]}`);
+      const qty = page.locator('#scan-qty');
+      await qty.waitFor();
+      await qty.fill(loose[2].replace(/,/g, ''));
+      await page.getByTestId('loose-qty-send').click();
+      await qty.waitFor({ state: 'detached' });
+      log('  second check: lot', loose[1], loose[2], 'pieces');
+    } else if (box) {
+      await scanBurst(page, `BC:BOX:${box[1]}`);
+      await page.getByText(new RegExp(`${box[1]}.*(checked|OK)`)).first().waitFor().catch(() => {});
+      log('  second check: box', box[1]);
+    } else throw new Error('cannot read the next box to check');
+    await page.waitForLoadState('networkidle').catch(() => {});
+  }
+  await shot(page, 'second-check-done');
+  await page.getByRole('button', { name: 'Finish the check' }).first().click();
+  await waitUrl(page, /\/sales\/shipments\/[0-9a-f-]{36}\?done=packed/);
+  await expectText(page, 'Next: send it out.');
+  log('second check done by Dino (not the picker)');
+  await close();
+});
+
+// ---------------------------------------------------------------- m. Send out, proof of delivery
+section('m. the warehouse sends it out; proof of delivery', async () => {
+  const { page, close } = await asUser(who('warehouse.nfd'));
+  await openIslaDelivery(page);
+  await page.fill('#driverName', 'Ramon Cruz');
+  await page.fill('#vehiclePlate', 'NAB 1234');
+  await page.getByRole('button', { name: 'Send out now' }).click();
+  await confirmOnPage(page, 'Yes, continue');
+  await waitUrl(page, /\?done=dispatched/);
+  facts.islaDr = (await page.locator('main').innerText()).match(/DR-\d{2}-\d{5}/)[0];
+  await expectText(page, 'Next: when the driver is back with the signed delivery receipt, save the proof of delivery.');
+  log('sent out with delivery receipt', facts.islaDr);
+  await close();
+});
+
+section('n. proof of delivery: the customer signs on the phone', async () => {
+  const { page, close } = await asUser(who('warehouse.nfd'), PHONE);
+  await openIslaDelivery(page);
+  await page.fill('#receivedByName', 'Liza Ramos');
+  // A finger signature on the canvas.
+  const pad = page.locator('main canvas').first();
+  await pad.scrollIntoViewIfNeeded();
+  const b = await pad.boundingBox();
+  await page.mouse.move(b.x + 20, b.y + b.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + 20 + i * ((b.width - 40) / 12), b.y + b.height / 2 + (i % 2 ? -15 : 15));
+  await page.mouse.up();
+  await shot(page, 'proof-of-delivery-phone', { full: true });
+  await page.getByRole('button', { name: 'Save proof of delivery' }).click();
+  await expectText(page, 'Delivered. Next: finance bills it.');
+  await expectText(page, 'Rosa Lim (Finance)');
+  log('proof of delivery saved (Liza Ramos)');
+  await close();
+});
+
+// ---------------------------------------------------------------- o. Invoice
+section('o. finance makes and sends the invoice from the delivery', async () => {
+  const { page, close } = await asUser(who('finance'));
+  await openIslaDelivery(page);
+  await expectText(page, 'Delivered. Next: finance bills it');
+  await page.getByRole('link', { name: /^Open (the )?invoice/ }).click();
+  await waitUrl(page, /\/finance\/invoices\/[0-9a-f-]{36}/);
+  facts.invoiceUrl = page.url().replace(BASE, '');
+  await expectText(page, 'Isla Spa Supplies');
+  await expectText(page, '48 pcs × ₱185.00');
+  await shot(page, 'invoice-draft');
+  const send = page.getByRole('button', { name: 'Send for approval' });
+  if (await send.count()) {
+    await send.click();
+    await expectText(page, 'This invoice waits for approval.');
+  }
+  // The small demo has one finance person (Rosa, who sent it), so the owner approves (owner override): the screen
+  // must name her, not "Nobody can do it yet".
+  await expectText(page, /Next: .*Ana \(owner\)/);
+  await close();
+});
+
+section('p. the owner approves the invoice on To approve (side panel)', async () => {
+  const { page, close } = await asUser(who('owner'));
+  await go(page, '/approvals');
+  await page.locator('li', { hasText: 'Invoice for Isla Spa Supplies' }).first().waitFor();
+  const panel = page.getByTestId('approval-detail');
+  await panel.getByTestId('approve-button').click();
+  await panel.getByRole('button', { name: 'Yes, approve' }).click();
+  await page.getByText('Nothing waits for your decision').waitFor(); // the decided item leaves the list
+  await shot(page, 'owner-approved-invoice');
+  log('invoice approved by the owner');
+  await close();
+});
+
+section('q. finance saves the invoice to the books', async () => {
+  const { page, close } = await asUser(who('finance'));
+  if (!facts.invoiceUrl) {
+    await go(page, '/finance/invoices');
+    await page.locator('main a[href^="/finance/invoices/"]').filter({ hasText: 'Isla Spa Supplies' }).first().click();
+    await waitUrl(page, /\/finance\/invoices\/[0-9a-f-]{36}/);
+    facts.invoiceUrl = page.url().replace(BASE, '');
+  }
+  await go(page, facts.invoiceUrl);
+  await expectText(page, 'Next: save it to the books.');
+  await page.getByRole('button', { name: 'Save to the books' }).click();
+  // Money is saved for good: the person types their password (step-up), then saves.
+  const pw = page.locator('#invoice-issue-pw');
+  await pw.waitFor({ timeout: 5000 }).catch(() => {});
+  if (await pw.count()) {
+    await pw.fill(PW);
+    await page.getByRole('button', { name: 'Save to the books' }).last().click();
+  }
+  await page.getByText(/INV-\d{4}-\d{6}/).first().waitFor();
+  facts.invoice = (await page.locator('main').innerText()).match(/INV-\d{4}-\d{6}/)[0];
+  await shot(page, 'invoice-posted');
+  log('invoice', facts.invoice, 'saved to the books');
+  await close();
+});
+
+// ---------------------------------------------------------------- r. Scene 6: the Luntian soap, two boxes
+section('r. the warehouse gets the Luntian soap from the shelf by scanning its two box labels (scene 6)', async () => {
+  const { page, close } = await asUser(who('warehouse.nfd'), PHONE);
+  await openOrder(page, 'Luntian Wellness Stores');
+  const start = page.getByRole('button', { name: 'Get from shelf' });
+  if (await start.count()) await start.first().click();
+  else await page.locator('main a[href^="/sales/picking/"]').first().click();
+  await waitUrl(page, /\/sales\/picking\/[0-9a-f-]{36}/);
+  const first = (await page.getByTestId('pick-option').first().innerText()).replace(/\s+/g, ' ');
+  facts.soapLot = (first.match(/L-\d{4}-\d{5}/) || [])[0];
+  await shot(page, 'luntian-pick-phone');
+  await pickEverything(page);
+  await expectText(page, 'Everything is scanned.');
+  await page.getByRole('button', { name: 'Finish getting from shelf' }).click();
+  await waitUrl(page, /\/sales\/shipments\/[0-9a-f-]{36}\?done=picked/);
+  log('Luntian soap taken off the shelf, lot', facts.soapLot);
+  await close();
+});
+
+// ---------------------------------------------------------------- s. Scene 7: where did it come from?
+section('s. QA traces the soap lot back to its supplier lots and forward to the customer (scene 7)', async () => {
+  const { page, close } = await asUser(who('qa.nfd'));
+  assert(facts.soapLot && facts.islaLot, 'the soap lot (scene 6) and the lotion lot sent to Isla Spa (section k)');
+  // Back: the soap lot to its batch and supplier lots. It is taken off the shelf but not sent yet: no customer.
+  await go(page, '/quality/trace?q=' + encodeURIComponent(facts.soapLot));
+  for (const t of ['Where it came from', 'Coconut Oil', 'Palm Oil', 'Laguna Oleo Supply', 'No customer has received this']) await expectText(page, t);
+  await shot(page, 'trace-soap-lot', { full: true });
+  // Forward: the lotion lot sent out today names the customer, the order and the delivery receipt.
+  await go(page, '/quality/trace?q=' + encodeURIComponent(facts.islaLot));
+  await expectText(page, 'Customers who got it');
+  await expectText(page, '48 pcs of Aloe Hand Lotion 250 mL');
+  await expectText(page, 'Isla Spa Supplies');
+  await shot(page, 'trace-lotion-to-customer', { full: true });
+  await close();
+});
+
+// ---------------------------------------------------------------- t. Scene 8: the owner sees what happened
+section('t. the owner sees what happened (scene 8)', async () => {
+  const { page, close } = await asUser(who('owner'));
+  await expectText(page, 'What to do next');
+  assert(!(await page.getByText('1 finished batch waits for the QA check').count()), 'no batch waits for QA any more');
+  await go(page, '/operations/flow');
+  await shot(page, 'how-work-flows', { full: true });
+  await close();
+});
+
 
 // ---------------------------------------------------------------- runner
 // UNTIL=<letter> stops after that section (for working on the script); the full run needs a fresh lite demo.
