@@ -3207,8 +3207,12 @@ and `0038_snapshot.json`. The next generated file must be renamed to `0039_<desc
 `0037_snapshot.json`).
 Done that way for the typed label codes (owner decision 2026-11-08, A-SCAN-TYPED-01): `0039_typed_label_codes` (idx 38,
 `entry_mode` on `pack_verification_scans` and `label_verifications`, `batch_material_picks.lot_entry_mode`,
-`ck_pick_lines_mode` allows `typed`), snapshot `0039_snapshot.json`. The next generated file must be renamed to
-`0040_<description>` (snapshot `0040_snapshot.json`).
+`ck_pick_lines_mode` allows `typed`), snapshot `0039_snapshot.json`.
+Then for the master search (owner request 2026-11-08): `0040_master_search_indexes` (idx 39, snapshot
+`0040_snapshot.json`) adds plain b-tree indexes `batches (organization_id, batch_number)`, `sales_orders
+(organization_id, order_number)` and `stock_movements (organization_id, source_document_number)`, the three numbers the
+search looks up that had no index (every other number column already had a unique `(organization_id, number)` index).
+The next generated file must be renamed to `0041_<description>` (snapshot `0041_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

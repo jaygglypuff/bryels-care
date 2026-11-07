@@ -13,6 +13,7 @@ import { NavigationProgress } from "@/ui/navigation-progress";
 import { DemoBanner } from "@/ui/demo-banner";
 import { SignOutButton, SyncChip, useSync } from "@/ui/sync-status";
 import { FrameHelp, type FrameHelpResult } from "@/ui/help/frame-help";
+import { MasterSearchLauncher, type SearchFn } from "@/ui/master-search";
 import type { SyncState } from "@/lib/offline/agent";
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -47,6 +48,8 @@ type Props = {
   signOut: () => Promise<void>;
   /** Round 4: the frame's Help "?" loads the guide of the current screen (server action). Without it, no button. */
   loadHelp?: (pathname: string) => Promise<FrameHelpResult>;
+  /** Master search (owner request 2026-11-08): the top-bar box from 1024 px, Ctrl/⌘+K and "/". Without it, no box. */
+  search?: SearchFn;
   /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
   demo?: { canReset: boolean; sandbox?: boolean } | null;
   children: React.ReactNode;
@@ -127,7 +130,7 @@ function DrawerSync({ userId }: { userId: string }) {
   );
 }
 
-export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, search, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -262,10 +265,11 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-2 xl:ml-0">
             {sites.length > 1 && <div className="hidden shrink-0 xl:block">{siteSwitcher(false)}</div>}
+            {search && <MasterSearchLauncher search={search} userId={user.id} />}
             {/* Scan for every role at every width (brief: camera scan entry on mobile). */}
             <Link
               href="/inventory/scan"
-              className={cx("flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/inventory/scan") && "text-primary-text")}
+              className={cx("flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/inventory/scan") && "text-primary-text", search && "lg:hidden")}
               aria-label="Scan or search"
               title="Scan or search"
             >

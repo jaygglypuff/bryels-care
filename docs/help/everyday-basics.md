@@ -1,12 +1,26 @@
 ---
 key: start.everyday_basics
-title: Everyday basics: codes, locations, deleting drafts, approvals and notifications
-version: 2
-updated_at: 2026-11-06
+title: Everyday basics: finding anything, codes, locations, deleting drafts, approvals and notifications
+version: 3
+updated_at: 2026-11-08
 sop: Training guide; not an SOP
 ---
 
-Five things people ask about most. Each one says where to tap.
+Six things people ask about most. Each one says where to tap.
+
+## Find anything
+
+1. On a computer, click the search box at the top (**Search anything — a screen, a name or a number**), or press **Ctrl+K** (**⌘K** on a Mac) or **/** from any screen. On a wide screen the box is a round search button.
+2. On a phone, tap **Scan** at the top. The same search is at the top of the **Scan or search** screen; the camera scan is below it.
+3. Type what you look for. Results show as you type:
+   - a **screen** word, like **bills**, **lots**, **master data**, **QA**, **receive** or **PO** — you get the screens you may open (**Supplier bills**, **Stock**, the set-up screens…);
+   - a **number**, like **BILL-26-00001**. Capitals and dashes do not matter: **bill2600001** works too. The record with exactly this number is first and says **This number**;
+   - only the **last digits**, like **26-00001** or **00012** — you get every record whose number ends with or contains them;
+   - a **name**, like **coconut oil** or a customer or supplier name.
+4. Use **↑** and **↓** to move, **Enter** to open, **Esc** to close. Or tap a row.
+5. With the box empty you see your recent searches, the records you opened lately (kept on this device only) and a few common screens for your job.
+6. You only see screens and records your role may open, at your sites. If something is missing, ask your manager for access.
+7. A label code (it starts with **BC:**) typed or scanned into the box opens what the label is on, like a scan.
 
 ## Codes are given for you
 
