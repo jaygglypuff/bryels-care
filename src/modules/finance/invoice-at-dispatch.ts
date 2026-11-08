@@ -88,7 +88,7 @@ export async function draftInvoiceAtDispatch(tx: Tx, ctx: AuthContext, shipment:
     });
     await notifyAt("finance.invoice.create", {
       title: `Invoice draft for ${label.doc} could not be created`,
-      body: `${message.slice(0, 300)} The delivery is sent out; make its invoice from Sales & Customers → Invoices once this is fixed.`,
+      body: `${message.slice(0, 300)} The delivery is sent out; make its invoice from Money › Invoices once this is fixed.`,
       link: "/finance/invoices",
       key: `invoice.draft_at_dispatch.failed:${shipment.shipmentId}`,
       severity: "warning",
