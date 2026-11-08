@@ -74,7 +74,8 @@ export type FloorTask = {
 };
 
 /** ADR-130: the checker's list "Waiting for you to check" (one card per thing to check). */
-export const CHECKS_HREF = "/production/checks";
+import { CHECKS_HREF } from "./checks-href";
+export { CHECKS_HREF };
 
 const RUNNING = ["materials_staged", "in_process", "rework_approved"];
 const APPROVED_ORDER = ["released", "in_progress"];

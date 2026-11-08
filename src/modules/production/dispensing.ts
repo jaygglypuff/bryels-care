@@ -23,6 +23,7 @@ import { changeLotInTx, lineForLotChange } from "./material-swaps";
 import { offPlanWarning } from "./pick-plan";
 import { notifyNextActors } from "@/modules/governance";
 import { flowHref } from "./flow-paths";
+import { CHECKS_HREF } from "./checks-href";
 
 /** Tolerance window at the typed resolution (shared with the weigh card, weigh-window.ts). */
 export { toleranceRange } from "./weigh-window";
@@ -436,7 +437,8 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         await notifyNextActors(tx, ctx, "weighing_check", { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
           title: `Check a weighing of batch ${batch.batchNumber}`,
           body: `${ctx.displayName} weighed ${material.name}. Watch the container and the scale, then confirm it on the Weigh screen.`,
-          link: flowHref({ batchId: batch.id, workOrderId: batch.workOrderId }, "weigh"),
+          // ADR-130: the message opens the checker's list, where the check is done (never the operator's screen).
+          link: CHECKS_HREF,
           entityType: "batch",
           entityId: batch.id,
           dedupeKey: `handoff.weighing_check:${batch.id}:${rec.id}`,

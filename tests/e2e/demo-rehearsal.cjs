@@ -648,6 +648,9 @@ section('l. a second person (Dino, not the picker) checks the delivery', async (
       await qty.fill(loose[2].replace(/,/g, ''));
       await page.getByTestId('loose-qty-send').click();
       await qty.waitFor({ state: 'detached' });
+      // Wait for the refreshed page ("48 pieces ✓ checked"): reading the old "Next to check" again scanned it twice.
+      await page.getByText(/pieces ✓ checked/).first().waitFor().catch(() => {});
+      await page.waitForLoadState('networkidle').catch(() => {});
       log('  second check: lot', loose[1], loose[2], 'pieces');
     } else if (box) {
       await scanBurst(page, `BC:BOX:${box[1]}`);
