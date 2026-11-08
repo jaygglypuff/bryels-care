@@ -308,7 +308,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                     ) : (
                       <p className="text-[13px] tabular text-fg-2">
                         {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
-                        {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price typed by hand)") : ""}
+                        {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price changed by hand)") : ""}
                         {showAlloc && (status === "shipped" ? ` · sent ${fmtQty(l.qtyUnits, "", 0)}` : ` · set aside ${fmtQty(l.allocated, "", 0)} of ${fmtQty(l.qtyUnits, "", 0)}`)}
                       </p>
                     )}

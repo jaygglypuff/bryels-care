@@ -1,9 +1,9 @@
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { friendlyUnit } from "@/lib/units";
-import { aslMaterialOptions, ensureReorderSuggestionsFresh, listReorderPolicies, listReorderSuggestions } from "@/modules/procurement";
+import { aslMaterialOptions, ensureReorderSuggestionsFresh, listReorderPolicies, listReorderSuggestions, whatToBuy } from "@/modules/procurement";
 import { supplierOptions } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, Field, Input, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Field, Input, LinkButton, PageHeader } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -38,6 +38,7 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
   const [rows, policies] = await Promise.all([listReorderSuggestions(ctx, { status }), listReorderPolicies(ctx)]);
   const [mats, sups] = canDecide && ctx.can("masterdata.supplier.edit") ? await Promise.all([aslMaterialOptions(ctx), supplierOptions(ctx)]) : [[], []];
   const open = status === "open" && canDecide;
+  const short = await whatToBuy(ctx).catch(() => []);
   return (
     <>
       <PageHeader
@@ -58,6 +59,37 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
       <PageIntro>This screen is for items that are running low at {ctx.currentSite.name}. You decide: ask to buy them, or hide the suggestion with a reason. Nothing is ordered by itself.</PageIntro>
       {open && rows.length > 0 && <NextStep text={`Next: ${rows.length === 1 ? "1 item is" : `${rows.length} items are`} running low. Ask to buy them.`} action={{ label: "Start with the first", href: `#s-${rows[0].id}` }} />}
       <SubNav />
+      {/* ADR-131 (C-office problem 5): what production orders and minimums need now, with "Ask to buy N" filled in. */}
+      <Card className="mb-4" data-testid="what-to-buy">
+        <CardTitle>Short now: needed by production orders or below the minimum</CardTitle>
+        {short.length === 0 ? (
+          <p className="text-[14px] text-fg-2">Nothing is short for the production orders at {ctx.currentSite.name}.{policies.length === 0 ? " No item has a minimum to keep yet: set one below so low stock shows here too." : ""}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {short.map((r) => (
+              <li key={r.materialId} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                <div className="min-w-0 text-[14px]">
+                  <p className="font-medium">{r.materialName}</p>
+                  <p className="text-fg-2">
+                    Short {fmtBase(r.shortBase, r.baseUom)} · free {fmtBase(r.freeBase, r.baseUom)} · coming {fmtBase(r.comingBase, r.baseUom)}
+                    {Number(r.neededBase) > 0 ? ` · production orders need ${fmtBase(r.neededBase, r.baseUom)}` : ""}
+                  </p>
+                  {r.forOrders.length > 0 && <p className="text-[13px] text-muted">For {r.forOrders.map((o) => `${o.productName} (${o.number}${o.neededBy ? `, ${fmtDate(o.neededBy)}` : ""})`).join("; ")}</p>}
+                  {r.supplierName && <p className="text-[13px] text-muted">Usually from {r.supplierName}{r.lastPrice ? `, last time ₱${Number(r.lastPrice.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })} per ${r.lastPrice.uom}` : ""}</p>}
+                </div>
+                {ctx.can("procurement.purchase_request.create") && (
+                  <LinkButton
+                    variant="secondary"
+                    href={`/procurement/requests/new?${new URLSearchParams({ material: r.materialId, qty: r.askQty, uom: r.askUom, ...(r.supplierId ? { supplier: r.supplierId } : {}), ...(r.lastPrice && r.lastPrice.uom === r.askUom ? { price: r.lastPrice.amount } : {}), why: r.why }).toString()}`}
+                  >
+                    {`Ask to buy ${Number(r.askQty).toLocaleString("en-PH")} ${r.askUom}`}
+                  </LinkButton>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
       <div className="flex flex-col gap-5">
         <Card>
           <FilterTabs label="Filter" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/procurement/reorder?status=${v}`] as const)} />

@@ -79,6 +79,17 @@ export const DONE_RULES: readonly DoneRule[] = [
   { kinds: ["purchase_order_approved", "handoff.purchase_order_send"], waiting: byStatus("purchase_orders", ["approved"]) },
   { kinds: ["handoff.delivery_coming"], waiting: byStatus("purchase_orders", ["approved", "sent", "partially_received"]) },
   { kinds: ["handoff.purchase_request"], waiting: byStatus("purchase_requests", ["submitted"]) },
+  // ADR-131: a delivery problem waits until purchasing decided every problem line of that purchase order's deliveries.
+  {
+    kinds: ["procurement.delivery_problem"],
+    waiting: (q, org, poIds) =>
+      ids(q, sql`select distinct pol.purchase_order_id::text as id from goods_receipt_lines gl
+        join goods_receipts gr on gr.id = gl.goods_receipt_id and gr.status = 'posted'
+        join purchase_order_lines pol on pol.id = gl.purchase_order_line_id
+        where pol.purchase_order_id in (${idList(poIds)}) and gr.organization_id = ${org}::uuid
+          and gl.discrepancy_kind in ('short', 'damaged', 'wrong_item')
+          and not exists (select 1 from delivery_problem_decisions d where d.goods_receipt_line_id = gl.id)`),
+  },
   { kinds: ["handoff.supplier_return"], waiting: byStatus("supplier_returns", ["submitted"]) },
   // Customer order confirmed: set the stock aside / ready to set aside after QA.
   { kinds: ["sales_order_confirmed", "handoff.set_aside"], waiting: byStatus("sales_orders", ["confirmed"]) },

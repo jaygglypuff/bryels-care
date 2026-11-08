@@ -17,6 +17,7 @@ import {
   createPurchaseRequest,
   createSupplierReturn,
   decideAslChange,
+  decideDeliveryProblem,
   decideForecastOverride,
   decidePurchaseOrder,
   decidePurchaseRequest,
@@ -271,6 +272,15 @@ export async function sendOrderAction(_p: ActionState, fd: FormData): Promise<Ac
     const r = await sendPurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId"), email: fd.get("email") === "yes", idempotencyKey: opt(fd, "idempotencyKey") });
     // ADR-131 (bug B1): the order is sent once the service returns; email trouble is a note, never "not saved".
     return { message: poSentWords(r.sendResult, r.emailedTo), next: await procurementNextActors(ctx, "purchase_order", r.purchaseOrderId) };
+  });
+}
+
+/** ADR-131 (C-office problem 11): purchasing decides a delivery problem (send the rest / money back / not needed). */
+export async function decideDeliveryProblemAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return inPlace(async () => {
+    const ctx = await requireContext();
+    const r = await decideDeliveryProblem(ctx, { goodsReceiptLineId: str(fd, "goodsReceiptLineId"), decision: str(fd, "decision"), note: str(fd, "note"), idempotencyKey: opt(fd, "idempotencyKey") });
+    return r.decision === "send_more" ? "Saved: the supplier sends the rest. The order stays open for it." : r.decision === "money_back" ? "Saved: finance is told to expect money back from the supplier." : "Saved: the rest is not needed. That order line is closed.";
   });
 }
 

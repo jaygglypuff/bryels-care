@@ -5,9 +5,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { materials, purchaseOrders, supplierMaterials } from "@/db/schema";
+import { materials, notifications, purchaseOrderLines, purchaseOrders, supplierMaterials } from "@/db/schema";
+import { resolveDoneNotifications } from "@/modules/platform/notification-done";
 import { buildContextForUser } from "@/lib/auth/context";
 import {
   createPurchaseOrder,
@@ -16,21 +18,28 @@ import {
   decidePurchaseRequest,
   getPurchaseRequest,
   lastPurchasePrices,
+  listDeliveryProblems,
+  decideDeliveryProblem,
+  receiveAgainstPurchaseOrder,
+  saveReorderPolicy,
+  whatToBuy,
   recordSupplierConfirmation,
   sendPurchaseOrder,
   submitPurchaseOrder,
   submitPurchaseRequest,
 } from "@/modules/procurement";
 import { resetTestDatabase } from "../../support/db";
-import { expectCode, loadKit, type Kit } from "../../support/kit";
+import { registerAppHooks } from "@/modules/wiring";
+import { asUser, expectCode, loadKit, loc, type Kit } from "../../support/kit";
 import { setOrgSetting } from "../production/w2a-fixtures";
-import { materialByCode, supplierByName, w4aUsers, type W4aUsers } from "./w4a-fixtures";
+import { materialByCode, sentPo, supplierByName, w4aUsers, type W4aUsers } from "./w4a-fixtures";
 
 let kit: Kit;
 let u: W4aUsers;
 
 beforeAll(async () => {
   await resetTestDatabase();
+  registerAppHooks();
   kit = await loadKit();
   u = await w4aUsers(kit);
 });
@@ -83,6 +92,52 @@ describe("one approval per purchase (A-PO-1APP-01 as amended by the owner, B-own
     const rows = await lastPurchasePrices(u.proc, s.id);
     for (const r of rows) expect(r.poNumber).toMatch(/^PO-/);
     await expectCode(lastPurchasePrices(u.warehouse, s.id), "forbidden");
+  });
+});
+
+describe("delivery problems reach purchasing (C-office problem 11)", () => {
+  it("a short delivery tells purchasing, is listed, and 'not needed' closes the rest; decided once; the message clears", async () => {
+    const po = await sentPo(u, [{ code: "MAT-0012", qty: "50" }]);
+    const [pl] = await db.select().from(purchaseOrderLines).where(eq(purchaseOrderLines.purchaseOrderId, po.id));
+    const exp = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10);
+    await receiveAgainstPurchaseOrder(u.warehouse, {
+      purchaseOrderId: po.id,
+      supplierDocumentNumber: "LOS-DR-R5-SHORT",
+      lines: [{ purchaseOrderLineId: pl.id, materialId: pl.materialId, qty: "30", uom: "kg", supplierLotNumber: "LOS-R5-S", expiresOn: exp, locationId: (await loc(kit.nfd.id, "QUA-01")).id, storageConditionsConfirmed: true, discrepancyKind: "short", discrepancyNote: "Only 30 kg came" }],
+      idempotencyKey: randomUUID(),
+      intent: "post",
+    });
+    const [msg] = await db.select().from(notifications).where(and(eq(notifications.kind, "procurement.delivery_problem"), eq(notifications.entityId, po.id)));
+    expect(msg).toBeTruthy();
+    const list = await listDeliveryProblems(u.proc, { purchaseOrderId: po.id });
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ kind: "short", decision: null });
+    await expectCode(decideDeliveryProblem(u.warehouse, { goodsReceiptLineId: list[0].goodsReceiptLineId, decision: "close_rest", note: "warehouse tries" }), "forbidden");
+    const procRvs = await asUser(kit, "procurement@bryels-care.test", "procurement", [kit.rvs]);
+    await expectCode(decideDeliveryProblem(procRvs, { goodsReceiptLineId: list[0].goodsReceiptLineId, decision: "close_rest", note: "other site tries" }), "not_found");
+    await decideDeliveryProblem(u.proc, { goodsReceiptLineId: list[0].goodsReceiptLineId, decision: "close_rest", note: "Supplier has no more this month", idempotencyKey: randomUUID() });
+    const [after] = await db.select().from(purchaseOrderLines).where(eq(purchaseOrderLines.id, pl.id));
+    expect(after.lineStatus).toBe("short_closed");
+    const [poAfter] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, po.id));
+    expect(poAfter.status).toBe("received");
+    await expectCode(decideDeliveryProblem(u.proc, { goodsReceiptLineId: list[0].goodsReceiptLineId, decision: "money_back", note: "again" }), "conflict");
+    await resolveDoneNotifications(db, { organizationId: kit.orgId });
+    const [done] = await db.select().from(notifications).where(eq(notifications.id, msg.id));
+    expect(done.resolvedAt).not.toBeNull();
+  });
+});
+
+describe("what to buy (C-office problem 5)", () => {
+  it("lists a material below its minimum with Ask to buy in the unit people use; refused for finance", async () => {
+    const m = await materialByCode("MAT-0012");
+    await saveReorderPolicy(u.proc, { materialId: m.id, minStockBase: "100000000" });
+    const rows = await whatToBuy(u.proc);
+    const r = rows.find((x) => x.materialId === m.id)!;
+    expect(r).toBeTruthy();
+    expect(Number(r.shortBase)).toBeGreaterThan(0);
+    expect(r.askUom).toBe("kg");
+    expect(r.why).toMatch(/minimum/);
+    await expectCode(whatToBuy(u.finance), "forbidden");
   });
 });
 

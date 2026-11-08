@@ -178,6 +178,7 @@ export const NAV: NavGroup[] = [
       ...inSection("Buying", [
         { label: "Purchasing", href: "/procurement", permission: "procurement.purchase_request.view" },
         { label: "Requests to buy", href: "/procurement/requests", permission: "procurement.purchase_request.view" },
+        { label: "Delivery problems", href: "/procurement/delivery-problems", permission: "procurement.purchase_order.view" },
         { label: "Send back to supplier", href: "/procurement/returns", permission: "procurement.supplier_return.view" },
         { label: "How suppliers do", href: "/procurement/performance", permission: "procurement.supplier_performance.view" },
         { label: "Sales guess", href: "/procurement/forecast", permission: "analytics.forecast.view" },

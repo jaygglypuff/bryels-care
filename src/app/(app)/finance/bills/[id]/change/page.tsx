@@ -37,7 +37,7 @@ export default async function ChangeBillPage({ params, searchParams }: { params:
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title={`Change the bill from ${d.supplier.name}`} subtitle={`Their bill ${b.supplierReference} · ${b.billNumber}`} actions={back} />
-      <PageIntro>Fix what was typed wrong. The bill is checked against the order and the delivery again when you send it.</PageIntro>
+      <PageIntro>This screen is for fixing what was typed wrong on a supplier bill. It is checked against the order and the delivery again when you send it.</PageIntro>
       {fixing && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title={`Bill ${fixing} was undone (kept on record).`}>This is its copy. Change what was wrong, then save it to the books again.</Banner>
