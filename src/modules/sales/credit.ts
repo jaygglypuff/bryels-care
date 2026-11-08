@@ -55,6 +55,11 @@ export async function evaluateCredit(q: DbOrTx, organizationId: string, customer
     if (exposure.plus(orderTotal).gt(customer.creditLimitAmount)) reasons.push({ code: "credit_limit", message: "Over credit limit" });
   } else if (await getSetting(q, organizationId, "sales.credit_check.require_limit")) {
     reasons.push({ code: "no_credit_limit", message: "No credit limit set for this customer" });
+  } else {
+    // ADR-131 (owner 2026-11-08, A-CREDIT-NOLIMIT-01): no limit set = fine up to the amount in Settings; a bigger
+    // order (with the customer's other open orders) waits for an OK instead of "Credit check: not needed".
+    const upTo = new Decimal(await getSetting(q, organizationId, "sales.credit.no_limit_check_above"));
+    if (exposure.plus(orderTotal).gt(upTo)) reasons.push({ code: "no_credit_limit", message: `No credit limit set and the order is above ₱${upTo.toNumber().toLocaleString("en-PH")}` });
   }
   return {
     failed: reasons.length > 0,

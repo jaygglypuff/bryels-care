@@ -12,8 +12,11 @@ type Mat = { id: string; name: string; code: string; baseUom: string };
  * "Ask to buy something" (purchase request, W04-02): item by name, how much in a friendly unit, needed by, why.
  * More items with one tap; supplier and price guesses folded away. The request number is made by the server.
  */
-export function RequestForm({ materials, suppliers, prices, neededBy, today }: { materials: Mat[]; suppliers: { id: string; name: string }[]; prices: boolean; neededBy: string; today: string }) {
-  const [rows, setRows] = useState([{ key: 0, materialId: "" }]);
+export type RequestPrefill = { materialId: string; qty: string; uom: string | null; supplierId: string | null; price: string | null; why: string | null };
+
+export function RequestForm({ materials, suppliers, prices, neededBy, today, prefill }: { materials: Mat[]; suppliers: { id: string; name: string }[]; prices: boolean; neededBy: string; today: string; prefill?: RequestPrefill | null }) {
+  // ADR-131 (C-office problem 5): "Ask to buy N" on What to buy opens this form filled in.
+  const [rows, setRows] = useState([{ key: 0, materialId: prefill?.materialId ?? "" }]);
   const [seq, setSeq] = useState(1);
   const byId = new Map(materials.map((m) => [m.id, m]));
   return (
@@ -36,30 +39,27 @@ export function RequestForm({ materials, suppliers, prices, neededBy, today }: {
                     </Select>
                   </Field>
                   <Field label="How much" htmlFor={`q-${r.key}`} error={fe[`lines.${i}.qty`] ?? fe[`lines.${i}.uom`]}>
-                    <QtyUnitInput id={`q-${r.key}`} baseUom={m?.baseUom ?? "*"} name={`lines.${i}.qty`} unitName={`lines.${i}.uom`} required={i === 0} />
+                    <QtyUnitInput id={`q-${r.key}`} baseUom={m?.baseUom ?? "*"} name={`lines.${i}.qty`} unitName={`lines.${i}.uom`} required={i === 0} defaultQty={i === 0 ? prefill?.qty : undefined} defaultUnit={i === 0 ? (prefill?.uom ?? undefined) : undefined} />
                   </Field>
                   <div className="sm:col-span-2">
-                    <details>
-                      <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">Supplier or price you know (you can skip this)</summary>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="Supplier you suggest" htmlFor={`s-${r.key}`}>
-                          <Select id={`s-${r.key}`} name={`lines.${i}.suggestedSupplierId`} defaultValue="">
-                            <option value="">Purchasing chooses</option>
-                            {suppliers.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name}
-                              </option>
-                            ))}
-                          </Select>
+                    {/* ADR-131 (C-office problem 9): supplier and price are visible and say what skipping them costs. */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Supplier you suggest (you can skip this)" htmlFor={`s-${r.key}`}>
+                        <Select id={`s-${r.key}`} name={`lines.${i}.suggestedSupplierId`} defaultValue={i === 0 ? (prefill?.supplierId ?? "") : ""}>
+                          <option value="">Purchasing chooses</option>
+                          {suppliers.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      {prices && (
+                        <Field label="Price you expect per unit (₱)" htmlFor={`p-${r.key}`} error={fe[`lines.${i}.estimatedUnitAmount`]} hint="Without a price, the purchase order needs the manager's OK a second time.">
+                          <Input id={`p-${r.key}`} name={`lines.${i}.estimatedUnitAmount`} inputMode="decimal" placeholder="0.00" defaultValue={i === 0 ? (prefill?.price ?? "") : ""} />
                         </Field>
-                        {prices && (
-                          <Field label="Price you expect per unit (₱)" htmlFor={`p-${r.key}`} error={fe[`lines.${i}.estimatedUnitAmount`]}>
-                            <Input id={`p-${r.key}`} name={`lines.${i}.estimatedUnitAmount`} inputMode="decimal" placeholder="0.00" />
-                          </Field>
-                        )}
-                      </div>
-                    </details>
-                    {m && <p className="font-mono text-[12px] text-muted">{m.code}</p>}
+                      )}
+                    </div>
                     {rows.length > 1 && (
                       <Button type="button" variant="ghost" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
                         <Trash2 size={16} aria-hidden /> Remove this item
@@ -87,7 +87,7 @@ export function RequestForm({ materials, suppliers, prices, neededBy, today }: {
               <Input id="neededByDate" type="date" name="neededByDate" min={today} defaultValue={neededBy} />
             </Field>
             <Field label="Why do we need it?" htmlFor="justification" error={fe.justification}>
-              <Textarea id="justification" name="justification" rows={2} placeholder="For example: soap batch next week" />
+              <Textarea id="justification" name="justification" rows={2} placeholder="For example: soap batch next week" defaultValue={prefill?.why ?? ""} />
             </Field>
           </div>
           <p className="text-[14px] text-fg-2">The request number is made for you. After saving, send it for approval on the next screen.</p>

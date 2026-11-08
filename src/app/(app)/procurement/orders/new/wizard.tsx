@@ -1,9 +1,10 @@
 "use client";
 import Decimal from "decimal.js";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { fmtFriendly, toBaseQty, unitChoices } from "@/lib/units";
 import { belowMinimum, startingOrderQty } from "@/lib/po-amount";
+import { suggestArrival, isSunday } from "@/lib/arrive-date";
 import { Button, Card, CardTitle, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
@@ -24,9 +25,10 @@ type Mat = {
   unitPrice: string | null;
   brand: string | null;
 };
-type Row = { key: number; materialId: string; qty: string; unit: string; unitAmount: string; requestLineId: string | null; requestNumber: string | null };
+type LastPrice = { materialId: string; unitAmount: string; uom: string; poNumber: string; orderDate: string };
+type Row = { key: number; materialId: string; qty: string; unit: string; unitAmount: string; requestLineId: string | null; requestNumber: string | null; priceFrom: string | null };
 
-const STEP_NAMES = ["Supplier", "Items", "When", "Check and send"] as const;
+const STEP_NAMES = ["Supplier", "Items", "When", "Check and save"] as const;
 
 /** Where you are in the four steps (shared by the server page for step 1). */
 export function WizardSteps({ current }: { current: 1 | 2 | 3 | 4 }) {
@@ -46,13 +48,9 @@ export function WizardSteps({ current }: { current: 1 | 2 | 3 | 4 }) {
   );
 }
 
-const plusDays = (d: string, n: number) => {
-  const x = new Date(d + "T00:00:00Z");
-  x.setUTCDate(x.getUTCDate() + n);
-  return x.toISOString().slice(0, 10);
-};
 const peso = (d: Decimal) => "₱" + d.toNumber().toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const niceDate = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const isPrice = (v: string) => /^\d+(\.\d{1,4})?$/.test(v.trim());
 
 function defaultUnit(m: Mat | undefined): string {
   if (!m) return "";
@@ -67,76 +65,122 @@ function defaultQty(m: Mat | undefined): string {
   return startingOrderQty(m, defaultUnit(m));
 }
 
-/** About how much one row costs, from the supplier price (kg/g, L/mL, pcs only); null when it cannot be worked out here. */
-function estimate(r: Row, m: Mat | undefined): Decimal | null {
-  if (!m || !r.qty.trim()) return null;
-  const q = toBaseQty(r.qty, r.unit, m.baseUom);
-  if (!q.ok) return null;
-  if (r.unitAmount.trim()) {
-    const p = toBaseQty("1", r.unit, m.baseUom);
-    if (!p.ok || !/^\d+(\.\d+)?$/.test(r.unitAmount.trim())) return null;
-    return q.qtyBase.div(p.qtyBase).times(r.unitAmount.trim());
+/**
+ * ADR-131 (C-office problem 8): the price a line starts with, per the line's unit, and where it came from: the last
+ * price paid to this supplier, else the supplier's price list, else nothing (the clerk types it). Never hidden.
+ */
+function startingPrice(m: Mat | undefined, unit: string, last: LastPrice | undefined): { amount: string; from: string | null } {
+  if (!m || !unit) return { amount: "", from: null };
+  const per = (fromAmount: string, fromUom: string): string | null => {
+    const a = toBaseQty("1", unit, m.baseUom);
+    const b = toBaseQty("1", fromUom, m.baseUom);
+    if (!a.ok || !b.ok || b.qtyBase.lte(0)) return null;
+    return a.qtyBase.div(b.qtyBase).times(fromAmount).toDecimalPlaces(4).toString();
+  };
+  if (last) {
+    const v = per(last.unitAmount, last.uom);
+    if (v) return { amount: v, from: `Last time ${peso(new Decimal(last.unitAmount))} per ${last.uom} on ${last.poNumber}` };
   }
-  if (!m.unitPrice || !m.priceUom) return null;
-  const per = toBaseQty("1", m.priceUom, m.baseUom);
-  if (!per.ok) return null;
-  return q.qtyBase.div(per.qtyBase).times(m.unitPrice);
+  if (m.unitPrice && m.priceUom) {
+    const v = per(m.unitPrice, m.priceUom);
+    if (v) return { amount: v, from: `Supplier price ${peso(new Decimal(m.unitPrice))} per ${m.priceUom}` };
+  }
+  return { amount: "", from: null };
+}
+
+/** About how much one row costs; null when it cannot be worked out here. */
+function estimate(r: Row, m: Mat | undefined): Decimal | null {
+  if (!m || !r.qty.trim() || !isPrice(r.unitAmount)) return null;
+  const q = toBaseQty(r.qty, r.unit, m.baseUom);
+  const p = toBaseQty("1", r.unit, m.baseUom);
+  if (!q.ok || !p.ok || p.qtyBase.lte(0)) return null;
+  return q.qtyBase.div(p.qtyBase).times(r.unitAmount.trim());
 }
 
 /**
  * Steps 2–4 of the new purchase order. Every field sits in ONE form so nothing typed is lost between steps;
  * hidden steps keep their inputs. No field in a hidden step is `required` (the browser cannot show the
- * message); the "Next" buttons check here and the server checks everything again on save.
+ * message); the "Next" buttons check here, in words, under the field, and the server checks everything again on
+ * save. A server error on a line brings the clerk back to step 2 with the message under that line.
  */
 export function NewOrderWizard({
   supplier,
   materials,
   fromRequests,
+  lastPrices,
   warehouses,
   prices,
   today,
+  neededBy,
+  approvedAmount,
+  changeHref,
   canSubmit,
 }: {
   supplier: { id: string; name: string; paymentTermsDays: number | null };
   materials: Mat[];
-  fromRequests: { id: string; materialId: string; requestNumber: string; qty: string; uom: string }[];
+  fromRequests: { id: string; materialId: string; requestNumber: string; qty: string; uom: string; price: string | null }[];
+  lastPrices: LastPrice[];
   warehouses: { id: string; name: string; code: string }[];
   prices: boolean;
   today: string;
+  neededBy: string | null;
+  approvedAmount: number | null;
+  changeHref: string;
   canSubmit: boolean;
 }) {
   const [state, dispatch] = useInPlaceAction(createOrderAction);
   const byId = new Map(materials.map((m) => [m.id, m]));
+  const lastOf = new Map(lastPrices.map((p) => [p.materialId, p]));
+  const firstRow = (key: number, m: Mat | undefined): Row => {
+    const unit = defaultUnit(m);
+    const p = prices ? startingPrice(m, unit, m ? lastOf.get(m.id) : undefined) : { amount: "", from: null };
+    return { key, materialId: m?.id ?? "", qty: defaultQty(m), unit, unitAmount: p.amount, requestLineId: null, requestNumber: null, priceFrom: p.from };
+  };
   const initial: Row[] = fromRequests.length
-    ? fromRequests.map((l, i) => ({ key: i, materialId: l.materialId, qty: l.qty, unit: l.uom, unitAmount: "", requestLineId: l.id, requestNumber: l.requestNumber }))
-    : [{ key: 0, materialId: materials.length === 1 ? materials[0].id : "", qty: defaultQty(materials.length === 1 ? materials[0] : undefined), unit: defaultUnit(materials.length === 1 ? materials[0] : undefined), unitAmount: "", requestLineId: null, requestNumber: null }];
+    ? fromRequests.map((l, i) => {
+        const m = byId.get(l.materialId);
+        const p = l.price ? { amount: l.price, from: `From the request ${l.requestNumber}` } : prices ? startingPrice(m, l.uom, lastOf.get(l.materialId)) : { amount: "", from: null };
+        return { key: i, materialId: l.materialId, qty: l.qty, unit: l.uom, unitAmount: p.amount, requestLineId: l.id, requestNumber: l.requestNumber, priceFrom: p.from };
+      })
+    : [firstRow(0, materials.length === 1 ? materials[0] : undefined)];
   const [rows, setRows] = useState<Row[]>(initial);
   const [seq, setSeq] = useState(initial.length);
   const [step, setStep] = useState<2 | 3 | 4>(2);
   const [problem, setProblem] = useState<string | null>(null);
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const chosen = rows.filter((r) => r.materialId && r.qty.trim());
   const lead = Math.max(0, ...chosen.map((r) => byId.get(r.materialId)?.leadTimeDays ?? 0));
-  const suggested = plusDays(today, lead);
+  const suggestion = suggestArrival({ today, leadDays: lead, neededBy });
   const [arrive, setArrive] = useState<string | null>(null); // null = follows the suggested date
-  const arriveOn = arrive ?? suggested;
+  const arriveOn = arrive ?? suggestion.date;
   const set = (k: number, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === k ? { ...r, ...patch } : r)));
   const total = chosen.reduce<Decimal | null>((s, r) => {
     const e = estimate(r, byId.get(r.materialId));
     return s && e ? s.plus(e) : null;
   }, new Decimal(0));
-  const fe = state?.fieldErrors ?? {};
+  const fe = { ...lineErrors, ...(state?.fieldErrors ?? {}) };
+  // A server refusal on an item (price, amount, unit) belongs to step 2: go back there so the message sits under it.
+  useEffect(() => {
+    if (state?.fieldErrors && Object.keys(state.fieldErrors).some((k) => k.startsWith("lines."))) setStep(2);
+  }, [state]);
+  const covered = approvedAmount !== null && total !== null && total.lte(approvedAmount);
 
   const goTo = (n: 2 | 3 | 4) => {
     if (n > 2) {
+      const errs: Record<string, string> = {};
       if (!chosen.length) return setProblem("Pick at least one item and type how much.");
-      for (const r of chosen) {
+      chosen.forEach((r) => {
+        const i = rows.indexOf(r);
         const m = byId.get(r.materialId)!;
         const q = toBaseQty(r.qty, r.unit, m.baseUom);
-        if (!q.ok) return setProblem(`${m.name}: ${q.message}`);
-        if (q.qtyBase.lte(0)) return setProblem(`${m.name}: type an amount above zero.`);
-      }
+        if (!q.ok) errs[`lines.${i}.qty`] = `${m.name}: ${q.message}`;
+        else if (q.qtyBase.lte(0)) errs[`lines.${i}.qty`] = `Type how much ${m.name} to buy (more than zero).`;
+        if (prices && !isPrice(r.unitAmount)) errs[`lines.${i}.unitAmount`] = r.unitAmount.trim() ? `Type the price of ${m.name} as a number, for example 9.50.` : `Type the price of ${m.name}.`;
+      });
+      setLineErrors(errs);
+      if (Object.keys(errs).length) return setProblem(Object.values(errs)[0]);
     }
-    if (n > 3 && arriveOn < today) return setProblem("The delivery date cannot be before today.");
+    if (n > 3 && arriveOn <= today) return setProblem("Choose a day after today for the delivery.");
     setProblem(null);
     setStep(n);
   };
@@ -148,18 +192,21 @@ export function NewOrderWizard({
         <WizardSteps current={step} />
         <p className="mb-3 text-[14px] text-fg-2">
           Supplier: <strong className="text-fg">{supplier.name}</strong> ·{" "}
-          <a className="text-primary-text underline" href="/procurement/orders/new">
+          <a className="text-primary-text underline" href={changeHref}>
             change
           </a>
         </p>
 
-        {/* Step 2: items */}
+        {/* Step 2: items, with the price visible (it is needed) */}
         <section hidden={step !== 2} aria-label="Items">
           <CardTitle>2. What do we buy?</CardTitle>
           <ul className="flex flex-col gap-3">
             {rows.map((r, i) => {
               const m = byId.get(r.materialId);
               const est = estimate(r, m);
+              const last = m ? lastOf.get(m.id) : undefined;
+              const lastPer = m && last ? startingPrice(m, r.unit, last).amount : "";
+              const differs = prices && lastPer && isPrice(r.unitAmount) && !new Decimal(r.unitAmount).eq(lastPer);
               return (
                 <li key={r.key} className="rounded-[14px] border border-line p-3" data-testid="po-item">
                   {r.requestLineId && <input type="hidden" name={`lines.${i}.purchaseRequestLineId`} value={r.requestLineId} />}
@@ -172,7 +219,9 @@ export function NewOrderWizard({
                         value={r.materialId}
                         onChange={(e) => {
                           const nm = byId.get(e.target.value);
-                          set(r.key, { materialId: e.target.value, unit: defaultUnit(nm), qty: r.qty || defaultQty(nm) });
+                          const unit = defaultUnit(nm);
+                          const p = prices ? startingPrice(nm, unit, nm ? lastOf.get(nm.id) : undefined) : { amount: "", from: null };
+                          set(r.key, { materialId: e.target.value, unit, qty: r.qty || defaultQty(nm), unitAmount: p.amount, priceFrom: p.from });
                         }}
                       >
                         <option value="">Pick an item…</option>
@@ -185,35 +234,56 @@ export function NewOrderWizard({
                       </Select>
                     </Field>
                     <Field label="How much" htmlFor={`qty-${r.key}`} error={fe[`lines.${i}.qty`] ?? fe[`lines.${i}.uom`]}>
-                      <QtyUnitInput id={`qty-${r.key}`} baseUom={m?.baseUom ?? "*"} name={`lines.${i}.qty`} unitName={`lines.${i}.uom`} qty={r.qty} onQtyChange={(v) => set(r.key, { qty: v })} unit={r.unit} onUnitChange={(u) => set(r.key, { unit: u })} />
+                      <QtyUnitInput
+                        id={`qty-${r.key}`}
+                        baseUom={m?.baseUom ?? "*"}
+                        name={`lines.${i}.qty`}
+                        unitName={`lines.${i}.uom`}
+                        qty={r.qty}
+                        onQtyChange={(v) => set(r.key, { qty: v })}
+                        unit={r.unit}
+                        onUnitChange={(u) => {
+                          // Keep the price per the new unit (₱185 per kg → ₱0.185 per g), never silently wrong.
+                          const conv = m && isPrice(r.unitAmount) ? (() => {
+                            const a = toBaseQty("1", u, m.baseUom);
+                            const b = toBaseQty("1", r.unit, m.baseUom);
+                            return a.ok && b.ok && b.qtyBase.gt(0) ? a.qtyBase.div(b.qtyBase).times(r.unitAmount).toDecimalPlaces(4).toString() : r.unitAmount;
+                          })() : r.unitAmount;
+                          set(r.key, { unit: u, unitAmount: conv });
+                        }}
+                      />
                     </Field>
                   </div>
+                  {prices && (
+                    <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+                      <Field label={`Price per ${r.unit || "unit"} (₱) (needed)`} htmlFor={`price-${r.key}`} error={fe[`lines.${i}.unitAmount`]} hint={r.priceFrom ?? (m ? "No price yet from this supplier: type the price they told you." : undefined)}>
+                        <Input id={`price-${r.key}`} name={`lines.${i}.unitAmount`} inputMode="decimal" value={r.unitAmount} onChange={(e) => set(r.key, { unitAmount: e.target.value, priceFrom: r.priceFrom })} placeholder="0.00" data-testid="po-price" />
+                      </Field>
+                      <div className="flex min-w-0 flex-col justify-end gap-1 pb-1 text-[14px]">
+                        {est && <p className="font-medium tabular-nums">About {peso(est)}</p>}
+                        {differs && last && (
+                          <p role="status" className="rounded-[8px] bg-[var(--warn-bg)] px-2 py-1 text-[13px] text-[var(--warn-fg)]" data-testid="price-differs">
+                            Last time it was {peso(new Decimal(lastPer))} per {r.unit} ({last.poNumber}). Check the price with the supplier.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {m && (
                     <p className="mt-1 text-[13px] text-fg-2">
                       {m.packQty && m.packUom ? `Comes in ${Number(m.packQty).toLocaleString("en-PH")} ${m.packUom} packs. ` : ""}
                       {m.moqQty ? `Order at least ${Number(m.moqQty).toLocaleString("en-PH")} ${m.moqUom ?? ""}. ` : ""}
                       {m.leadTimeDays !== null ? `Takes about ${m.leadTimeDays === 1 ? "1 day" : `${m.leadTimeDays} days`} to arrive. ` : ""}
-                      {prices && m.unitPrice && m.priceUom ? `Supplier price ${peso(new Decimal(m.unitPrice))} per ${m.priceUom}.` : ""}
                       {r.requestNumber ? ` From request to buy ${r.requestNumber}.` : ""}
-                      <span className="ml-1 font-mono text-[12px] text-muted">{m.code}</span>
                     </p>
                   )}
-                  {prices && est && <p className="mt-1 text-[14px] font-medium tabular-nums">About {peso(est)}</p>}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {prices && (
-                      <details className="min-w-0 flex-1">
-                        <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">A different price (you can skip this)</summary>
-                        <Field label={`Price per ${r.unit || "unit"} (₱)`} htmlFor={`price-${r.key}`} hint="Leave empty to use the supplier price." error={fe[`lines.${i}.unitAmount`]}>
-                          <Input id={`price-${r.key}`} name={`lines.${i}.unitAmount`} inputMode="decimal" value={r.unitAmount} onChange={(e) => set(r.key, { unitAmount: e.target.value })} placeholder="0.00" />
-                        </Field>
-                      </details>
-                    )}
-                    {rows.length > 1 && (
+                  {rows.length > 1 && (
+                    <div className="mt-2">
                       <Button type="button" variant="ghost" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} aria-label={`Remove ${m?.name ?? "this item"}`}>
                         <Trash2 size={16} aria-hidden /> Remove
                       </Button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -223,7 +293,7 @@ export function NewOrderWizard({
               type="button"
               variant="secondary"
               onClick={() => {
-                setRows((rs) => [...rs, { key: seq, materialId: "", qty: "", unit: "", unitAmount: "", requestLineId: null, requestNumber: null }]);
+                setRows((rs) => [...rs, { key: seq, materialId: "", qty: "", unit: "", unitAmount: "", requestLineId: null, requestNumber: null, priceFrom: null }]);
                 setSeq(seq + 1);
               }}
             >
@@ -236,9 +306,23 @@ export function NewOrderWizard({
         {/* Step 3: when */}
         <section hidden={step !== 3} aria-label="When">
           <CardTitle>3. When should it arrive?</CardTitle>
-          <Field label="Arrives on" htmlFor="arrive" hint={lead ? `Suggested: today + ${lead === 1 ? "1 day" : `${lead} days`}, the longest time the supplier needs for these items.` : "Suggested: today."}>
+          <Field
+            label="Arrives on"
+            htmlFor="arrive"
+            hint={
+              suggestion.why === "request"
+                ? `Suggested: the day the request needs it (${niceDate(suggestion.date)}).`
+                : suggestion.why === "lead_time"
+                  ? `Suggested: ${niceDate(suggestion.date)}, the longest time the supplier needs for these items (${lead === 1 ? "1 day" : `${lead} days`}).`
+                  : `Suggested: ${niceDate(suggestion.date)} (never today or a Sunday).`
+            }
+          >
             <Input id="arrive" type="date" min={today} value={arriveOn} onChange={(e) => setArrive(e.target.value || null)} />
           </Field>
+          <p className="mt-1 text-[14px] text-fg-2" aria-live="polite">
+            {niceDate(arriveOn)}
+            {isSunday(arriveOn) ? " · this is a Sunday: is the supplier open?" : ""}
+          </p>
           <div className="mt-4">
             <MoreDetails>
               <Field label="Deliver to" htmlFor="shipToWarehouseId">
@@ -272,9 +356,9 @@ export function NewOrderWizard({
           </div>
         </section>
 
-        {/* Step 4: check and send */}
-        <section hidden={step !== 4} aria-label="Check and send">
-          <CardTitle>4. Check and send</CardTitle>
+        {/* Step 4: check and save */}
+        <section hidden={step !== 4} aria-label="Check and save">
+          <CardTitle>4. Check and save</CardTitle>
           <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
             {chosen.map((r) => {
               const m = byId.get(r.materialId)!;
@@ -285,28 +369,39 @@ export function NewOrderWizard({
                 <li key={r.key} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <span className="min-w-0">
                     <span className="block font-medium">{m.name}</span>
-                    <span className="text-[13px] text-fg-2">{q.ok ? fmtFriendly(q.qtyBase, m.baseUom) : r.qty}</span>
+                    <span className="text-[13px] text-fg-2">
+                      {q.ok ? fmtFriendly(q.qtyBase, m.baseUom) : r.qty}
+                      {prices && isPrice(r.unitAmount) ? ` at ${peso(new Decimal(r.unitAmount))} per ${r.unit}` : ""}
+                    </span>
                     {low && (
                       <span role="status" className="mt-1 block rounded-[8px] bg-[var(--warn-bg)] px-2 py-1 text-[13px] text-[var(--warn-fg)]" data-testid="below-minimum">
                         Less than the supplier&apos;s minimum order ({Number(m.moqQty).toLocaleString("en-PH")} {m.moqUom ?? m.baseUom}). They may refuse it or charge more. Go back to change it, or ask them first.
                       </span>
                     )}
                   </span>
-                  {prices && <span className="shrink-0 text-right font-semibold tabular-nums">{est ? peso(est) : "price on save"}</span>}
+                  {prices && est && <span className="shrink-0 text-right font-semibold tabular-nums">{peso(est)}</span>}
                 </li>
               );
             })}
-            {prices && (
+            {prices && total && (
               <li className="flex items-center justify-between gap-3 bg-surface-2 px-3 py-2.5 font-semibold">
                 <span>Total before tax</span>
-                <span className="tabular-nums">{total ? `about ${peso(total)}` : "worked out on save"}</span>
+                <span className="tabular-nums">{peso(total)}</span>
               </li>
             )}
           </ul>
           <p className="mt-3 text-[15px]">
             Arrives on <strong>{niceDate(arriveOn)}</strong> from <strong>{supplier.name}</strong>.
           </p>
-          <p className="mt-1 text-[14px] text-fg-2">{canSubmit ? "“Save and send for approval” saves the order and asks the manager to approve it. After approval you send it to the supplier." : "Saving keeps it as a draft; someone who may send orders for approval does that next."}</p>
+          <p className="mt-1 text-[14px] text-fg-2" data-testid="po-approval-words">
+            {!canSubmit
+              ? "Saving keeps it as a draft; someone who may send orders for approval does that next."
+              : covered
+                ? "The request's approval covers this order: after saving, you can send it to the supplier straight away."
+                : approvedAmount !== null && total !== null
+                  ? "This is more than the request was approved for, so saving asks the manager for an OK. After the OK you send it to the supplier."
+                  : "Saving asks the manager for an OK. After the OK you send it to the supplier."}
+          </p>
         </section>
 
         {problem && (
@@ -331,7 +426,7 @@ export function NewOrderWizard({
             <>
               {canSubmit && (
                 <SubmitButton variant="cta" name="intent" value="submit" pendingText="Saving…">
-                  Save and send for approval
+                  {covered ? "Save the order" : "Save and ask for an OK"}
                 </SubmitButton>
               )}
               <SubmitButton variant={canSubmit ? "secondary" : "cta"} name="intent" value="draft" pendingText="Saving…">

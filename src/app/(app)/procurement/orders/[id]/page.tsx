@@ -106,7 +106,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       />
       <PageIntro>This screen is for one order to a supplier: what we ordered, who approves it, sending it, and what has arrived.</PageIntro>
       {sp.sent === "1" && <Banner tone="ok" title="Saved and sent for approval">{next ? <NextApprover next={next} inline /> : waiting}</Banner>}
-      {sp.sent === "approved" && <Banner tone="ok" title="Saved and approved with its request to buy">No second approval is needed. Next: send it to the supplier.</Banner>}
+      {sp.sent === "approved" && <Banner tone="ok" title="Saved and approved with its request to buy">No second OK is needed. Next: send it to the supplier.</Banner>}
       {sp.sent === "0" && <Banner tone="warn" title="Saved as a draft">It could not be sent for approval yet. Tap “Send for approval” below to see why.</Banner>}
       {sp.saved && <Banner tone="ok" title="Order saved as a draft">Send it for approval when it is ready.</Banner>}
       {(sp.sent || sp.saved) && <div className="mb-4" />}
@@ -163,7 +163,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         {po.isUrgent && <Banner tone="warn" title="Urgent purchase">{po.urgentReason}</Banner>}
         {v.approvedByRequest && (
           <Banner tone="ok" title={`Approved with request to buy ${v.approvedByRequest.join(", ")}`}>
-            The supplier, the items and the amount stay within what the manager approved on the request, so this order needs no second approval (one approval per purchase).
+            The items and the amount stay within what was approved on the request, so this order needs no second OK (one approval per purchase).
           </Banner>
         )}
         {po.afterTheFact && (

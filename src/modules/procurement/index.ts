@@ -51,6 +51,8 @@ export {
   exportPurchaseOrdersCsv,
   poFormOptions,
   currentPurchaseOrderDocument,
+  lastPurchasePrices,
+  type LastPrice,
   regeneratePoDocument,
   purchaseOrderReceivingHooks,
   type PoInput,
