@@ -18,7 +18,7 @@ const TONES: Record<string, { tone: Tone; label: string; I: Icon }> = {
   draft: { tone: "neu", label: "Draft – not sent for approval", I: CircleDashed },
   submitted: { tone: "appr", label: "Waiting for approval", I: PauseCircle },
   approved: { tone: "info", label: "Approved – save to the books next", I: CheckCircle2 },
-  issued: { tone: "info", label: "Sent – not paid yet", I: Send },
+  issued: { tone: "info", label: "In the books – not paid yet", I: Send },
   partially_paid: { tone: "warn", label: "Part paid", I: Clock },
   paid: { tone: "ok", label: "Paid", I: CheckCircle2 },
   closed: { tone: "neu", label: "Done", I: CheckCircle2 },
@@ -138,7 +138,7 @@ export function ApprovalCard({ progress, decisions }: { progress: { steps: Step[
   );
 }
 
-const STATE_WORD: Record<string, string> = { draft: "draft", submitted: "sent for approval", approved: "approved", issued: "sent out", partially_paid: "part paid", paid: "paid", closed: "done", voided: "cancelled (kept on record)", cancelled: "cancelled", applied: "taken off the invoice", disputed: "does not match", posted: "saved to the books", recorded: "saved to the books", rejected: "not approved", reconciled: "checked with the bank" };
+const STATE_WORD: Record<string, string> = { draft: "draft", submitted: "sent for approval", approved: "approved", issued: "saved to the books", partially_paid: "part paid", paid: "paid", closed: "done", voided: "cancelled (kept on record)", cancelled: "cancelled", applied: "taken off the invoice", disputed: "does not match", posted: "saved to the books", recorded: "saved to the books", rejected: "not approved", reconciled: "checked with the bank" };
 export function HistoryCard({ history }: { history: { id: string; fromState: string | null; toState: string; actorName: string; occurredAt: Date; reason: string | null }[] }) {
   return (
     <div>

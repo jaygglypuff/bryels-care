@@ -557,7 +557,7 @@ export async function getInvoice(ctx: AuthContext, id: string) {
   const today = businessDate();
   return {
     invoice: { ...inv, openAmount: m4(openAmountOf(inv)), overdue: (OPEN_INVOICE_STATUSES as readonly string[]).includes(inv.status) && !!inv.dueDate && inv.dueDate < today },
-    customer: { id: row.c.id, code: row.c.code, name: row.c.name, taxIdentifier: ctx.can("finance.credit_terms.view") ? row.c.taxIdentifier : undefined },
+    customer: { id: row.c.id, code: row.c.code, name: row.c.name, email: row.c.email, taxIdentifier: ctx.can("finance.credit_terms.view") ? row.c.taxIdentifier : undefined },
     order: { id: row.o.id, orderNumber: row.o.orderNumber, status: row.o.status },
     shipment: { id: row.s.id, number: row.s.shipmentNumber ?? row.s.deliveryReceiptNumber, drNumber: row.s.deliveryReceiptNumber, dispatchedAt: row.s.dispatchedAt, status: row.s.status },
     lines,

@@ -11,6 +11,7 @@ export * from "./payments";
 export * from "./expenses";
 export * from "./periods";
 export * from "./tax";
+export { emailInvoiceToCustomer, markInvoiceGiven } from "./invoice-copies"; // ADR-131
 export { registerPurchaseOrderMatchSource, purchaseOrderMatchSource, type ExpectedSupplierCredit, type PoLineForMatch, type PurchaseOrderMatchSource } from "./procurement-contract";
 export { invoicesToApprove, overdueInvoices, disputedBills, expenseClaimsToApprove } from "./action-items";
 export { oneStepBelow, oneStepFor, approvalProgress as financeApprovalProgress, BASE_APPROVE as FINANCE_BASE_APPROVE, type FinanceRecordType, type Progress as FinanceApprovalProgress } from "./approvals";

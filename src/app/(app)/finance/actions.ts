@@ -7,6 +7,8 @@ import { refreshCurrentPage } from "@/lib/in-place";
 import {
   approveInvoice,
   bookInvoiceInOneStep,
+  emailInvoiceToCustomer,
+  markInvoiceGiven,
   recordPaymentInOneStep,
   approvePeriodUnlock,
   approveTaxConfiguration,
@@ -54,6 +56,7 @@ import {
 } from "@/modules/finance";
 import { financeNext } from "./approval-waiting";
 import { paymentSavedWords } from "@/lib/payment-words";
+import { customerEmailWords } from "@/lib/send-words";
 
 /** Finance server actions (US-6-10..14): thin adapters over src/modules/finance; every rule is in the services. */
 const str = (fd: FormData, k: string) => {
@@ -117,6 +120,16 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         message = `Saved to the books as invoice ${r.invoiceNumber}. Next: give it to the customer (email or print).`;
         break;
       }
+      case "invoice:email": {
+        // ADR-131: "Given to the customer" only when the email really went out.
+        const r = await emailInvoiceToCustomer(ctx, id, { idempotencyKey: key });
+        refreshCurrentPage();
+        return { ok: r.given, message: customerEmailWords("invoice", r.outcome, r.to) };
+      }
+      case "invoice:given":
+        await markInvoiceGiven(ctx, id);
+        message = "Saved: the customer has the printed invoice.";
+        break;
       case "invoice:void":
         await voidInvoice(ctx, id, { reason, password });
         break;
