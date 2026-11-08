@@ -5,6 +5,7 @@ import { uuidv7 } from "uuidv7";
 import { db, type Tx } from "@/db/client";
 import {
   SALES_ORDER_STATUSES,
+  auditEvents,
   customerAddresses,
   customers,
   inventoryLots,
@@ -282,6 +283,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
         .select({
           id: stockAllocations.id,
           lineId: stockAllocations.salesOrderLineId,
+          allocStatus: stockAllocations.status,
           qtyUnits: stockAllocations.qtyUnits,
           lotId: inventoryLots.id,
           lotNumber: inventoryLots.lotNumber,
@@ -328,6 +330,8 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
       requirementSnapshot: line.requirementSnapshot as RequirementSnapshot | null,
       allocated: allocated.toString(),
       shortfall: Decimal.max(D(line.qtyUnits).minus(allocated), 0).toString(),
+      /** ADR-131: pieces of this line already sent out (a change never goes below it). */
+      sent: allocations.filter((a) => a.lineId === line.id && a.allocStatus === "fulfilled").reduce((s, a) => s.plus(a.qtyUnits), new Decimal(0)).toString(),
     };
     if (!prices) return { ...base, _masked: ["unitPrice", "listUnitPrice", "discountPct", "value", "priceSource"] as string[] };
     return { ...base, unitPrice: line.unitPrice, listUnitPrice: line.listUnitPrice, discountPct: line.discountPct, priceSource: line.priceSource, value: D(line.qtyUnits).times(line.unitPrice).toString() };
@@ -348,6 +352,18 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
     }),
     shipments: shipmentRows,
     transitions: transitions.map((t) => ({ ...t.t, actorName: t.actorName })),
+    // ADR-131: line changes of a confirmed order (who, when, why, from → to), shown in "What happened".
+    lineChanges: (
+      await db
+        .select({ id: auditEvents.id, at: auditEvents.occurredAt, who: auditEvents.actorLabel, reason: auditEvents.reason, before: auditEvents.before, after: auditEvents.after })
+        .from(auditEvents)
+        .where(and(eq(auditEvents.organizationId, ctx.organizationId), eq(auditEvents.entityType, "sales_order"), eq(auditEvents.entityId, o.order.id), eq(auditEvents.action, "sales.sales_order.line_changed")))
+        .orderBy(asc(auditEvents.occurredAt))
+    ).map((e) => {
+      const b = (e.before ?? {}) as { product?: string; qty?: string };
+      const a = (e.after ?? {}) as { qty?: string };
+      return { id: e.id, at: e.at, who: e.who, reason: e.reason, label: a.qty === "0" ? `${b.product ?? "A product"} taken off the order (was ${b.qty})` : `${b.product ?? "A product"} changed from ${b.qty} to ${a.qty}` };
+    }),
     shipTo: addresses.find((a) => a.id === o.order.shipToAddressId) ?? null,
     billTo: addresses.find((a) => a.id === o.order.billToAddressId) ?? null,
     quote: quote[0] ?? null,
@@ -362,6 +378,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
     allocations: (typeof allocations[number] & { sku: string; productName: string })[];
     shipments: typeof shipmentRows;
     transitions: (typeof transitions[number]["t"] & { actorName: string })[];
+    lineChanges: { id: string; at: Date; who: string | null; reason: string | null; label: string }[];
     shipTo: (typeof addresses)[number] | null;
     billTo: (typeof addresses)[number] | null;
     quote: { id: string; quoteNumber: string } | null;

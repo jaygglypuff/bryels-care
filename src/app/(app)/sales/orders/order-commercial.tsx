@@ -7,7 +7,7 @@ import { approveOrderAction, reorderAction, returnOrderAction, submitOrderAction
 /** Draft → submit (customer requirements, minimum order, credit and approval check). The server decides: confirmed, or pending approval with the reason. */
 export function SubmitOrderForm({ orderId }: { orderId: string }) {
   return (
-    <ActionForm action={submitOrderAction} hidden={{ orderId }} submit="Send the order" pending="Checking credit and approvals…" variant="cta" size="lg" />
+    <ActionForm action={submitOrderAction} hidden={{ orderId }} submit="Confirm the order" pending="Checking credit and approvals…" variant="cta" size="lg" />
   );
 }
 

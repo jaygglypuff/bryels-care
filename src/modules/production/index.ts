@@ -122,6 +122,8 @@ export {
   type ShortCustomerLine,
   productionOrdersForSalesOrder,
   orderCanShipFrom,
+  earlierOrdersNeedingSameStock,
+  type EarlierOrder,
   MAKE_FOR_SALES_STATUSES,
   batchPlanWords,
   type ProductionOrderInput,

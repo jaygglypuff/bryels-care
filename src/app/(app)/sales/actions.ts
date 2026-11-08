@@ -46,6 +46,11 @@ export async function createOrderAction(_: ActionState, fd: FormData): Promise<A
   redirect(`/sales/${orderId}`);
 }
 
+/** ADR-131 (B-owner problem 13): the set-aside button as a form with a confirm step (the order id comes in the form). */
+export async function allocateFormAction(prev: ActionState, fd: FormData): Promise<ActionState> {
+  return allocateAction(String(fd.get("orderId") ?? ""), prev);
+}
+
 export async function allocateAction(orderId: string, _: ActionState): Promise<ActionState> {
   const ctx = await requireContext();
   let r: Awaited<ReturnType<typeof allocateOrder>>;

@@ -30,7 +30,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ orde
         <PageHeader title="Change order" />
         <PageIntro>This screen is for changing a draft order. This order was already sent, so it cannot be changed here.</PageIntro>
         <Banner tone="info" title="Only a draft can be changed" action={<LinkButton href={`/sales/${order.id}`} variant="secondary">Back to the order</LinkButton>}>
-          If the customer changed their order, cancel this one with a reason (⋯ More on the order) and enter a new one.
+          If the customer changed their order, open the order and use “Change how many” or “Cancel this line” under each product (with what the customer said). The stock already set aside stays, except what is no longer needed.
         </Banner>
       </>
     );
