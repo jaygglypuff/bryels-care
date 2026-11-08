@@ -80,7 +80,7 @@ export function RecordHeader({
   return (
     <header className="mb-4 sm:mb-6" data-testid="record-header">
       {back && (
-        <Link href={back.href} className="-ml-2 mb-1 inline-flex min-h-[44px] items-center gap-0.5 rounded-full px-2 text-meta font-medium text-primary-text hover:bg-primary-soft pointer-fine:min-h-[32px]">
+        <Link href={back.href} className="-ml-2 mb-1 inline-flex min-h-[44px] items-center gap-0.5 rounded-full px-2 text-meta font-medium text-primary-text hover:bg-primary-soft">
           <ChevronLeft size={16} aria-hidden /> {back.label}
         </Link>
       )}

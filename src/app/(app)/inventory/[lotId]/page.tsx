@@ -112,6 +112,8 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   if (ctx.can("inventory.label_job.create")) more.push({ key: "label", label: "Print a label", href: `/labels/new?entityType=inventory_lot&entityId=${lot.id}` });
   if (ctx.can("quality.genealogy.view")) more.push({ key: "trace", label: "Where it came from and where it went", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}` });
   if (ctx.can("inventory.lot.edit")) more.push({ key: "edit", label: "Fix dates or the supplier's code", href: `/inventory/lots/${lot.id}/edit` });
+  // Round 5 (B-owner-manager B4): "Report a problem" from the lot page; the reporter comes back here after sending.
+  if (ctx.can("quality.deviation.create")) more.push({ key: "problem", label: "Report a problem", href: `/quality/deviations/new?lotId=${lot.id}&back=${encodeURIComponent(`/inventory/${lot.id}`)}` });
 
   return (
     <div className="space-y-4">

@@ -163,7 +163,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
             />
           )}
           <p className="mt-4 text-[14px]">
-            <Link href="/inventory/receive/put-away" className="font-medium text-primary-text underline">
+            <Link href="/inventory/receive/put-away" className="inline-flex min-h-[44px] items-center font-medium text-primary-text underline">
               Back to the list
             </Link>
           </p>

@@ -63,7 +63,7 @@ export const HANDOFFS = {
   qa_review: { permission: "quality.inspection.approve", does: "reviews the test results", doBase: "review the test results", where: "on Check quality", fallback: "another QA person", independent: true, prefer: ["qa_qc"] },
   delivery_coming: { permission: "procurement.goods_receipt.create", does: "receives it when it arrives", doBase: "receive it when it arrives", where: "on Receive a delivery", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"] },
   set_aside: { permission: "inventory.allocation.create", does: "sets the stock aside for the order", doBase: "set the stock aside for the order", where: "on the order", fallback: "the warehouse or sales", prefer: ["warehouse_operator", "sales_cs", "site_manager"] },
-  dispatch: { permission: "sales.shipment.post", does: "sends it out", doBase: "send it out", where: "on Packing & dispatch", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"] },
+  dispatch: { permission: "sales.shipment.post", does: "sends it out", doBase: "send it out", where: "on their Home", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"] },
   qa_result_correction: { permission: "quality.disposition.approve", does: "approves the corrected result", doBase: "approve the corrected result", where: "on Check quality", fallback: "another QA person", independent: true, prefer: ["qa_qc"] },
   stock_adjustment: { permission: "inventory.adjustment.approve", does: "approves this stock correction", doBase: "approve this stock correction", where: TO_APPROVE, fallback: "the site manager", operational: true, prefer: OFFICE },
   stock_adjustment_post: { permission: "inventory.adjustment.post", does: "saves it to stock", doBase: "save it to stock", where: "on this stock fix", fallback: "the site manager", operational: true, prefer: OFFICE },
@@ -87,7 +87,7 @@ export const HANDOFFS = {
   inspection_plan_revision: { permission: "quality.inspection_plan.approve", does: "approves the check plan", doBase: "approve the check plan", where: TO_APPROVE, fallback: "QA", independent: true, prefer: ["qa_qc"] },
   setting_change: { permission: "platform.settings.approve", does: "approves the setting change", doBase: "approve the setting change", where: TO_APPROVE, fallback: "the owner", prefer: ["owner_director"] },
   pick: { permission: "sales.pick.create", does: "gets it from the shelf", doBase: "get it from the shelf", where: "on To get from shelf", fallback: "the warehouse", prefer: ["warehouse_operator"] },
-  pack_check: { permission: "inventory.pack.approve", does: "checks the box", doBase: "check the box", where: "on Packing", fallback: "the warehouse", independent: true, prefer: ["warehouse_operator", "site_manager"] },
+  pack_check: { permission: "inventory.pack.approve", does: "checks the box", doBase: "check the box", where: "on their Home", fallback: "the warehouse", independent: true, prefer: ["warehouse_operator", "site_manager"] },
 } satisfies Record<string, HandoffRule>;
 
 export type HandoffKind = keyof typeof HANDOFFS;

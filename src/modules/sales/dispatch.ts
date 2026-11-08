@@ -520,3 +520,18 @@ export async function shippedBoxesForLot(ctx: AuthContext, lotId: string) {
     .where(and(eq(shipmentLines.lotId, lotId), eq(shipments.organizationId, ctx.organizationId), inArray(shipments.siteId, ctx.allowedSiteIds), inArray(shipments.status, ["dispatched", "delivered", "returned"]), isNotNull(shipmentLines.stockMovementId)))
     .orderBy(asc(shipments.dispatchedAt), asc(containers.containerNumber));
 }
+
+/**
+ * Round 5 problem 14: the driver and plate of the last truck that left this site, to prefill "Send out" (the driver
+ * was typed every time). Read only; needs `sales.shipment.post` at the site. Null when no truck left yet.
+ */
+export async function lastDriverAtSite(ctx: AuthContext, siteId: string): Promise<{ driverName: string; vehiclePlate: string | null } | null> {
+  if (!ctx.canAt("sales.shipment.post", siteId)) return null;
+  const [r] = await db
+    .select({ driverName: shipments.driverName, vehiclePlate: shipments.vehiclePlate })
+    .from(shipments)
+    .where(and(eq(shipments.organizationId, ctx.organizationId), eq(shipments.siteId, siteId), isNotNull(shipments.dispatchedAt), isNotNull(shipments.driverName)))
+    .orderBy(desc(shipments.dispatchedAt))
+    .limit(1);
+  return r?.driverName ? { driverName: r.driverName, vehiclePlate: r.vehiclePlate } : null;
+}

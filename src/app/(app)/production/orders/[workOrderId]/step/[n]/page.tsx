@@ -162,10 +162,16 @@ export default async function StepPage({ params, searchParams }: { params: Promi
           {v.pause.last.words}
         </p>
       ) : null}
-      <p className="mt-6 text-[15px]">
+      <p className="mt-6 flex flex-wrap gap-x-6 text-[15px]">
         <Link href={batchRecordHref(b.id)} className="inline-flex min-h-[44px] items-center text-primary-text underline">
           See the full batch record
         </Link>
+        {/* Round 5 (B-owner-manager B4): report a problem from the step; the reporter comes back to this step. */}
+        {ctx.can("quality.deviation.create") && (
+          <Link href={`/quality/deviations/new?batchId=${b.id}&back=${encodeURIComponent(href(v.step.stepNo))}`} className="inline-flex min-h-[44px] items-center text-primary-text underline" data-testid="report-problem">
+            Report a problem
+          </Link>
+        )}
       </p>
     </div>
   );
