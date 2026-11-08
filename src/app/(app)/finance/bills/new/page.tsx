@@ -22,7 +22,7 @@ export default async function NewBillPage() {
       ) : (
         <BillForm
           suppliers={o.suppliers}
-          receipts={o.receipts.map((r) => ({ id: r.id, supplierId: r.supplierId, label: `Delivery of ${fmtDate(r.receivedAt)} (${r.receiptNumber})`, lines: r.lines }))}
+          receipts={o.receipts.map((r) => ({ id: r.id, supplierId: r.supplierId, label: `Delivery of ${fmtDate(r.receivedAt)}${r.poNumber ? ` for order ${r.poNumber}` : ""} (${r.receiptNumber})`, lines: r.lines }))}
           categories={o.categories}
           taxCodes={o.taxCodes}
           defaultTaxCode={o.defaultTaxCode}

@@ -14,6 +14,7 @@ import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
+import { FixBillForm } from "./fix-form";
 import { LineName } from "@/ui/line-name";
 import { ApprovalCard, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
 
@@ -24,11 +25,11 @@ const MATCH_TONE: Record<string, "ok" | "warn" | "bad" | "info" | "neu"> = { mat
 const MATCH_WORD: Record<string, string> = { matched: "Matches order and delivery", no_po: "Matches the delivery", qty_variance: "Amount differs from the delivery", price_variance: "Price differs from the order", no_receipt: "Not on a delivery" };
 
 /** One supplier bill (money we owe): supplier first, the check against order and delivery, next step by state; posting rules unchanged. */
-export default async function BillPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
+export default async function BillPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string; changed?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("finance.supplier_bill.view")) return <Forbidden what="supplier bills" permission="finance.supplier_bill.view" />;
   const { id } = await params;
-  const { created } = await searchParams;
+  const { created, changed } = await searchParams;
   let d: Awaited<ReturnType<typeof getSupplierBill>>;
   try {
     d = await getSupplierBill(ctx, id);
@@ -46,19 +47,33 @@ export default async function BillPage({ params, searchParams }: { params: Promi
   const canCancel = ["draft", "submitted", "disputed", "approved"].includes(b.status) && ctx.can("finance.supplier_bill.create");
   const canVoid = b.status === "posted" && Number(b.paidAmount) === 0 && !isCredit && ctx.can("finance.supplier_bill.void");
   const payHref = `/finance/payments/new?counterparty=supplier:${d.supplier.id}`;
+  // ADR-131: a draft or "does not match" bill is changed; a bill in the books with nothing paid is fixed (undo + copy).
+  const canChange = ["draft", "disputed"].includes(b.status) && ctx.can("finance.supplier_bill.edit");
+  const canFix = canVoid && ctx.can("finance.supplier_bill.create");
   // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
   const doNow = (
     <>
         {canSubmit && <FinanceCommand entity="bill" id={b.id} command="submit" label="Check against order and delivery, then send" variant="cta" />}
         {b.status === "disputed" && (
-          <>
-            {ctx.can("finance.supplier_bill.submit") && <FinanceCommand entity="bill" id={b.id} command="rematch" label="Check again" />}
+          // ADR-131 (bug B12): three plain choices; a typo on our side is never blamed on the supplier.
+          <div className="flex flex-col gap-2" data-testid="bill-dispute-choices">
+            {canChange && (
+              <LinkButton href={`/finance/bills/${b.id}/change`} variant="cta">
+                I typed it wrong – change the bill
+              </LinkButton>
+            )}
+            {ctx.can("finance.supplier_bill.create") && !isCredit && (
+              <LinkButton href="/finance/bills/new" variant="secondary">
+                The supplier charged more – enter their money back
+              </LinkButton>
+            )}
             {d.canApproveVariance ? (
-              <FinanceCommand entity="bill" id={b.id} command="approve_variance" label="Accept the difference" reason variant="cta" />
+              <FinanceCommand entity="bill" id={b.id} command="approve_variance" label="Accept the difference (with the reason)" reason />
             ) : (
               <p className="text-[14px] text-fg-2">Another finance person (not the one who typed or sent this bill) can accept the difference.</p>
             )}
-          </>
+            {ctx.can("finance.supplier_bill.submit") && <FinanceCommand entity="bill" id={b.id} command="rematch" label="Check again (the order was changed)" />}
+          </div>
         )}
         {canDecide && (
           <>
@@ -83,10 +98,15 @@ export default async function BillPage({ params, searchParams }: { params: Promi
               <LinkButton href="/finance/bills" variant="secondary">
                 All supplier bills
               </LinkButton>
-              {b.status === "disputed" && ctx.can("finance.supplier_bill.create") && !isCredit && (
-                <LinkButton href="/finance/bills/new" variant="secondary">
-                  Enter money back from the supplier
+              {canChange && b.status === "draft" && (
+                <LinkButton href={`/finance/bills/${b.id}/change`} variant="secondary">
+                  Change the bill
                 </LinkButton>
+              )}
+              {canFix && (
+                <div className="border-t border-line pt-3">
+                  <FixBillForm billId={b.id} />
+                </div>
               )}
               {canCancel && (
                 <div className="border-t border-line pt-3">
@@ -110,13 +130,18 @@ export default async function BillPage({ params, searchParams }: { params: Promi
           <Banner tone="ok" title="Supplier bill saved.">Send it for approval: the system first checks it against the order and the delivery.</Banner>
         </div>
       )}
+      {changed && (
+        <div className="mb-4" role="status">
+          <Banner tone="ok" title="Bill changed.">Send it again: it is checked against the order and the delivery.</Banner>
+        </div>
+      )}
       {canSubmit ? (
         <NextStepBox text="Next: send it for approval. The system first checks it against the order and the delivery.">{doNow}</NextStepBox>
       ) : b.status === "draft" ? (
         <NextStep text="This supplier bill is a draft." waitingFor={await waitingFor(ctx, "finance.supplier_bill.submit", b.siteId, "to send it for approval", "finance")} />
       ) : b.status === "disputed" ? (
         <NextStepBox
-          text="This bill does not match the order or the delivery (see below). Ask the supplier for money back, check again, or accept the difference with a reason."
+          text="This bill does not match the order or the delivery (see below). Was it typed wrong, did the supplier charge more, or do you accept the difference?"
           waitingFor={d.canApproveVariance ? undefined : await waitingFor(ctx, "finance.supplier_bill.approve", b.siteId, "to accept the difference", "another finance person", { exclude: [b.createdBy, b.submittedBy], operational: true })}
         >
           {doNow}

@@ -2,14 +2,15 @@
 import Decimal from "decimal.js";
 import { useMemo, useState } from "react";
 import { fmtMoney } from "@/lib/qty";
+import { toBaseQty } from "@/lib/units";
 import { Button, Card, CardTitle, Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
 import { LineName } from "@/ui/line-name";
 import { createBillAction } from "../../actions";
 
-type Receipt = { id: string; supplierId: string; label: string; lines: { id: string; lineNo: number | null; material: string; uom: string; qtyUnbilled: string }[] };
-type Line = { key: number; uom?: string; chargeKind: string; goodsReceiptLineId: string | null; description: string; qty: string; unitAmount: string; taxCode: string };
+type Receipt = { id: string; supplierId: string; label: string; lines: { id: string; lineNo: number | null; material: string; uom: string; qtyUnbilled: string; poUom?: string | null; poUnitAmount?: string | null; poNumber?: string | null }[] };
+type Line = { key: number; uom?: string; baseUom?: string; poUnitAmount?: string | null; poNumber?: string | null; chargeKind: string; goodsReceiptLineId: string | null; description: string; qty: string; unitAmount: string; taxCode: string };
 
 const KINDS = [
   ["goods", "Goods"],
@@ -45,26 +46,49 @@ export function BillForm({
   poConnected?: boolean;
 }) {
   const [kind, setKind] = useState<"bill" | "credit">("bill");
-  const [supplierId, setSupplierId] = useState(receipts[0]?.supplierId ?? suppliers[0].id);
+  // ADR-131 (bug B13): never default to the first supplier in the list; the clerk chooses (a delivery picks it too).
+  const [supplierId, setSupplierId] = useState("");
   const [receiptId, setReceiptId] = useState("");
   const [seq, setSeq] = useState(1);
   const tax = defaultTaxCode ?? "";
   const [lines, setLines] = useState<Line[]>([{ key: 0, chargeKind: "other", goodsReceiptLineId: null, description: "", qty: "1", unitAmount: "", taxCode: tax }]);
-  const supplierReceipts = receipts.filter((r) => r.supplierId === supplierId);
+  const supplierReceipts = supplierId ? receipts.filter((r) => r.supplierId === supplierId) : receipts;
   const chooseReceipt = (id: string) => {
     setReceiptId(id);
     const r = receipts.find((x) => x.id === id);
+    if (r) setSupplierId(r.supplierId);
     if (!r) {
       setLines([{ key: seq, chargeKind: "other", goodsReceiptLineId: null, description: "", qty: "1", unitAmount: "", taxCode: tax }]);
       setSeq(seq + 1);
       return;
     }
-    setLines(r.lines.filter((l) => Number(l.qtyUnbilled) > 0).map((l, i) => ({ key: seq + i, uom: l.uom, chargeKind: "goods", goodsReceiptLineId: l.id, description: l.material, qty: String(Number(l.qtyUnbilled)), unitAmount: "", taxCode: tax })));
+    // ADR-131 (C-office problem 7): in the order's unit (25 kg, not 25,000 g), with the order's price filled in.
+    setLines(
+      r.lines
+        .filter((l) => Number(l.qtyUnbilled) > 0)
+        .map((l, i) => {
+          const per = l.poUom && l.poUom !== l.uom ? toBaseQty("1", l.poUom, l.uom) : null;
+          const inPoUnit = per && per.ok && per.qtyBase.gt(0);
+          return {
+            key: seq + i,
+            uom: inPoUnit ? l.poUom! : l.uom,
+            baseUom: l.uom,
+            poUnitAmount: l.poUnitAmount ?? null,
+            poNumber: l.poNumber ?? null,
+            chargeKind: "goods",
+            goodsReceiptLineId: l.id,
+            description: l.material,
+            qty: inPoUnit ? new Decimal(l.qtyUnbilled).div(per.qtyBase).toDecimalPlaces(4).toString() : String(Number(l.qtyUnbilled)),
+            unitAmount: l.poUnitAmount ? new Decimal(l.poUnitAmount).toString() : "",
+            taxCode: tax,
+          };
+        }),
+    );
     setSeq(seq + r.lines.length);
   };
   const set = (k: number, patch: Partial<Line>) => setLines(lines.map((l) => (l.key === k ? { ...l, ...patch } : l)));
   const payload = useMemo(
-    () => JSON.stringify(lines.map((l) => ({ chargeKind: l.chargeKind, goodsReceiptLineId: l.goodsReceiptLineId, description: l.description, qty: l.qty, unitAmount: l.unitAmount, taxCode: l.taxCode || null }))),
+    () => JSON.stringify(lines.map((l) => ({ chargeKind: l.chargeKind, goodsReceiptLineId: l.goodsReceiptLineId, description: l.description, qty: l.qty, uom: l.goodsReceiptLineId ? l.uom ?? null : null, unitAmount: l.unitAmount, taxCode: l.taxCode || null }))),
     [lines],
   );
   const num = (v: string) => (/^\d+(\.\d+)?$/.test(v.trim()) ? new Decimal(v.trim()) : new Decimal(0));
@@ -85,7 +109,9 @@ export function BillForm({
                     setSupplierId(e.target.value);
                     chooseReceipt("");
                   }}
+                  required
                 >
+                  <option value="">Choose the supplier…</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -122,13 +148,14 @@ export function BillForm({
               </Field>
             </div>
             {/* Round 4 (UX re-audit C #7): the date (today unless changed) and the spending kind are folded; open by itself on an error. */}
-            <MoreDetails title="Date and kind (you can skip this)" open={!!(fe.billDate || fe.categoryCode)}>
+            <MoreDetails title="Date, what it was for, and kind" open={!!(fe.billDate || fe.categoryCode) || (kind === "bill" && !receiptId)}>
               <Field label="Date on the bill" htmlFor="b-date" error={fe.billDate} hint="Its month must not be closed.">
                 <Input id="b-date" name="billDate" type="date" defaultValue={today} required />
               </Field>
               {kind === "bill" && !receiptId && (
                 <Field label="What was it for?" htmlFor="b-cat" error={fe.categoryCode}>
-                  <Select id="b-cat" name="categoryCode" defaultValue={categories[0]}>
+                  <Select id="b-cat" name="categoryCode" defaultValue="" required>
+                    <option value="">Choose what it was for…</option>
                     {categories.map((c) => (
                       <option key={c} value={c}>
                         {c.replace(/_/g, " ")}
@@ -173,6 +200,12 @@ export function BillForm({
                       <Input id={`bl-p-${l.key}`} inputMode="decimal" value={l.unitAmount} onChange={(e) => set(l.key, { unitAmount: e.target.value })} placeholder="0.00" />
                     </Field>
                   </div>
+                  {/* ADR-131 (C-office problem 7): checked while typing, against the order's price per the same unit. */}
+                  {l.poUnitAmount && /^\d+(\.\d+)?$/.test(l.unitAmount.trim()) && !num(l.unitAmount).eq(l.poUnitAmount) && (
+                    <p role="status" className="rounded-[8px] bg-[var(--warn-bg)] px-2 py-1 text-[13px] text-[var(--warn-fg)]" data-testid="bill-price-differs">
+                      Order price {fmtMoney(l.poUnitAmount)} per {l.uom}{l.poNumber ? ` (${l.poNumber})` : ""} – yours is {fmtMoney(l.unitAmount)}. Check the supplier&apos;s paper.
+                    </p>
+                  )}
                   <p className="text-right text-[14px] tabular-nums text-fg-2">{fmtMoney(num(l.qty).times(num(l.unitAmount)))}</p>
                   <details>
                     <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">{l.goodsReceiptLineId ? "Kind and tax (you can skip this)" : "How many, kind and tax (you can skip this)"}</summary>
