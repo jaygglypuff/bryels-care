@@ -1,6 +1,7 @@
 import "server-only";
+import Decimal from "decimal.js";
 import { and, asc, eq } from "drizzle-orm";
-import type { DbOrTx, Tx } from "@/db/client";
+import { db, type DbOrTx, type Tx } from "@/db/client";
 import { approvalDecisions, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { approverLabel } from "@/lib/auth/self-approval";
@@ -8,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { type ApprovalBasis, type ApprovalDocumentType, type EvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, rolesAllowedNow } from "@/modules/governance";
 import { notifyRoles } from "@/modules/platform";
+import { getSetting } from "@/lib/settings";
 
 /**
  * Approval steps of the finance documents through the shared `approval_rules` evaluation (US-1-14;
@@ -76,6 +78,24 @@ export async function approvalProgress(q: DbOrTx, organizationId: string, args: 
     posterMayEqualApprover: steps.every((s) => s.posterMayEqualApprover),
   };
 }
+
+/**
+ * ADR-131 (C-office problem 9, A-FIN-1STEP-01): below the owner's amount (Settings `finance.invoice.one_step_below` /
+ * `finance.payment.one_step_below`) one finance person saves an invoice or a payment to the books without a separate
+ * approver. 0 switches it off. Returns the amount when it applies, else null.
+ */
+export async function oneStepBelow(q: DbOrTx, organizationId: string, kind: "invoice" | "payment", amount: string | number): Promise<number | null> {
+  const below = Number(await getSetting(q, organizationId, kind === "invoice" ? "finance.invoice.one_step_below" : "finance.payment.one_step_below"));
+  if (!(below > 0)) return null;
+  return new Decimal(amount).lt(below) ? below : null;
+}
+
+/** For screens: the one-step amount when it applies to this amount (the services re-check on save). */
+export async function oneStepFor(ctx: AuthContext, kind: "invoice" | "payment", amount: string | number): Promise<number | null> {
+  return oneStepBelow(db, ctx.organizationId, kind, amount);
+}
+
+export const oneStepReason =(below: number) => `Below ₱${below.toLocaleString("en-PH")}: one person, one step (Settings)`;
 
 /** Audited evaluation at submission: returns whether any step applies. */
 export async function evaluateAtSubmit(tx: Tx, ctx: AuthContext, args: ApprovalArgs & { recordNumber: string }) {

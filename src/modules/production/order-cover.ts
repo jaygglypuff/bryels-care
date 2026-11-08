@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { freeFinishedStock } from "@/modules/inventory";
+import { getSetting } from "@/lib/settings";
 import { coverOrders, type ComingSource, type LineCover, type OrderCoverResult } from "./order-cover-rule";
 
 /**
@@ -29,11 +30,15 @@ export type SiteOrderCoverOrder = Omit<CoverOrderMeta, "lines"> & { state: Order
 export type SiteOrderCover = { orders: SiteOrderCoverOrder[]; freeByProduct: Map<string, Decimal> };
 
 /** Stock coming at the site, per batch (QA check, being made) and per unapproved production order made for an order. */
-export async function comingStock(q: DbOrTx, organizationId: string, siteId: string): Promise<ComingSource[]> {
-  const rows = await q.execute<{ id: string; ref: string; product_id: string; kind: ComingSource["kind"]; qty: string | null; sales_order_id: string | null }>(sql`
+export async function comingStock(q: DbOrTx, organizationId: string, siteId: string, opts: { today?: string; qaDays?: number } = {}): Promise<ComingSource[]> {
+  // ADR-131 "Can ship from": a source is usable on its planned finish (never before today) plus the QA days.
+  const today = opts.today ?? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  const qaDays = Math.max(0, Math.floor(opts.qaDays ?? (await getSetting(q, organizationId, "sales.can_ship.qa_days", siteId))));
+  const rows = await q.execute<{ id: string; ref: string; product_id: string; kind: ComingSource["kind"]; qty: string | null; sales_order_id: string | null; ready_on: string | null }>(sql`
     -- Waiting for the QA check: what is in the batch's lot (samples already taken out), else the pieces made.
     select b.id, b.batch_number as ref, b.product_id, 'waiting_qa' as kind, w.sales_order_id,
-           coalesce((select sum(ib.qty_base) from inventory_balances ib where ib.lot_id = b.output_lot_id and ib.qty_base > 0), b.actual_units, 0)::text as qty
+           coalesce((select sum(ib.qty_base) from inventory_balances ib where ib.lot_id = b.output_lot_id and ib.qty_base > 0), b.actual_units, 0)::text as qty,
+           (${today}::date + ${qaDays}::int)::text as ready_on
       from batches b left join work_orders w on w.id = b.work_order_id
      where b.organization_id = ${organizationId} and b.site_id = ${siteId} and b.status in ('awaiting_qc', 'quarantined')
        and (w.id is null or w.status <> 'cancelled')
@@ -41,7 +46,8 @@ export async function comingStock(q: DbOrTx, organizationId: string, siteId: str
     -- Being made: batches of approved or in-progress production orders, at their planned pieces.
     select b.id, b.batch_number, b.product_id, 'being_made', w.sales_order_id,
            floor(round(case when w.target_units is not null and w.qty_planned_base > 0 then w.target_units * b.planned_size_g / w.qty_planned_base
-                            else b.planned_size_g * coalesce(fr.theoretical_yield_pct, 100) / 100 / nullif(p.unit_net_mass_g, 0) end, 3))::text
+                            else b.planned_size_g * coalesce(fr.theoretical_yield_pct, 100) / 100 / nullif(p.unit_net_mass_g, 0) end, 3))::text,
+           (greatest(w.planned_end, ${today}::date) + ${qaDays}::int)::text
       from batches b join work_orders w on w.id = b.work_order_id join products p on p.id = b.product_id
       left join formula_revisions fr on fr.id = b.formula_revision_id
      where b.organization_id = ${organizationId} and b.site_id = ${siteId}
@@ -49,10 +55,11 @@ export async function comingStock(q: DbOrTx, organizationId: string, siteId: str
     union all
     -- Not approved yet: only for the customer order it was made for (it may still be changed or refused).
     select w.id, w.work_order_number, w.product_id, 'planned', w.sales_order_id,
-           floor(round(coalesce(w.target_units, w.qty_planned_base * coalesce(fr.theoretical_yield_pct, 100) / 100 / nullif(p.unit_net_mass_g, 0)), 3))::text
+           floor(round(coalesce(w.target_units, w.qty_planned_base * coalesce(fr.theoretical_yield_pct, 100) / 100 / nullif(p.unit_net_mass_g, 0)), 3))::text,
+           (greatest(w.planned_end, ${today}::date) + ${qaDays}::int)::text
       from work_orders w join products p on p.id = w.product_id left join formula_revisions fr on fr.id = w.formula_revision_id
      where w.organization_id = ${organizationId} and w.site_id = ${siteId} and w.status in ('draft', 'planned') and w.sales_order_id is not null`);
-  return [...rows].map((r) => ({ id: r.id, ref: r.ref, productId: r.product_id, kind: r.kind, qty: new Decimal(r.qty ?? 0), salesOrderId: r.sales_order_id }));
+  return [...rows].map((r) => ({ id: r.id, ref: r.ref, productId: r.product_id, kind: r.kind, qty: new Decimal(r.qty ?? 0), salesOrderId: r.sales_order_id, readyOn: r.ready_on }));
 }
 
 /** Every open customer order of the site, in priority order (earliest delivery date first), with the rule applied. */

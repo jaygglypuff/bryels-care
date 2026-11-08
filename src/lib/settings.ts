@@ -625,6 +625,17 @@ export const SETTINGS = {
    * amount (order total with tax, plus their other open orders) without approval; above it the order waits for an OK.
    * 0 = every order of such a customer waits.
    */
+  /** ADR-131 (C-office problem 3, A-CANSHIP-01): days the QA check usually takes, added to a batch's finish for "Can ship from". */
+  "sales.can_ship.qa_days": {
+    scopes: ["organization", "site"],
+    schema: z.number().int().min(0).max(60),
+    default: 2,
+    assumption: "A-CANSHIP-01",
+    group: "Sales",
+    label: "Days the QA check usually takes (for “Can ship from” on customer orders)",
+    description: "“Can ship from” on a customer order = today for stock on the shelf; for stock still being made or waiting for QA, the batch's planned finish (or today) plus these days.",
+    whoChanges: "The owner, with QA.",
+  },
   "sales.credit.no_limit_check_above": {
     scopes: ["organization"],
     schema: z.number().min(0).max(100_000_000),

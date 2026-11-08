@@ -1,9 +1,11 @@
+import Decimal from "decimal.js";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { PAYMENT_METHOD_LABEL, getPayment } from "@/modules/finance";
+import { PAYMENT_METHOD_LABEL, getPayment, oneStepFor } from "@/modules/finance";
+import { paymentFigureLabels, paymentPlanWords } from "@/lib/payment-words";
 import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -40,10 +42,15 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
   const canCancel = ["draft", "submitted", "approved"].includes(p.status) && ctx.can("finance.payment_record.create");
   const canVoid = p.status === "recorded" && ctx.can("finance.payment_record.void");
   const done = p.status === "recorded" || p.status === "voided";
+  // ADR-131: below the owner's one-step amount, finance saves it to the books straight from the draft.
+  const oneStep = canSubmit && ctx.can("finance.payment_record.post") ? await oneStepFor(ctx, "payment", p.amount) : null;
+  const labels = paymentFigureLabels(done);
+  const willPay = d.preview.reduce((s, a) => s.plus(a.amount), new Decimal(0));
   // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
   const doNow = (
     <>
-        {canSubmit && <FinanceCommand entity="payment" id={p.id} command="submit" label="Send for approval" variant="cta" />}
+        {canSubmit && oneStep !== null && <FinanceCommand entity="payment" id={p.id} command="book" label="Save to the books" password variant="cta" hint={`Below ₱${oneStep.toLocaleString("en-PH")} you do it alone in one step (set by the owner). After this it cannot be changed. The day the money moved must be in a month that is not closed.`} />}
+        {canSubmit && oneStep === null && <FinanceCommand entity="payment" id={p.id} command="submit" label="Send for approval" variant="cta" />}
         {canDecide && (
           <>
             <FinanceCommand entity="payment" id={p.id} command="approve" label="Approve" note variant="cta" />
@@ -86,11 +93,11 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
       <PageIntro>This screen is for one payment: {inbound ? "money a customer paid us" : "money we paid"}, and which invoices or bills it pays.</PageIntro>
       {created && (
         <div className="mb-4" role="status">
-          <Banner tone="ok" title="Payment saved.">Send it for approval; after approval finance saves it to the books.</Banner>
+          <Banner tone="ok" title="Payment saved as a draft.">{oneStep !== null ? "Next: save it to the books (one step)." : "Next: send it for approval; after approval finance saves it to the books."}</Banner>
         </div>
       )}
       {canSubmit ? (
-        <NextStepBox text="Next: send this payment for approval.">{doNow}</NextStepBox>
+        <NextStepBox text={oneStep !== null ? "Next: save this payment to the books." : "Next: send this payment for approval."}>{doNow}</NextStepBox>
       ) : p.status === "draft" ? (
         <NextStep text="This payment is a draft." waitingFor={await waitingFor(ctx, "finance.payment_record.create", p.siteId, "to send it for approval", "finance")} />
       ) : canDecide ? (
@@ -138,17 +145,18 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-[13px] text-muted">{p.applicationPlan?.length ? "Amounts chosen by hand." : "Oldest first; worked out again when it is saved to the books."}</p>
+              <p className="mt-1 text-[13px] text-muted">{paymentPlanWords(!!p.applicationPlan?.length, false)}</p>
             </>
           )}
+          {/* ADR-131 (bug B14): before it is in the books, the figures are what it WILL pay, never "Used ₱0.00". */}
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[14px] sm:grid-cols-3">
             <div>
-              <dt className="text-muted">Used</dt>
-              <dd className="font-medium"><Money value={p.appliedAmount} /></dd>
+              <dt className="text-muted">{labels.used}</dt>
+              <dd className="font-medium"><Money value={done ? p.appliedAmount : willPay.toFixed(2)} /></dd>
             </div>
             <div>
-              <dt className="text-muted">Kept for later</dt>
-              <dd className="font-medium"><Money value={p.unapplied} /></dd>
+              <dt className="text-muted">{labels.left}</dt>
+              <dd className="font-medium"><Money value={done ? p.unapplied : Decimal.max(0, new Decimal(p.amount).plus(p.withheldAmount).minus(willPay)).toFixed(2)} /></dd>
             </div>
             {Number(p.withheldAmount) > 0 && (
               <div>

@@ -6,6 +6,8 @@ import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import {
   approveInvoice,
+  bookInvoiceInOneStep,
+  recordPaymentInOneStep,
   approvePeriodUnlock,
   approveTaxConfiguration,
   cancelCreditNote,
@@ -51,6 +53,7 @@ import {
   voidSupplierBill,
 } from "@/modules/finance";
 import { financeNext } from "./approval-waiting";
+import { paymentSavedWords } from "@/lib/payment-words";
 
 /** Finance server actions (US-6-10..14): thin adapters over src/modules/finance; every rule is in the services. */
 const str = (fd: FormData, k: string) => {
@@ -108,6 +111,12 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         message = `Saved to the books as invoice ${r.invoiceNumber}.`;
         break;
       }
+      case "invoice:book": {
+        // ADR-131: below the owner's one-step amount, from the draft straight to the books.
+        const r = await bookInvoiceInOneStep(ctx, id, { password, idempotencyKey: key });
+        message = `Saved to the books as invoice ${r.invoiceNumber}. Next: give it to the customer (email or print).`;
+        break;
+      }
       case "invoice:void":
         await voidInvoice(ctx, id, { reason, password });
         break;
@@ -154,7 +163,13 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "payment:record": {
         const r = await recordPayment(ctx, id, { password, idempotencyKey: key });
-        message = `Saved to the books: ${r.applied} used on bills or invoices, ${r.unapplied} kept for later.`;
+        message = paymentSavedWords(r.applied, r.unapplied);
+        break;
+      }
+      case "payment:book": {
+        // ADR-131: below the owner's one-step amount, from the draft straight to the books.
+        const r = await recordPaymentInOneStep(ctx, id, { password, idempotencyKey: key });
+        message = paymentSavedWords(r.applied, r.unapplied);
         break;
       }
       case "payment:void":

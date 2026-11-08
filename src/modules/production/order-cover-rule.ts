@@ -31,9 +31,11 @@ export type ComingSource = {
   qty: Decimal.Value;
   /** The customer order the production order was made for; null = for stock. */
   salesOrderId: string | null;
+  /** ADR-131: the day the pieces are expected to be usable (planned finish or today, plus the QA days); null = not known. */
+  readyOn?: string | null;
 };
 
-export type ComingTaken = { sourceId: string; ref: string; kind: ComingKind; qty: Decimal };
+export type ComingTaken = { sourceId: string; ref: string; kind: ComingKind; qty: Decimal; readyOn?: string | null };
 
 export type LineCover = {
   lineId: string;
@@ -92,7 +94,7 @@ export function coverOrders(orders: readonly CoverOrder[], freeStock: ReadonlyMa
           const q = Decimal.min(have, rest);
           left.set(c.id, have.minus(q));
           rest = rest.minus(q);
-          taken.push({ sourceId: c.id, ref: c.ref, kind: c.kind, qty: q });
+          taken.push({ sourceId: c.id, ref: c.ref, kind: c.kind, qty: q, readyOn: c.readyOn ?? null });
         }
       }
       const comingTotal = taken.reduce((t, x) => t.plus(x.qty), new Decimal(0));
@@ -103,7 +105,25 @@ export function coverOrders(orders: readonly CoverOrder[], freeStock: ReadonlyMa
   return out;
 }
 
-const KIND_WORDS: Record<ComingKind, string> = { waiting_qa: "waiting for QA", being_made: "being made", planned: "in a production order waiting for approval" };
+export type CanShipFrom = { date: string | null; why: "all_set_aside" | "on_the_shelf" | "coming" | "not_known" };
+
+/**
+ * ADR-131 (C-office problem 3): "Can ship from" for one customer order, from the cover of its open lines. Everything
+ * set aside or on the shelf = today; stock that is coming = the latest ready day of what it takes; anything still
+ * missing (or a source with no known day) = not known. Pure.
+ */
+export function canShipFrom(lines: readonly Pick<LineCover, "need" | "fromFree" | "coming" | "missing">[], today: string): CanShipFrom {
+  const open = lines.filter((l) => new Decimal(l.need).gt(0));
+  if (open.length === 0) return { date: today, why: "all_set_aside" };
+  if (open.some((l) => new Decimal(l.missing).gt(0))) return { date: null, why: "not_known" };
+  const taken = open.flatMap((l) => l.coming.filter((c) => new Decimal(c.qty).gt(0)));
+  if (taken.length === 0) return { date: today, why: "on_the_shelf" };
+  if (taken.some((c) => !c.readyOn)) return { date: null, why: "not_known" };
+  const latest = taken.map((c) => c.readyOn!).sort().at(-1)!;
+  return { date: latest < today ? today : latest, why: "coming" };
+}
+
+const KIND_WORDS: Record<ComingKind, string> ={ waiting_qa: "waiting for QA", being_made: "being made", planned: "in a production order waiting for approval" };
 
 /** "coming: 94 waiting for QA, 2 being made" (empty when nothing is coming). Whole pieces. */
 export function comingWords(coming: readonly Pick<ComingTaken, "kind" | "qty">[]): string {

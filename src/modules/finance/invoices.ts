@@ -12,7 +12,7 @@ import { type InTx, runInTx } from "@/lib/tx";
 import { requireReauthentication } from "@/modules/governance";
 import { claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { formatAddress, lockOrder, shippedLotsOf, transitionOrder } from "@/modules/sales";
-import { type Progress, approvalProgress, assertPosterAllowed, canDecide, decisionsOf, evaluateAtSubmit, notifyNextStep, recordDecision } from "./approvals";
+import { type Progress, approvalProgress, assertPosterAllowed, canDecide, decisionsOf, evaluateAtSubmit, notifyNextStep, oneStepBelow, oneStepReason, recordDecision } from "./approvals";
 import { D, addDays, businessDate, computeTaxedLines, isUuid, logTransition, m4, money, namesOf, openPeriodForPosting, postFinancial, postingsOf, requireReason, reverseDocumentPosting, transitionsOf } from "./shared";
 import { type TaxConfigRow, defaultTaxCode, requireTaxConfiguration } from "./tax";
 
@@ -274,16 +274,42 @@ export async function submitInvoice(ctx: AuthContext, id: string) {
     if (inv.status !== "draft") throw new DomainError("state", `${label(inv)} is ${INVOICE_STATUS_LABEL[inv.status].toLowerCase()}; only a draft can be submitted.`);
     const now = new Date();
     const ev = await evaluateAtSubmit(tx, ctx, { recordType: "invoice", recordId: inv.id, recordNumber: inv.invoiceNumber ?? inv.id.slice(0, 8), siteId: inv.siteId, basis: { amount: inv.totalAmount } });
-    const to = ev.steps.length ? "submitted" : "approved";
+    // ADR-131: below the owner's one-step amount no separate approver is needed (A-FIN-1STEP-01).
+    const oneStep = ev.steps.length ? await oneStepBelow(tx, ctx.organizationId, "invoice", inv.totalAmount) : null;
+    const to = ev.steps.length && oneStep === null ? "submitted" : "approved";
     await tx.update(invoices).set({ status: to, submittedBy: ctx.userId, submittedAt: now, ...(to === "approved" ? { approvedAt: now } : {}), updatedAt: now }).where(eq(invoices.id, inv.id));
     await logTransition(tx, ctx, doc(inv), "draft", "submitted");
-    if (to === "approved") await logTransition(tx, ctx, doc(inv), "submitted", "approved", "No approval rule applies");
-    await audit(tx, ctx, { action: "finance.invoice.submitted", entityType: "invoice", entityId: inv.id, siteId: inv.siteId, after: { status: to, total: inv.totalAmount } });
+    if (to === "approved") await logTransition(tx, ctx, doc(inv), "submitted", "approved", oneStep !== null ? oneStepReason(oneStep) : "No approval rule applies");
+    await audit(tx, ctx, { action: "finance.invoice.submitted", entityType: "invoice", entityId: inv.id, siteId: inv.siteId, after: { status: to, total: inv.totalAmount, ...(oneStep !== null ? { oneStepBelow: oneStep } : {}) } });
     if (to === "submitted") {
       await notifyNextStep(tx, ctx, ev.steps[0] ?? null, { siteId: inv.siteId, kind: "finance.invoice.approval", title: "Invoice waiting for approval", body: `An invoice of ${money(inv.totalAmount)} ${inv.currency} waits for step 1.`, entityType: "invoice", entityId: inv.id, link: `/finance/invoices/${inv.id}` });
     }
     return { status: to };
   });
+}
+
+/**
+ * ADR-131 (C-office problem 9): "Save to the books" straight from the draft when the invoice is below the owner's
+ * one-step amount: one finance person (submit and post at the invoice's site), with their password. Above the
+ * amount it is refused with the way forward (send it for approval). Idempotent on the key through `issueInvoice`.
+ */
+export async function bookInvoiceInOneStep(ctx: AuthContext, id: string, input: { password?: string | null; idempotencyKey?: string | null } = {}) {
+  ctx.require("finance.invoice.submit");
+  ctx.require("finance.invoice.post");
+  await requireReauthentication(ctx, input.password, "finance.invoice.post");
+  const inv0 = await db.transaction(async (tx) => {
+    const inv = await lockInvoice(tx, ctx, id);
+    ctx.requireAt("finance.invoice.submit", inv.siteId);
+    ctx.requireAt("finance.invoice.post", inv.siteId);
+    return inv;
+  });
+  if (inv0.status === "draft") {
+    if ((await oneStepBelow(db, ctx.organizationId, "invoice", inv0.totalAmount)) === null) throw new DomainError("state", "This invoice is at or above the one-step amount in Settings, so another person approves it first. Send it for approval.");
+    await submitInvoice(ctx, id);
+  } else if (inv0.status !== "approved") {
+    throw new DomainError("state", `${label(inv0)} is ${INVOICE_STATUS_LABEL[inv0.status].toLowerCase()}; only a draft or an approved invoice can be saved to the books.`);
+  }
+  return issueInvoice(ctx, id, { password: input.password, idempotencyKey: input.idempotencyKey });
 }
 
 /** R-03: approval (finance ≠ submitter; owner above the threshold). */
