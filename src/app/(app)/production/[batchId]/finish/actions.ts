@@ -29,7 +29,8 @@ export async function finishBatchAction(_: ActionState, fd: FormData): Promise<A
     const types = str(fd, "rejectTypes").split("|").filter(Boolean);
     const rejects: FinishReject[] = types.map((type, i) => ({ type, qty: str(fd, `reject-${i}`) || "0" })).filter((r) => r.qty !== "0");
     const materials = str(fd, "materialIds").split(",").filter(Boolean);
-    const packaging: FinishPackaging[] = materials.map((m) => ({ materialId: m, damaged: str(fd, `pkg-${m}-damaged`) || "0", leftOver: str(fd, `pkg-${m}-leftOver`) || "0", used: str(fd, `pkg-${m}-used`) || null }));
+    // Round 5 B2: empty stays empty (the server refuses it); "All used, none broken" sends 0 and 0 on purpose.
+    const packaging: FinishPackaging[] = materials.map((m) => ({ materialId: m, damaged: str(fd, `pkg-${m}-damaged`), leftOver: str(fd, `pkg-${m}-leftOver`), used: str(fd, `pkg-${m}-used`) || null }));
     const checkerId = str(fd, "checkerId");
     const checker = checkerId
       ? await coSign(ctx, { userId: checkerId, password: str(fd, "checkerPassword"), role: "checker", permission: "production.process_step_record.approve", siteId: await batchSiteId(ctx, batchId) })

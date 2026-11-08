@@ -244,7 +244,7 @@ export async function postBatchToQuarantineLocked(
     await audit(tx, ctx, { ...base, action: "production.process_step_record.completed", entityType: "process_step_record", entityId: batch.id, after: { stepNo: transfer.stepNo, name: transfer.name, status: "completed", checker: checker?.displayName ?? null } });
   }
   if (checker) {
-    await audit(tx, checker, { ...base, action: "production.process_step_record.checked", entityType: "process_step_record", entityId: batch.id, after: { stepNo: transfer?.stepNo ?? null, name: transfer?.name ?? "Move to the QA waiting area", signedOn: "operator_device" } });
+    await audit(tx, checker, { ...base, action: "production.process_step_record.checked", entityType: "process_step_record", entityId: batch.id, after: { stepNo: transfer?.stepNo ?? null, name: transfer?.name ?? "Move to the QA waiting area", signedOn: checker.signedOn } });
   }
   await audit(tx, ctx, {
     ...base,

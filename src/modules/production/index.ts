@@ -21,7 +21,9 @@ export { type FormulaSnapshot, manilaToday, addDays, CHECKER_PERMISSION, isWeigh
 export { STEP_STATUSES, STEP_TRANSITIONS, canStepTransition, checkStep, returnStep, eligibleSigners, checkPermission, performPermission, type StepStatus } from "./execution";
 export { registerExecutionHooks, resetExecutionHooks, DEVIATION_UNAVAILABLE, type ExecutionHooks, type OpenDeviationInput, type DeviationKind, type InProcessQcStatus } from "./execution-hooks";
 export { submitChecklist, type ClearanceAnswer, type SubmitChecklistInput } from "./line-clearance";
-export { recordDispense, checkDispense, voidDispense, returnDispense, toleranceRange, toBaseQty, type DispenseInput } from "./dispensing";
+export { recordDispense, checkDispense, checkDispenses, voidDispense, returnDispense, toleranceRange, toBaseQty, type DispenseInput } from "./dispensing";
+export { checkerQueue, checksWaitingCount, type CheckCard, type CheckerQueue, type WeighingToCheck } from "./checker-queue";
+export { plainNumber, weighUnitFor, inWeighUnit, outOfRangeSentence, missingReadingSentence, rangeWords, CORRECTION_REASONS, correctionReasonText } from "./floor-words";
 export { recordReading, selectEquipment, approveStepException, evaluateReading, limitsLabel } from "./process";
 export { startStep, completeStep, type CompleteStepInput } from "./steps";
 export { issuePackaging, countPackaging } from "./packaging";

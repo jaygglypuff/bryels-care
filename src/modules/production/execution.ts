@@ -264,7 +264,7 @@ export async function finishStep(
       entityId: rec.id,
       entityNumber: batch.batchNumber,
       siteId: batch.siteId,
-      after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, conductedBy: ctx.displayName, signedOn: "operator_device" },
+      after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, conductedBy: ctx.displayName, signedOn: checker.signedOn },
     });
   }
   if (to === "completed") await afterStepCompleted(tx, ctx, batch, step);
@@ -327,7 +327,7 @@ export async function checkStep(checker: AuthContext, input: { batchId: string; 
         entityNumber: batch.batchNumber,
         siteId: batch.siteId,
         before: { status: rec.status },
-        after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, status: "completed", signedOn: "own_session" },
+        after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, status: "completed", signedOn: checker.signedOn },
       });
       await afterStepCompleted(tx, checker, batch, step);
       return { stepNo: step.stepNo, name: step.name, status: "completed" as const };

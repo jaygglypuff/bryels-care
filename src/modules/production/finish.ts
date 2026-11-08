@@ -394,8 +394,18 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
     const p = pkgIn.get(g.materialId);
     const field = `pkg-${g.materialId}`;
     if (!p) throw new DomainError("validation", `Count the ${g.materialName}: how many are damaged and how many are left over.`, { field, fieldErrors: { [field]: "Enter damaged and left over (0 if none)." } });
-    const damaged = s(p.damaged) === "" ? new Decimal(0) : wholeNumber(p.damaged, `Damaged ${g.materialName}`, `${field}-damaged`);
-    const leftOver = s(p.leftOver) === "" ? new Decimal(0) : wholeNumber(p.leftOver, `${g.materialName} left over`, `${field}-leftOver`);
+    // Round 5 B2: an empty count is never read as 0. "All used, none broken" sends 0 and 0 on purpose.
+    const word = wrapperWord(g.materialName);
+    if (s(p.leftOver) === "") {
+      const msg = `Count the ${word}: how many are left over? Type 0 if none.`;
+      throw new DomainError("validation", msg, { field: `${field}-leftOver`, fieldErrors: { [`${field}-leftOver`]: "How many left over? 0 if none." }, rule: "V-RECON-EMPTY" });
+    }
+    if (s(p.damaged) === "") {
+      const msg = `Count the ${word}: how many are damaged? Type 0 if none.`;
+      throw new DomainError("validation", msg, { field: `${field}-damaged`, fieldErrors: { [`${field}-damaged`]: "How many damaged? 0 if none." }, rule: "V-RECON-EMPTY" });
+    }
+    const damaged = wholeNumber(p.damaged, `Damaged ${g.materialName}`, `${field}-damaged`);
+    const leftOver = wholeNumber(p.leftOver, `${g.materialName} left over`, `${field}-leftOver`);
     const used = s(p.used) === "" ? new Decimal(packagingUsedFor(good.plus(rejectsWrapped).toNumber(), g.perPiece)) : wholeNumber(p.used, `${g.materialName} used`, `${field}-used`);
     // Spread over the open rows in issue order; rows already counted keep their counts.
     const open = g.rows.filter((x) => !x.r.countedAt);
