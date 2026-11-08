@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Banknote, Box, Boxes, Clock, Cog, FileText, FlaskConical, Factory, LayoutGrid, MapPin, Package, Plus, Search, ShieldCheck, ShoppingCart, Truck, UserRound, Wrench, X, ScanLine, Building2, Layers,
 } from "lucide-react";
@@ -423,13 +424,14 @@ export function MasterSearchLauncher({ search, userId, keysOnly = false, tight =
           <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted 2xl:inline">{mac ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       )}
-      {open && (
+      {/* A portal: the sticky, blurred top bar would otherwise hold the overlay (it covered only the bar, round 5). */}
+      {open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-0 sm:p-4 sm:pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && close()}>
           <div role="dialog" aria-modal="true" aria-label="Search" className="flex h-dvh w-full max-w-2xl flex-col overflow-hidden bg-surface shadow-2xl sm:h-auto sm:rounded-[18px]">
             <MasterSearchPanel search={search} userId={userId} variant="dialog" autoFocus onClose={close} />
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }

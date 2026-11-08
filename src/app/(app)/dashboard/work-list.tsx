@@ -19,7 +19,7 @@ export const PROCUREMENT_LINES: readonly WorkLine[] = [
 
 export const WAREHOUSE_LINES: readonly WorkLine[] = [
   { key: "so_to_pick", title: "To get from shelf", button: "Get from shelf", href: "/sales/picking" },
-  { key: "shipments_to_check", title: "To check (needs a different person)", button: "Check a box", href: "/sales/dispatch#check" },
+  { key: "shipments_to_check", title: "Boxes to check (by someone who did not take them)", button: "Check a box", href: "/sales/dispatch#check" },
   { key: "shipments_to_send", title: "To send out", button: "Send out", href: "/sales/dispatch#ready" },
   { key: "shipments_no_proof", title: "Customer has not signed yet", button: "Save the signature", href: "/sales/dispatch#proof" },
 ];
@@ -55,7 +55,7 @@ export function WorkList({ title, lines, counts, testId }: { title: string; line
                 </span>
               </span>
               {c.count > 0 && (
-                <Link href={l.href} className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-cta px-4 text-[14px] font-semibold text-white min-[420px]:w-auto">
+                <Link href={l.href} className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full border border-line-strong bg-surface px-4 text-[14px] font-semibold text-fg hover:bg-surface-2 min-[420px]:w-auto">
                   {l.button} <ArrowRight size={14} aria-hidden />
                 </Link>
               )}

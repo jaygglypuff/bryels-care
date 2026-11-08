@@ -62,7 +62,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         {short.length > 0 && <CustomerOrdersShort lines={short} />}
         {plan && <PlannerNext plan={plan} canApprove={ctx.can("production.work_order.approve")} />}
         {buyer && <BuyerNext counts={buying} toBuy={toBuy} />}
-        {putAway.length > 0 && <PutAwayNext tasks={putAway} />}
+        {putAway.length > 0 ? <PutAwayNext tasks={putAway} /> : warehouse && <WarehouseNext counts={dispatch} canCheck={boxChecks.length > 0} />}
         {boxChecks.length > 0 && <BoxChecks checks={boxChecks} />}
         {buyer && <WorkList title="Your buying work" lines={PROCUREMENT_LINES} counts={buying} testId="procurement-work" />}
         {warehouse && <WorkList title="Orders to send out" lines={WAREHOUSE_LINES} counts={dispatch} testId="warehouse-work" />}
@@ -72,7 +72,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             messages={messages.map((m) => ({ id: m.id, title: codeLast(plainDatesIn(m.title)).text, codes: codeLast(m.title).codes.join(" · "), at: m.createdAt }))}
           />
         ) : (
-          <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
+          <>
+            {warehouse && <h2 className="mb-2.5 mt-2 text-[16px] font-semibold text-fg">Other jobs</h2>}
+            <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
+          </>
         )}
       </>
     );
@@ -134,6 +137,18 @@ function PutAwayNext({ tasks }: { tasks: PutAwayTask[] }) {
       waitingFor={more > 0 ? `${more} more ${more === 1 ? "lot waits" : "lots wait"} after this one.` : undefined}
     />
   );
+}
+
+/**
+ * Round 5 (A report task 3): the warehouse's ONE next job when nothing waits to be put away: the first line of "Orders
+ * to send out" with work in it. A box check counts only when someone else took the boxes (the person who took them may
+ * not check them).
+ */
+function WarehouseNext({ counts, canCheck }: { counts: { key: string; count: number }[]; canCheck: boolean }) {
+  const line = WAREHOUSE_LINES.find((l) => (counts.find((c) => c.key === l.key)?.count ?? 0) > 0 && (l.key !== "shipments_to_check" || canCheck));
+  if (!line) return <NextStep text="Nothing waits for you right now. New deliveries and orders show here." />;
+  const n = counts.find((c) => c.key === line.key)!.count;
+  return <NextStep text={`Next: ${line.title.toLowerCase()} (${n}).`} action={{ label: line.button, href: line.href }} />;
 }
 
 /** Round 5: "Waiting for you to check" on the warehouse Home (box checks of deliveries someone else took off the shelf). */

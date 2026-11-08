@@ -304,7 +304,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
                 data-testid="top-bar-approvals"
               >
                 <ListChecks size={18} aria-hidden />
-                <span className={cx("hidden whitespace-nowrap", tightTopBar ? "2xl:inline" : "md:inline")}>To approve</span>
+                <span className={cx("hidden whitespace-nowrap", tightTopBar ? "" : "md:inline")}>To approve</span>
                 <CountBadge n={approvalCount} className="absolute -right-0.5 -top-0.5" />
               </Link>
             )}
@@ -312,7 +312,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
             {!needsMeArea && (
               <Link href="/notifications" className={cx(topButton, pathname.startsWith("/notifications") && "text-primary-text")} aria-label={`Messages, ${unreadCount} unread`} title="Messages" data-testid="top-bar-messages">
                 <Bell size={18} aria-hidden />
-                <span className={cx("hidden", tightTopBar ? "2xl:inline" : "md:inline")}>Messages</span>
+                <span className={cx("hidden", tightTopBar ? "" : "md:inline")}>Messages</span>
                 <CountBadge n={unreadCount} className="absolute -right-0.5 -top-0.5" />
               </Link>
             )}

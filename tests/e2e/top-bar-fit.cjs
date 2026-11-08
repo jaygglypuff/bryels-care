@@ -36,7 +36,7 @@ function loadPlaywright() {
 const { chromium } = loadPlaywright();
 
 const BASE = (process.env.BASE || process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-const USERS = (process.env.USERS || 'owner,manager.nfd,finance,sales,qa.nfd,warehouse.rvs,warehouse.nfd,operator.nfd').split(',');
+const USERS = (process.env.USERS || 'owner,manager.nfd,finance,sales,procurement,qa.nfd,warehouse.rvs,warehouse.nfd,operator.nfd').split(',');
 const WIDTHS = (process.env.WIDTHS || '1280,1366,1440,1536,1920').split(',').map(Number);
 const OUT = process.env.SHOTS_DIR || path.join(os.tmpdir(), 'top-bar-fit');
 fs.mkdirSync(OUT, { recursive: true });

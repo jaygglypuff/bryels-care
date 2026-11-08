@@ -167,7 +167,8 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
     salesDesk ? getWorkFlowCounts(ctx, ["so_short", "so_can_set_aside"]).catch(() => []) : Promise.resolve([]),
     ctx.can("finance.invoice.view") && persona !== "sales" ? receivablesSummary(ctx).catch(() => null) : Promise.resolve(null),
     ctx.can("finance.supplier_bill.view") ? payablesSummary(ctx).catch(() => null) : Promise.resolve(null),
-    persona === "sales" ? Promise.resolve([] as CheckItem[]) : checksWaitingForMe(ctx).catch(() => [] as CheckItem[]),
+    // The owner is not a floor checker (B report #9): second checks go to the warehouse and the site manager.
+    persona === "sales" || persona === "owner" ? Promise.resolve([] as CheckItem[]) : checksWaitingForMe(ctx).catch(() => [] as CheckItem[]),
   ]);
   const notBilled = unbilled ? { count: unbilled.count, toMake: unbilled.toMake, waitingApproval: unbilled.waitingApproval, toSave: unbilled.toSave, oldestDays: unbilled.oldestDispatchedAt ? Math.floor((Date.now() - unbilled.oldestDispatchedAt.getTime()) / 86_400_000) : null } : null;
   const qs = all ? "?scope=all" : "";
