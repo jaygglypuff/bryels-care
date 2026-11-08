@@ -235,6 +235,7 @@ export const NAV: NavGroup[] = [
     description: "Products, recipes, people, settings and places",
     href: SETUP_HREF,
     items: [
+      { label: "Set-up", href: SETUP_HREF },
       ...inSection("Products and recipes", [
         { label: "Products", href: "/masterdata/products", permission: "masterdata.product.view" },
         // Round 4 (UX re-audit C #5): the plain recipe list (one row per product; "New recipe" and the wizard open from it).
@@ -542,17 +543,18 @@ export function activeEntry(nav: readonly NavGroup[], pathname: string): { group
         href = i.href;
       }
     }
-  if (group) return { group, href };
   let cat: NavGroup | undefined;
-  best = -1;
+  let catBest = -1;
   for (const g of NAV)
     for (const i of g.items) {
       const m = matchLen(pathname, i.href);
-      if (m > best) {
-        best = m;
+      if (m > catBest) {
+        catBest = m;
         cat = g;
       }
     }
+  // A more specific screen of its own (Scan or search under Stock) does not light the shorter tab it starts with.
+  if (group && best >= catBest) return { group, href };
   return { group: cat ? nav.find((g) => g.label === cat!.label) : undefined, href: "" };
 }
 
