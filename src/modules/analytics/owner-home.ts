@@ -85,6 +85,8 @@ export type OwnerHome = {
   generatedAt: string;
   /** KPI-SAL-01V today vs yesterday; `masked` when the caller may not see money (value null). */
   salesToday: null | { masked: boolean; value: string | null; yesterday: string | null; orders: number; ordersYesterday: number; href: string; ordersHref: string };
+  /** Round 5 (B report #4): KPI-SAL-01V for this calendar month (orders confirmed), same rule as today's card. */
+  salesMonth: null | { masked: boolean; value: string | null; lastMonth: string | null; orders: number; href: string };
   production: null | { done: number; total: number; pct: number | null; weekStart: string; weekEnd: string };
   stock: StockAlertCounts | null;
   /** The last 7 days (today included), one point per day, from confirmed orders (actuals only). */
@@ -234,15 +236,22 @@ export async function getOwnerHome(ctx: AuthContext, opts: { all?: boolean; now?
   const from7 = addDays(today, -6);
   const tomorrow = addDays(today, 1);
 
-  const [valueToday, countToday, valueWeek, countWeek, week, alerts, activity] = await Promise.all([
+  const [valueToday, countToday, valueWeek, countWeek, week, alerts, activity, valueMonth, countMonth] = await Promise.all([
     seesOrders ? getKpiTile(ctx, "KPI-SAL-01V", { scope: kscope, period: "today", now }) : null,
     seesOrders ? getKpiTile(ctx, "KPI-SAL-01", { scope: kscope, period: "today", now }) : null,
     seesOrders ? getKpiTile(ctx, "KPI-SAL-01V", { scope: kscope, from: from7, to: tomorrow, daily: true, now }) : null,
     seesOrders ? getKpiTile(ctx, "KPI-SAL-01", { scope: kscope, from: from7, to: tomorrow, daily: true, now }) : null,
     ctx.can("production.batch.view") ? listWeekBatches(ctx, opts) : null,
     ctx.can("inventory.lot.view") || ctx.can("inventory.balance.view") ? listStockAlerts(ctx, opts) : null,
-    ctx.can("platform.audit.view") ? listRecentActivity(ctx, scope, 8) : null,
+    // Round 5: more rows, so Home can keep the business events and drop the technical ones (activity-sentence.ts).
+    ctx.can("platform.audit.view") ? listRecentActivity(ctx, scope, 40) : null,
+    seesOrders ? getKpiTile(ctx, "KPI-SAL-01V", { scope: kscope, period: "month", now }) : null,
+    seesOrders ? getKpiTile(ctx, "KPI-SAL-01", { scope: kscope, period: "month", now }) : null,
   ]);
+  const salesMonth =
+    valueMonth && countMonth
+      ? { masked: valueMonth.masked, value: valueMonth.current?.value ?? null, lastMonth: valueMonth.previous?.value ?? null, orders: countMonth.current?.rowCount ?? 0, href: valueMonth.masked ? countMonth.href : valueMonth.href }
+      : null;
 
   const salesToday =
     valueToday && countToday
@@ -286,6 +295,7 @@ export async function getOwnerHome(ctx: AuthContext, opts: { all?: boolean; now?
     today,
     generatedAt: now.toISOString(),
     salesToday,
+    salesMonth,
     production,
     stock: alerts ? stockAlertCounts(alerts) : null,
     salesWeek,

@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, ArrowRightLeft, ClipboardCheck, ClipboardList, Factory, PackageCheck, PackagePlus, ScanLine, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, ClipboardCheck, Factory, PackageCheck, PackagePlus, ScanLine, ShieldCheck, Truck, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import type { OperatorTile } from "@/modules/analytics";
 import type { FloorTask } from "@/modules/production";
 import { fmtDateTime } from "@/lib/qty";
 import { EmptyState } from "@/ui/core";
-import { TaskCards } from "../production/task-cards";
-import { floorQuickKeys } from "./home-next";
+import { TaskCard } from "../production/task-cards";
 
 const ICON: Record<OperatorTile["key"], ReactNode> = {
   receive: <PackagePlus size={26} />,
@@ -89,96 +88,85 @@ function WarehouseTiles({ tiles, siteLabel, updated }: { tiles: OperatorTile[]; 
   );
 }
 
-type QuickAction = { href: string; label: string; icon: ReactNode };
 
 /** One open message on the operator Home (desktop side panel). */
 export type HomeMessage = { id: string; title: string; /** Record codes moved to the end of the title (codeLast), shown small. */ codes?: string; at: Date };
 
 /**
- * "Your tasks today" (UX review, operator mockup): 2–3 count tiles, then one card per batch with ONE
- * big green button (myFloorTasks), then small quick actions. Replaces the ADR-082 "Your next task"
- * card: the first card is that task, and batches without a production order are included.
- * Live check 2026-11-06 (desktop ≥ 1280 px): the right third holds "Today" (quick actions) and the newest messages
- * instead of staying empty; phones and tablets keep one column (messages stay behind the bell there). Warehouse jobs
- * (Put away, Move) are not an operator's quick actions.
+ * "My jobs" for floor people (round 5, ADR-129; A report §4 "Home ("My jobs") for floor roles"):
+ * 1. one big card at the top: the next job, with its verb button (the only green button);
+ * 2. "Waiting for you to check": weighings and steps someone else did that this person may check (A report #11, B13);
+ * 3. "Later": the other jobs, full-width rows; jobs that only wait (curing, another person's check) come last.
+ * No number tiles ("0 Weighing" while a weighing waited for the checker, B13) and no quick actions: the bottom bar holds
+ * Scan, Batches and Help. On desktop (≥ 1280 px) the right third shows the newest messages.
  */
-export function TasksToday({ tasks, counts, tiles, canDailyCount, messages = [] }: { tasks: FloorTask[]; counts: { forYou: number; weighing: number; waiting: number }; tiles: OperatorTile[]; canDailyCount: boolean; messages?: HomeMessage[] }) {
-  const quick: QuickAction[] = [];
-  const scan = tiles.find((t) => t.key === "scan");
-  if (scan) quick.push({ href: scan.href, label: "Scan or search", icon: <ScanLine size={18} aria-hidden /> });
-  if (canDailyCount) quick.push({ href: "/production/today", label: "Today's count", icon: <ClipboardList size={18} aria-hidden /> });
-  const keys = floorQuickKeys(tiles);
-  for (const t of tiles) if (keys.includes(t.key)) quick.push({ href: t.href, label: t.title, icon: ICON[t.key] });
-  const COUNT: [string, number][] = [
-    ["Batches for you", counts.forYou],
-    ["Weighing", counts.weighing],
-    ["Waiting", counts.waiting],
-  ];
+export function TasksToday({ tasks, messages = [] }: { tasks: FloorTask[]; messages?: HomeMessage[] }) {
+  const checks = tasks.filter((t) => t.kind === "check" && t.canDo);
+  const work = tasks.filter((t) => !checks.includes(t));
+  // The next job: my own work first; with nothing of my own to do, the first check.
+  const first = work.find((t) => t.canDo) ?? checks[0] ?? null;
+  const restChecks = checks.filter((t) => t !== first);
+  const later = work.filter((t) => t !== first);
   return (
     <div className="xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start xl:gap-5">
-      <div className="min-w-0">
-        <ul className="mb-5 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Your tasks in numbers">
-          {COUNT.map(([label, n]) => (
-            <li key={label} className="rounded-[16px] border border-line bg-surface px-3 py-3 sm:px-4">
-              <p className="tabular text-stat leading-none text-fg">{n}</p>
-              <p className="mt-1.5 text-[12.5px] leading-tight text-fg-2 sm:text-[13px]">{label}</p>
-            </li>
-          ))}
-        </ul>
-        <h2 className="mb-2.5 text-[16px] font-semibold text-fg">Your tasks today</h2>
-        <TaskCards tasks={tasks} gridClass="sm:grid-cols-2" empty={<EmptyState title="Nothing for you right now.">Your supervisor plans the next batch.</EmptyState>} />
-        {tasks.length > 0 && (
-          <p className="mt-3 text-[14px]">
-            <Link href="/production/orders" className="font-medium text-primary-text underline">
-              My work
-            </Link>
-          </p>
+      <div className="min-w-0 space-y-5">
+        {first ? (
+          <section aria-labelledby="next-job-h" data-testid="next-job">
+            <h2 id="next-job-h" className="mb-2.5 text-[16px] font-semibold text-fg">Your next job</h2>
+            <TaskCard t={first} first />
+          </section>
+        ) : (
+          <EmptyState title="Nothing for you right now.">Your supervisor plans the next batch. New work shows here.</EmptyState>
+        )}
+        {restChecks.length > 0 && (
+          <section aria-labelledby="to-check-h" data-testid="home-checks">
+            <h2 id="to-check-h" className="mb-2.5 text-[16px] font-semibold text-fg">Waiting for you to check</h2>
+            <ul className="grid gap-3">
+              {restChecks.map((t) => (
+                <li key={t.batchId} className="min-w-0">
+                  <TaskCard t={t} first={false} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {later.length > 0 && (
+          <section aria-labelledby="later-h">
+            <h2 id="later-h" className="mb-2.5 text-[16px] font-semibold text-fg">Later</h2>
+            <ul className="grid gap-3">
+              {[...later.filter((t) => t.canDo), ...later.filter((t) => !t.canDo)].map((t) => (
+                <li key={t.batchId} className="min-w-0">
+                  <TaskCard t={t} first={false} />
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
-      <aside aria-label="Today" className="min-w-0 xl:rounded-[20px] xl:border xl:border-line xl:bg-surface xl:p-4">
-        {quick.length > 0 && (
-          <nav aria-label="Quick actions" className="mt-6 xl:mt-0">
-            <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
-              <span className="xl:hidden">Quick actions</span>
-              <span className="hidden xl:inline">Today</span>
-            </h2>
-            <ul className="flex flex-wrap gap-2 xl:flex-col">
-              {quick.map((q) => (
-                <li key={q.href}>
-                  <Link href={q.href} className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg hover:bg-surface-2 xl:flex xl:w-full [&_svg]:size-[18px]">
-                    {q.icon}
-                    {q.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+      <aside aria-label="Messages for you" className="hidden min-w-0 xl:block xl:rounded-[20px] xl:border xl:border-line xl:bg-surface xl:p-4">
+        <h2 id="home-messages-h" className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
+          Messages for you
+        </h2>
+        {messages.length === 0 ? (
+          <p className="text-[14px] text-fg-2">No new messages.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {messages.map((m) => (
+              <li key={m.id}>
+                <a href={`/notifications/open/${m.id}`} className="block min-h-[44px] py-2 text-[14px] text-fg hover:text-primary-text">
+                  <span className="block font-medium">
+                    {m.title}
+                    {m.codes && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{m.codes}</span>}
+                  </span>
+                  <span className="block text-[12px] text-muted">{fmtDateTime(m.at)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
         )}
-        <section aria-labelledby="home-messages-h" className="hidden xl:mt-5 xl:block xl:border-t xl:border-line xl:pt-4">
-          <h2 id="home-messages-h" className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">
-            Messages for you
-          </h2>
-          {messages.length === 0 ? (
-            <p className="text-[14px] text-fg-2">No new messages.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-line">
-              {messages.map((m) => (
-                <li key={m.id}>
-                  <a href={`/notifications/open/${m.id}`} className="block min-h-[44px] py-2 text-[14px] text-fg hover:text-primary-text">
-                    <span className="block font-medium">
-                      {m.title}
-                      {m.codes && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{m.codes}</span>}
-                    </span>
-                    <span className="block text-[12px] text-muted">{fmtDateTime(m.at)}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link href="/notifications" className="mt-1 inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
-            All messages
-          </Link>
-        </section>
+        <Link href="/notifications" className="mt-1 inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
+          All messages
+        </Link>
       </aside>
     </div>
   );

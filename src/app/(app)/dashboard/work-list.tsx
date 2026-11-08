@@ -21,7 +21,7 @@ export const WAREHOUSE_LINES: readonly WorkLine[] = [
   { key: "so_to_pick", title: "To get from shelf", button: "Get from shelf", href: "/sales/picking" },
   { key: "shipments_to_check", title: "To check (needs a different person)", button: "Check a box", href: "/sales/dispatch#check" },
   { key: "shipments_to_send", title: "To send out", button: "Send out", href: "/sales/dispatch#ready" },
-  { key: "shipments_no_proof", title: "Proof of delivery missing", button: "Save the proof", href: "/sales/dispatch#proof" },
+  { key: "shipments_no_proof", title: "Customer has not signed yet", button: "Save the signature", href: "/sales/dispatch#proof" },
 ];
 
 export function WorkList({ title, lines, counts, testId }: { title: string; lines: readonly WorkLine[]; counts: FlowCount[]; testId: string }) {
