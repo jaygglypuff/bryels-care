@@ -296,9 +296,10 @@ section('e. operator gets the materials for the lotion order (scene 5)', async (
     await page.locator('button[aria-pressed=false]', { hasText: 'Taken' }).first().click();
     if (i < total) await page.getByTestId('pick-progress').getByText(`${i} of ${total} taken`).waitFor();
   }
-  await expectText(page, 'Every line is taken. Next: Start.');
+  // Round 5: the button names the next step ("Next: Check the area is clean"), never a bare "Start".
+  await expectText(page, 'Every line is taken. Next: Check the area is clean.');
   await shot(page, 'materials-taken-phone');
-  await page.getByRole('link', { name: 'Start', exact: true }).click();
+  await page.getByRole('link', { name: 'Next: Check the area is clean', exact: true }).click();
   await waitUrl(page, /\/step\/\d+\?batch=/);
   await expectText(page, 'Check the area is clean');
   log('materials taken for', facts.lotionOrderId);
@@ -327,22 +328,31 @@ async function findLotionBatch(page) {
   facts.lotionBatchId = u.searchParams.get('batch');
 }
 
-/** The second person confirms on their OWN session (ADR-100): the same screen, "Yes, I checked it". */
-async function checkerConfirms(chk, url, what) {
-  await go(chk, url);
-  const own = chk.getByRole('button', { name: /Yes, I checked it/ }).first();
-  await own.waitFor();
-  await own.click();
-  await own.waitFor({ state: 'detached' });
-  log('  checked by Jun on his own phone:', what);
+/**
+ * ADR-130 one checker flow: the second person confirms on their OWN session, from their list "Waiting for you to
+ * check" (/production/checks): one card per batch of weighings, one per step, "Looks right". Only the cards of the
+ * lotion batch are confirmed; after each tap the checker is back on the list (round 5 B18).
+ */
+async function checkerConfirms(chk, what) {
+  const number = facts.lotionBatchNumber;
+  for (let guard = 0; guard < 6; guard++) {
+    await go(chk, '/production/checks');
+    await chk.getByRole('heading', { name: 'Waiting for you to check' }).waitFor();
+    const cards = chk.locator('[data-testid^="check-card-"]').filter({ hasText: number || '' });
+    if (!(await cards.count())) break;
+    const card = cards.first();
+    if (guard === 0) await shot(chk, 'checker-list-phone');
+    await card.getByTestId('looks-right').click();
+    await chk.getByTestId('check-done').waitFor();
+    assert(/\/production\/checks/.test(chk.url()), 'the checker stays on his list after a check: ' + chk.url());
+    log('  checked by Jun on his own phone:', what, '·', (await chk.getByTestId('check-done').innerText()).trim());
+  }
 }
 
-/** After Step done: when the step waits for the second person, the checker opens the check on his own session. */
+/** After Step done: when the step waits for the second person, the checker confirms it from his list. */
 async function secondCheck(op, chk, url, what) {
-  if (!(await op.getByText(/Second check needed|Waiting for the second check|waiting for the checker/).count())) return;
-  const link = op.getByRole('link', { name: 'Open the check' });
-  const target = (await link.count()) ? await link.first().getAttribute('href') : url;
-  await checkerConfirms(chk, target, what);
+  if (!(await op.getByText(/Waiting for the second check|waits for the second check/).count())) return;
+  await checkerConfirms(chk, what);
 }
 
 /** Reads "OK 65 – 75 °C" style limits and returns the middle (or the one bound). */
@@ -361,26 +371,28 @@ async function weighAll(op, chk) {
     const card = op.getByTestId('weigh-card').first();
     if (!(await card.count())) break;
     const name = ((await card.getAttribute('aria-label')) || '').replace(/^Weigh /, '');
-    // Get materials told which lot to take; the weigh card proposes it ("from L-…: 17,919 g").
-    const proposal = await card.getByTestId('weigh-proposal').innerText();
-    const lot = proposal.match(/L-\d{4}-\d{5}/)[0];
-    const target = (await card.locator('p.font-display').first().innerText()).replace(/,/g, '').match(/([\d.]+)\s*(kg|g)\b/);
-    const grams = String(Math.round(Number(target[1]) * (target[2] === 'kg' ? 1000 : 1) * 10) / 10);
+    facts.lotionBatchNumber ??= (await op.getByTestId('record-number').first().innerText()).trim();
+    // Round 5: the lot is shown once ("Take lot …0010 · shelf", full number under it); the amount is in the scale's
+    // unit (kg for 1 kg or more), typed in that unit.
+    const lot = (await card.getByTestId('weigh-lot').innerText()).match(/L-\d{4}-\d{5}/)[0];
+    const target = (await card.getByTestId('weigh-target').innerText()).replace(/,/g, '').match(/([\d.]+)\s*(kg|g)\b/);
     await scanBurst(op, `BC:LOT:${lot}`);
-    await card.getByText(`Label scanned: lot ${lot}`).waitFor();
-    await card.getByRole('button', { name: 'Weight' }).click().catch(() => {});
-    await keypad(card, grams);
+    await card.getByTestId('lot-confirmed').waitFor();
+    await card.getByRole('button', { name: /Weight/ }).click().catch(() => {});
+    await keypad(card, target[1]);
     await card.getByText('OK', { exact: true }).first().waitFor();
     if (guard === 0) await shot(op, 'weigh-card-scanned-phone');
     await card.getByRole('button', { name: 'Save', exact: true }).click();
-    // The weighing waits for the second person, who confirms on their own phone.
-    await op.getByText(/Second check needed|Check .*'s weighing|waits for/).first().waitFor();
-    await checkerConfirms(chk, weighUrl, `weighing of ${name} (${grams} g from ${lot})`);
+    // "Saved: … It waits for the second check." The operator goes on; the checks wait on Jun's list.
+    await op.getByTestId('weigh-saved').waitFor();
     await go(op, weighUrl);
-    (facts.weighed ??= []).push(`${name} ${grams} g ${lot}`);
+    (facts.weighed ??= []).push(`${name} ${target[1]} ${target[2]} ${lot}`);
   }
+  // One card on Jun's list for all the weighings of the batch (A-CHK-01): one "Looks right".
+  await checkerConfirms(chk, 'the weighings of the batch');
+  await go(op, weighUrl);
   // Everything weighed: the summary's Step done closes the weighing step.
-  // (When the step was already closed, the summary shows "Next step" instead.)
+  // (When the step was already closed, the summary shows "Done — go to …" instead.)
   const stepDone = op.getByTestId('weigh-summary').getByRole('button', { name: 'Step done' });
   if (await stepDone.count()) await stepDone.click();
   await op.waitForLoadState('networkidle').catch(() => {});
@@ -429,11 +441,20 @@ async function boxLabels(op) {
   const box = op.getByTestId('box-labels');
   if (!(await box.count())) return;
   const back = op.url();
+  // Round 5 problem 3: one green button "Print 94 piece labels and 4 box labels" opens ONE print page with both.
   const print = box.getByRole('button', { name: /^Print .*box label/ });
   if (await print.count()) {
     facts.boxSplit = (await box.getByTestId('box-split').innerText()).trim();
+    facts.pieceLabels = (await print.innerText()).trim();
     await print.click();
-    await box.getByTestId('open-box-labels').waitFor();
+    await waitUrl(op, /\/print\/labels\/batch-boxes\//);
+    await shot(op, 'labels-one-print-trip');
+    await op.getByRole('button', { name: /^Yes, (it|they) printed$/ }).click();
+    await printedOk(op);
+    await op.goto(back);
+    await ok(op);
+    log('  piece and box labels printed in one go:', facts.pieceLabels, '·', facts.boxSplit);
+    return;
   }
   const open = box.getByTestId('open-box-labels');
   if ((await open.count()) && !/^See /.test((await open.innerText()).trim())) { // "See the box labels": printed before
@@ -465,15 +486,20 @@ section('f. weigh by scanning lot labels (Jun checks on his own session), the st
   const op = await asUser(who('operator.nfd'), PHONE);
   const chk = await asUser(who('checker.nfd'), PHONE);
   await findLotionBatch(op.page);
+  let atFinish = false;
   for (let guard = 0; guard < 20; guard++) {
     await go(op.page, continueUrl());
     const u = op.page.url();
-    if (/\/finish/.test(u)) break;
+    // Round 5 B19: Finish is the last step ("Move to the QA waiting area"), shown in the step template.
+    if (/\/finish/.test(u) || (await op.page.getByTestId('finish-panel').count())) {
+      atFinish = true;
+      break;
+    }
     if (/\/weigh(\?|$)/.test(u)) await weighAll(op.page, chk.page);
     else if (/\/step\/\d+/.test(u)) await doStep(op.page, chk.page);
     else throw new Error('unexpected screen on Continue: ' + u);
   }
-  assert(/\/finish/.test(op.page.url()), 'every step done: Continue opens Finish, got ' + op.page.url());
+  assert(atFinish, 'every step done: Continue opens Finish (the last step), got ' + op.page.url());
   if (!process.env.ONLY) assert((facts.weighed ?? []).length >= 4, 'every ingredient weighed: ' + JSON.stringify(facts.weighed));
   await op.close();
   await chk.close();
@@ -484,11 +510,15 @@ section('i. finish: good pieces and the packaging count', async () => {
   const { page, close } = await asUser(who('operator.nfd'), PHONE);
   await findLotionBatch(page);
   await go(page, continueUrl());
-  await waitUrl(page, /\/finish/);
+  // Round 5: Finish is step N of N in the step template (B19, problem 2).
+  await page.getByTestId('finish-panel').waitFor();
+  await expectText(page, /Step \d+ of \d+/);
   const checker = page.locator('#checkerId');
   if (await checker.count()) await checker.selectOption({ label: CHECKER });
   const pw = page.locator('#checkerPassword');
   if (await pw.count()) await pw.fill(PW);
+  // One question per packing item ("All 96 bottles used, none broken?"): Yes. An empty count is never sent (B2).
+  for (const yes of await page.locator('[data-testid^="pkg-yes-"]').all()) await yes.click();
   await shot(page, 'finish-phone', { full: true });
   await page.getByTestId('finish-batch').click();
   const yes = page.getByRole('button', { name: 'Yes, finish' });
@@ -629,7 +659,7 @@ section('l. a second person (Dino, not the picker) checks the delivery', async (
   await shot(page, 'second-check-done');
   await page.getByRole('button', { name: 'Finish the check' }).first().click();
   await waitUrl(page, /\/sales\/shipments\/[0-9a-f-]{36}\?done=packed/);
-  await expectText(page, 'Next: send it out.');
+  await expectText(page, 'Next: 1. print the delivery receipt for the driver');
   log('second check done by Dino (not the picker)');
   await close();
 });
@@ -638,6 +668,14 @@ section('l. a second person (Dino, not the picker) checks the delivery', async (
 section('m. the warehouse sends it out', async () => {
   const { page, close } = await asUser(who('warehouse.nfd'));
   await openIslaDelivery(page);
+  // Round 5 problem 14: the paper first — a draft delivery receipt the driver takes, printable before the truck leaves.
+  const makeDr = page.getByTestId('dr-before-sending').getByRole('button', { name: /Make the delivery receipt/ });
+  if (await makeDr.count()) {
+    await makeDr.click();
+    await confirmOnPage(page, 'Yes, continue').catch(() => {});
+  }
+  await page.getByTestId('dr-before-sending').getByRole('link', { name: /Print the delivery receipt/ }).waitFor();
+  log('  draft delivery receipt ready to print before sending out');
   await page.fill('#driverName', 'Ramon Cruz');
   await page.fill('#vehiclePlate', 'NAB 1234');
   await page.getByRole('button', { name: 'Send out now' }).click();

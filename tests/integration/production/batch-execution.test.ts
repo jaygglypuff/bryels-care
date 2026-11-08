@@ -332,7 +332,7 @@ describe("Acapulco batch end to end: process, packaging, yield, transfer to quar
     await expectCode(selectEquipment(operator, { batchId, stepNo: mixing.stepNo, equipmentRef: "SC-01" }), "validation"); // a scale is not a mixer
     const e = await expectCode(completeStep(operator, { batchId, stepNo: mixing.stepNo }, { checker }), "state");
     expect(e.message).toMatch(/Select the mixer/);
-    expect(e.message).toMatch(/Record Oil phase temperature/);
+    expect(e.message).toMatch(/Type the Oil phase temperature at mixing \(°C\) first\./); // round 5 B4: plain sentence
     await cleanEquipment(operator, "MIX-01");
     await selectEquipment(operator, { batchId, stepNo: mixing.stepNo, equipmentRef: "BC:EQP:MIX-01" });
     const temp = mixing.parameters!.find((p) => p.code === "oil_temp")!;
