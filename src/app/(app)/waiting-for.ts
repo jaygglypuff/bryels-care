@@ -16,11 +16,11 @@ export async function waitingFor(
   siteId: string | null,
   verb: string,
   fallbackRole: string,
-  opts: { exclude?: readonly (string | null | undefined)[]; roleCodes?: readonly string[]; operational?: boolean; priorApproverIds?: readonly (string | null | undefined)[] } = {},
+  opts: { exclude?: readonly (string | null | undefined)[]; roleCodes?: readonly string[]; operational?: boolean; priorApproverIds?: readonly (string | null | undefined)[]; /** Round 5: the job's roles (HandoffRule.only). Default for "the warehouse": warehouse operators. */ only?: readonly string[] } = {},
 ): Promise<string> {
   const next = await nextActors(
     ctx,
-    { kind: `waiting.${permission}`, permission: permission as Permission, does: verb, doBase: verb, where: "", fallback: fallbackRole, operational: opts.operational, independent: !opts.operational },
+    { kind: `waiting.${permission}`, permission: permission as Permission, does: verb, doBase: verb, where: "", fallback: fallbackRole, operational: opts.operational, independent: !opts.operational, only: opts.only ?? (fallbackRole === "the warehouse" ? ["warehouse_operator"] : undefined) },
     { siteId, excludeUserIds: opts.exclude, roleCodes: opts.roleCodes, priorApproverIds: opts.priorApproverIds },
   ).catch(() => null);
   return waitingLine(next?.people ?? [], verb, fallbackRole);
