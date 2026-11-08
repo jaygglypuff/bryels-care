@@ -173,11 +173,11 @@ export const RECORD_TYPES: readonly RecordType[] = [
 ];
 
 /**
- * Record types that are only noise in a partial or short-number search (round 5, A report #15, C report #15: "Set
+ * Record types that are only noise in a short-number search (round 5, A report #15, C report #15: "Set
  * aside · RSV-…", "Stock change · MOV-…", "Document · label DOC-…" under "0003"). They still open when their whole
  * number is typed.
  */
-export const EXACT_ONLY_TYPES: readonly string[] = ["reservation", "movement", "document", "import_job", "delivery_receipt"];
+export const EXACT_ONLY_TYPES: readonly string[] = ["reservation", "movement", "document", "import_job"];
 
 /** Order of record types in "Records by number" for the same match quality: the records people ask for by number first. */
 const NUMBER_TYPE_ORDER: readonly string[] = ["batch", "sales_order", "lot", "work_order", "purchase_order", "invoice", "shipment", "box", "supplier_bill", "goods_receipt", "quote", "purchase_request", "payment", "customer", "supplier", "product", "material"];
@@ -347,7 +347,7 @@ export async function masterSearch(ctx: AuthContext, input: string): Promise<Mas
 
   const [exact, partial, ending, named] = await Promise.all([
     numberSearch && q.exact.length && q.compact.length >= 2 ? run(numberTypes.map((x) => exactBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
-    partialOn ? run(numberTypes.filter(notNoise).map((x) => partialBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
+    partialOn ? run(numberTypes.map((x) => partialBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
     short && shortTypes.length ? run(shortTypes.map((x) => shortBranch(ctx, x.type, x.scope, short))) : Promise.resolve([] as Row[]),
     words.length ? run(types.filter((x) => x.type.words).map((x) => wordsBranch(ctx, x.type, x.scope, words))) : Promise.resolve([] as Row[]),
   ]);
