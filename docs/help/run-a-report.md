@@ -10,7 +10,7 @@ Lists read saved records live, only for your sites and your role. Each list show
 
 ## Show a list
 
-1. Open **Management → Reports & analytics → Lists to download or print**. It shows only the lists your role may see.
+1. Open **Money → More → Lists to download or print**. It shows only the lists your role may see.
 2. Tap a list. Choose the **Site** and the **Dates**, or your own dates with **From (your own dates)** and **To (your own dates)**.
 3. Press **Show the list**.
 4. **Nothing matches**: try longer dates, another site, or fewer filters.
@@ -26,4 +26,4 @@ Lists read saved records live, only for your sites and your role. Each list show
 1. On the list, open **⋯ More → Send it by email regularly**.
 2. Fill in **Name of this email**, the **Sites**, the **File type**, **How often** and **What time**. Press **Start sending**.
 3. People get a message in the app with an email link. Each person's access is checked again every time. Anyone who lost access is skipped, and the owner of the email is told.
-4. **Management → Reports & analytics → Lists sent by email** shows your emails and what was sent so far.
+4. **Lists sent by email** (type it in **Search**) shows your emails and what was sent so far.

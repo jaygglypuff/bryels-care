@@ -12,7 +12,7 @@ import { manilaToday } from "./availability";
  *
  * Minimums (owner-maintained configuration, never invented here):
  * - materials: the active reorder policy per site × material (`material_reorder_policies.min_stock_base`,
- *   A-W4A-05, edited under Management › Purchasing › Running low);
+ *   A-W4A-05, edited under Buy & stock › What to buy);
  * - finished products: `product_min_stock.min_stock_units` per site × product (A-W2A-06, planning).
  *
  * On hand = USABLE stock only (decision documented in docs/PRD.md assumption A-INV-LOW-01): lots with

@@ -125,6 +125,7 @@ excluded) and the seeded messages for the banned list, with an explicit allow-li
 | `/account` | current | menu | — | Current. |
 | `/action-centre` | current | Problems & alerts | ?tab=approvals → /approvals, ?tab=alerts → /notifications, ?kind=approval.* → /approvals | The “To decide” and “Alerts for you” tabs duplicated To approve and Messages and were removed; tabs are Problems and Phone changes to check (only with platform.sync_conflict.view). |
 | `/admin` | redirect (alias) | /admin/users (People) | — | Kept: section address opens People. |
+| `/management` | redirect (alias) | /setup (Set-up) | — | Round 5 (ADR-129): the Management hub repeated every menu as a card grid; set-up screens are on the Set-up page (avatar menu), daily screens in the areas. |
 | `/admin/approval-rules` | current | menu | — | Current. |
 | `/admin/audit` | current | menu | — | Current. |
 | `/admin/demo` | current | linked from screens | — | Current. |

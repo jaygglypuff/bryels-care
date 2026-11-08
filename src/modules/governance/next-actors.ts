@@ -41,6 +41,12 @@ export type HandoffRule = {
   /** Roles listed first (people at the floor before the owner). */
   prefer?: string[];
   /**
+   * Round 5 (ADR-129; A report B10, C report B15): the job this belongs to. When anyone who may do it holds one of these
+   * roles, only they are listed and told (put-away goes to the warehouse, not to every operator, the owner or the manager).
+   * When nobody holds them, everyone who may do it is listed, as before.
+   */
+  only?: readonly string[];
+  /**
    * ADR-117: a recipe, steps or how-to sheet revision — the owner (organization-wide) may approve every open step alone
    * while `approvals.owner_approves_recipes_alone` is on. Listed apart ("— or Ana (owner) alone").
    */
@@ -61,9 +67,9 @@ export const HANDOFFS = {
   batch_qa: { permission: "quality.disposition.approve", does: "decides if the batch may be sold", doBase: "decide if the batch may be sold", where: "on Check quality", fallback: "QA", independent: true, prefer: ["qa_qc"] },
   lot_qa: { permission: "quality.disposition.approve", does: "checks this lot and says OK or not OK", doBase: "check this lot and say OK or not OK", where: "on Check quality", fallback: "QA", independent: true, prefer: ["qa_qc"] },
   qa_review: { permission: "quality.inspection.approve", does: "reviews the test results", doBase: "review the test results", where: "on Check quality", fallback: "another QA person", independent: true, prefer: ["qa_qc"] },
-  delivery_coming: { permission: "procurement.goods_receipt.create", does: "receives it when it arrives", doBase: "receive it when it arrives", where: "on Receive a delivery", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"] },
+  delivery_coming: { permission: "procurement.goods_receipt.create", does: "receives it when it arrives", doBase: "receive it when it arrives", where: "on Receive a delivery", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"], only: ["warehouse_operator"] },
   set_aside: { permission: "inventory.allocation.create", does: "sets the stock aside for the order", doBase: "set the stock aside for the order", where: "on the order", fallback: "the warehouse or sales", prefer: ["warehouse_operator", "sales_cs", "site_manager"] },
-  dispatch: { permission: "sales.shipment.post", does: "sends it out", doBase: "send it out", where: "on their Home", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"] },
+  dispatch: { permission: "sales.shipment.post", does: "sends it out", doBase: "send it out", where: "on Send out", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"], only: ["warehouse_operator"] },
   qa_result_correction: { permission: "quality.disposition.approve", does: "approves the corrected result", doBase: "approve the corrected result", where: "on Check quality", fallback: "another QA person", independent: true, prefer: ["qa_qc"] },
   stock_adjustment: { permission: "inventory.adjustment.approve", does: "approves this stock correction", doBase: "approve this stock correction", where: TO_APPROVE, fallback: "the site manager", operational: true, prefer: OFFICE },
   stock_adjustment_post: { permission: "inventory.adjustment.post", does: "saves it to stock", doBase: "save it to stock", where: "on this stock fix", fallback: "the site manager", operational: true, prefer: OFFICE },
@@ -86,8 +92,10 @@ export const HANDOFFS = {
   work_instruction_revision: { permission: "masterdata.work_instruction.approve", does: "approves the how-to sheet", doBase: "approve the how-to sheet", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"], ownerAlone: true },
   inspection_plan_revision: { permission: "quality.inspection_plan.approve", does: "approves the check plan", doBase: "approve the check plan", where: TO_APPROVE, fallback: "QA", independent: true, prefer: ["qa_qc"] },
   setting_change: { permission: "platform.settings.approve", does: "approves the setting change", doBase: "approve the setting change", where: TO_APPROVE, fallback: "the owner", prefer: ["owner_director"] },
-  pick: { permission: "sales.pick.create", does: "gets it from the shelf", doBase: "get it from the shelf", where: "on To get from shelf", fallback: "the warehouse", prefer: ["warehouse_operator"] },
-  pack_check: { permission: "inventory.pack.approve", does: "checks the box", doBase: "check the box", where: "on their Home", fallback: "the warehouse", independent: true, prefer: ["warehouse_operator", "site_manager"] },
+  pick: { permission: "sales.pick.create", does: "gets it from the shelf", doBase: "get it from the shelf", where: "on To get from shelf", fallback: "the warehouse", prefer: ["warehouse_operator"], only: ["warehouse_operator"] },
+  // Round 5: a released lot goes on its shelf; the warehouse does it (A report B10, C report B15).
+  put_away: { permission: "inventory.movement.post", does: "puts it on its shelf", doBase: "put it on its shelf", where: "on Put away", fallback: "the warehouse", prefer: ["warehouse_operator", "site_manager"], only: ["warehouse_operator"] },
+  pack_check: { permission: "inventory.pack.approve", does: "checks the box", doBase: "check the box", where: "on their Home", fallback: "the warehouse", independent: true, prefer: ["warehouse_operator", "site_manager"], only: ["warehouse_operator", "site_manager"] },
 } satisfies Record<string, HandoffRule>;
 
 export type HandoffKind = keyof typeof HANDOFFS;
@@ -182,7 +190,7 @@ export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHan
     return i < 0 ? 50 : i;
   };
 
-  const people: (NextPerson & { rank: number })[] = [];
+  let people: (NextPerson & { rank: number; job?: boolean })[] = [];
   const owners: NextPerson[] = [];
   for (const c of await candidates(q, ctx.organizationId, permission, siteId)) {
     if (c.userId === ctx.userId) continue;
@@ -194,8 +202,10 @@ export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHan
       continue;
     }
     const best = matching.sort((a, z) => rank(a) - rank(z))[0];
-    people.push({ userId: c.userId, name: c.name, role: personRole(best, c.roles.get(best)), rank: rank(best) });
+    people.push({ userId: c.userId, name: c.name, role: personRole(best, c.roles.get(best)), rank: rank(best), job: !!rule.only?.some((r) => c.roles.has(r)) });
   }
+  // Round 5: the job's own people when there are any (put-away → the warehouse, not every operator, the owner or the manager).
+  if (rule.only?.length && people.some((p) => p.job)) people = people.filter((p) => p.job);
   // ADR-073 owner override: when nobody holding the step's role is left (the small demo has one finance person, who
   // sent the invoice), the owner may still decide it. Name the owner instead of "Nobody can do it yet" (demo rehearsal
   // 2026-11-07). Never for independent checks (GMP floor checks, QA decisions), where the listed people stay as configured.
@@ -224,7 +234,7 @@ export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHan
     does: rule.does,
     doBase: rule.doBase,
     where: rule.where,
-    people: people.map(({ rank: _r, ...p }) => p),
+    people: people.map(({ rank: _r, job: _j, ...p }) => p),
     roleWords: roleCodesWords(stepRoles, rule.fallback),
     viewer: { can, selfApproval, note: selfApproval ? selfApprovalNote(ctx) : ownerAlone ? OWNER_ALONE_VIEWER_NOTE : null, ownerAlone },
     ownerAlone: owners,

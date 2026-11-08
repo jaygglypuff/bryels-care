@@ -1,41 +1,50 @@
 ---
 key: start.everyday_basics
 title: Everyday basics: finding anything, codes, locations, deleting drafts, approvals and notifications
-version: 4
-updated_at: 2026-11-07
+version: 5
+updated_at: 2026-11-08
 sop: Training guide; not an SOP
 ---
 
-Six things people ask about most. Each one says where to tap.
+Seven things people ask about most. Each one says where to tap.
 
 ## Find anything
 
-1. On a computer, click the search box at the top (**Search anything — a screen, a name or a number**), or press **Ctrl+K** (**⌘K** on a Mac) or **/** from any screen. On a wide screen the box is a round search button.
-2. On a phone, tap **Scan** at the top. The same search is at the top of the **Scan or search** screen; the camera scan is below it.
+1. On a computer or tablet, click the box with the word **Search** at the top, right after the menu, or press **Ctrl+K** (**⌘K** on a Mac) or **/** from any screen.
+2. On a phone, tap **Search** at the top. The first line of the search is **Scan a label** (the camera). Floor people also have **Scan** in the bottom bar.
 3. Type what you look for. Results show as you type:
    - a **screen** word, like **bills**, **lots**, **master data**, **QA**, **receive** or **PO** — you get the screens you may open (**Supplier bills**, **Stock**, the set-up screens…);
    - a **number**, like **BILL-26-00001**. Capitals and dashes do not matter: **bill2600001** works too. The record with exactly this number is first and says **This number**;
-   - only the **last digits**, like **26-00001** or **00012** — you get every record whose number ends with or contains them;
-   - a **name**, like **coconut oil** or a customer or supplier name.
-4. Use **↑** and **↓** to move, **Enter** to open, **Esc** to close. Or tap a row.
+   - only the **last digits**, like **4**, **0003** or **26-00001** — you get every record whose number ends with them. Add the kind to narrow it: **SO 4** or **order 4** (customer, purchase and production orders), **batch 3**, **invoice 2**;
+   - a **name**, like **coconut oil**, a customer or supplier name, or a person (**Dino**) if you may see people;
+   - a **question** or a **thing to do**, like **who owes us**, **this month's sales**, **new customer** or **record a payment** — you get the screen that answers it or starts it.
+4. Tap a row, or use **↑** and **↓** and **Enter**. **Enter** opens the record whose whole number you typed; otherwise it opens the line you chose with the arrows. When several things match and you did not choose one, nothing opens: tap the one you want. **Esc** (or **Close** on a phone) closes the search.
 5. With the box empty you see your recent searches, the records you opened lately (kept on this device only) and a few common screens for your job.
 6. You only see screens and records your role may open, at your sites. If something is missing, ask your manager for access.
 7. A label code (it starts with **BC:**) typed or scanned into the box opens what the label is on, like a scan.
 8. Your company can change two things in **Settings**: the top bar may show **Scan** instead of the search box (then press **Ctrl+K**, **⌘K** or **/** to search), and the search may be only for people who may see stock.
+
+## Finding your way (the menu)
+
+1. **Home** is always one tap away: the logo at the top left, or **Home** / **My jobs** in the bottom bar.
+2. The menu shows only what your job uses. Owner and site manager: **Home · Needs me · Sell · Make · Buy & stock · Money**. Sales: **Orders, Customers, Price offers, Invoices**. Purchasing: **Buying, Suppliers**. Finance: Home is the **Money** page, then **Money in, Money out, Month end, Reports**. QA: **Check, Problems, Trace**.
+3. Machine operators and the warehouse have four doors in the bottom bar: **My jobs, Scan, Batches** (or **Receive**), **Help**. The site manager's phone shows **My jobs, Scan, To check/approve, Help**.
+4. **Set-up** (products, recipes, materials, people, settings, labels, shelves, machines, record numbers) is behind your initials at the top right. **All screens** there opens the full list for your job.
+5. A screen that is not in your menu still opens from **Search** or from a link, if your job may open it.
 
 ## Codes are given for you
 
 1. When you add a material, product, supplier, customer, location or equipment, you may leave **Code** empty.
 2. The system then gives the next number: **MAT-0001** for materials, **PRD-0001** products, **SUP-0001** suppliers, **CUS-0001** customers, **LOC-0001** locations and **EQP-0001** equipment.
 3. You can still type your own code if your labels already use one. A code that is already taken is skipped by the automatic numbering.
-4. The owner can change the prefix under **Management → People, rules and settings → How record numbers look**.
+4. The owner can change the prefix under **Set-up → People, rules and settings → How record numbers look**.
 
 ## Adding or changing a location
 
-1. Open **Management → Master data → Shelves and areas (set up)**. Tap **+ Add location** at the top, pick the warehouse and the type of place, and give it a name. Leave the code empty for an automatic one.
+1. Open **Set-up → Shelves and areas (set up)**. Tap **+ Add location** at the top, pick the warehouse and the type of place, and give it a name. Leave the code empty for an automatic one.
 2. To change a location, tap **Edit** next to it. You can change the name, the type of place, the **Warehouse section** it sits in, and whether it can be picked from.
 3. To stop using a location, open it and use **Switch off (no longer used)**. A location that holds stock must be emptied first.
-4. A **Site** is one address. If your company works from places far apart (for example a factory and a store room in another town), add one Site per address under **Management → Master data → Sites**. Each site has its own warehouses, and each warehouse has its own locations.
+4. A **Site** is one address. If your company works from places far apart (for example a factory and a store room in another town), add one Site per address under **Set-up → Sites**. Each site has its own warehouses, and each warehouse has its own locations.
 
 ## Deleting a draft
 
@@ -54,6 +63,6 @@ Six things people ask about most. Each one says where to tap.
 
 ## Messages open the record
 
-1. Tap the bell (**Messages**). Each message has an **Open** button that takes you to the record it is about and marks it read.
-2. **I'm on it** means "I am dealing with it" and removes it from your open list.
+1. Tap the bell (**Messages**; owner and site manager: **Needs me → Messages**). Each message has an **Open** button that takes you to the record it is about and marks it read.
+2. A message that asks you to do something (approve, put away, send, check) goes away by itself when the work is done, whoever did it. **Show history** lists it with **Done**. Office staff may also press **I'm on it** ("I am dealing with it"); floor staff just tap the message.
 3. Decisions waiting for you are in **To approve**; things that went wrong or wait too long are in **Problems & alerts**.

@@ -2708,3 +2708,55 @@ wizard).
 
 Tests: `tests/unit/material-short.test.ts`; `tests/integration/production/finish-batch.test.ts` (checker follows the
 move step, both ways). No migration.
+
+## ADR-129 One short menu per job, a Search you can see, Homes that start with what needs you, messages that clear themselves (owner 2026-11-08)
+
+Status: Accepted (owner: second usability round for people who are not computer-literate; the new navigation goes
+ahead). Supersedes ADR-081's five destinations and ADR-121's "round search button from 1280 px". Extends ADR-101,
+ADR-109, ADR-123 and ADR-126. Brief: `docs/ux-audit/round5/` (A floor, B owner and manager, C office).
+
+Decision:
+1. **One catalogue, short menus per job** (`src/app/(app)/nav.ts`).
+   - Every screen is listed once in `NAV`, in the areas Home, Needs me, Sell, Make, Buy & stock, Money and Set-up.
+   - Each job gets its own areas, with at most five tabs plus one flat "More" and no menu inside a menu:
+
+     | Job | Menu |
+     |---|---|
+     | Owner and site manager | Home · Needs me · Sell · Make · Buy & stock · Money |
+     | Sales | Orders, Customers, Price offers, Invoices |
+     | Purchasing | Buying, Suppliers |
+     | Finance | Money (Home), Money in, Money out, Month end, Reports |
+     | QA | Check, Problems, Trace |
+     | Floor roles | four bottom doors (My jobs · Scan · Batches/Receive · Help); the site manager's phone has To check/approve as the third door; no tab rows |
+   - Set-up is a page behind the avatar menu (`/setup`), and `/management` redirects there.
+   - Pages outside a job's menu still open by URL, link and Search. Menu word = screen title. Permissions are unchanged.
+2. **Search you can see.**
+   - From 768 px a box with the word "Search" sits right after the menu; phones get a labelled pill. Its first line is
+     "Scan a label".
+   - It finds people by name (scoped to the viewer's sites), plain questions and actions, and short record numbers.
+   - Enter opens the exact record number, else the highlighted row, else one exact action, else the only row. It never
+     opens the first hit of an unrelated type.
+   - `ui.wide_screen_top_bar = scan` still swaps the box for the Scan button.
+3. **Homes start with what needs you.**
+   - Owner and manager: Sales this month, Customers owe us, We owe suppliers and Needs you.
+   - "What to do next" is only the viewer's own job; other people's work is named. The checks waiting for the viewer
+     are listed, and activity shows business events only.
+   - Floor roles: "My jobs".
+4. **Messages clear when the work is done and go to the job's people.**
+   - `resolveDoneNotifications` has one rule per message kind. It resolves a message once its record has left the
+     state the message asked about.
+   - `HandoffRule.only` and `usersForJob` route warehouse work to the warehouse.
+
+Consequences: no migration and no permission change.
+
+Tests:
+- unit: `nav-per-role`, `nav-titles`, `menu-paths`, `search-screens`, `search-round5`, `home-round5`
+- integration: `tests/integration/platform/messages-clear.test.ts`, `tests/integration/scan/search-round5.test.ts`
+- e2e: `tests/e2e/top-bar-fit.cjs` (210 checks)
+
+Open:
+- grouping of many messages;
+- names instead of codes in message titles;
+- a "Delivery problems" list;
+- address search;
+- the record header's second "?".

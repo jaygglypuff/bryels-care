@@ -176,7 +176,7 @@ export async function assertLookupValue(q: DbOrTx, organizationId: string, key: 
     if (still) return match.code;
   }
   const active = rows.filter((r) => r.isActive).map((r) => r.label);
-  const msg = match && !match.isActive ? `"${match.label}" is no longer used. Choose another option.` : `Choose one of the ${def.title.toLowerCase()}${active.length ? `: ${active.join(", ")}` : ""}. An admin can add options under Management › Master data › Choice lists.`;
+  const msg = match && !match.isActive ? `"${match.label}" is no longer used. Choose another option.` : `Choose one of the ${def.title.toLowerCase()}${active.length ? `: ${active.join(", ")}` : ""}. An admin can add options under Set-up › Choice lists.`;
   throw new DomainError("validation", msg, { field: opts.field });
 }
 

@@ -70,6 +70,8 @@ const JOIN: Record<string, string> = {
 /** Verb for `module.entity.event` (exact) or for the event alone. */
 const EXACT: Record<string, string> = {
   "inventory.goods_receipt.posted": "received",
+  "procurement.goods_receipt.posted": "received",
+  "production.batch.finished": "finished making",
   "procurement.goods_receipt.created": "started",
   "sales.sales_order.placed_in_portal": "placed in the customer portal",
   "sales.customer.credit_terms_changed": "changed the days to pay of",
@@ -144,6 +146,49 @@ const PROBLEM_VERB: Record<string, string> = {
   acknowledged: "is dealing with the problem",
   created: "raised a problem",
 };
+
+/**
+ * Round 5 (ADR-129; B report #14 and bug B5): Home shows business events only, the things an owner says on the phone
+ * ("Luntian ordered…", "the coconut oil passed QA", "Ana sent the order to Laguna Oleo"). Technical events (stock
+ * moves, documents, labels, site assignments, owner's override, break glass, rule checks, step readings) stay in
+ * History of changes. Exact `module.entity.event` names.
+ */
+export const BUSINESS_EVENTS: ReadonlySet<string> = new Set([
+  "sales.sales_order.created",
+  "sales.sales_order.confirmed",
+  "sales.sales_order.cancelled",
+  "sales.quote.sent",
+  "sales.quote.converted",
+  "sales.shipment.dispatched",
+  "sales.shipment.delivered",
+  "procurement.purchase_order.sent",
+  "procurement.purchase_order.approved",
+  "procurement.purchase_request.approved",
+  "procurement.goods_receipt.posted",
+  "inventory.goods_receipt.posted",
+  "production.production_order.approved",
+  "production.batch.started",
+  "production.batch.finished",
+  "quality.disposition.released",
+  "quality.disposition.rejected",
+  "quality.complaint.created",
+  "quality.deviation.created",
+  "finance.invoice.posted",
+  "finance.invoice.issued",
+  "finance.payment_record.posted",
+  "finance.payment_record.recorded",
+  "masterdata.customer.created",
+  "masterdata.supplier.created",
+  "masterdata.product.created",
+]);
+
+/** Words that must never reach Home's activity (B report bug B5). */
+const TECHNICAL_WORDS = /break glass|break_glass|override|site assignment|site_assignment|evaluated/i;
+
+/** Keeps the business events, newest first, at most `limit` (Home shows 5). */
+export function businessActivity<T extends { action: string }>(rows: readonly T[], limit = 5): T[] {
+  return rows.filter((r) => BUSINESS_EVENTS.has(r.action) && !TECHNICAL_WORDS.test(r.action)).slice(0, limit);
+}
 
 export type ActivityInput = { action: string; entityType: string; entityNumber: string | null; actorName: string | null; entityName?: string | null };
 

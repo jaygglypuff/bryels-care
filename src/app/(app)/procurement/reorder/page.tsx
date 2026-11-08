@@ -15,7 +15,7 @@ import { SubNav, fmtBase } from "../_ui";
 import { PolicyForm } from "./policy-form";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Running low" };
+export const metadata = { title: "What to buy" };
 
 const FILTERS = [
   ["open", "To decide"],
@@ -41,7 +41,7 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader
-        title="Running low"
+        title="What to buy"
         actions={
           <MoreMenu>
             <div className="flex flex-col gap-3">

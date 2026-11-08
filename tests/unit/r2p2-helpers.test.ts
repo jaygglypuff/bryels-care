@@ -19,7 +19,7 @@ describe("whom to ask on a refused screen (UX audit B #8)", () => {
 describe("Waiting for <name> (role)", () => {
   it("names up to three people, else the role with where access is given", () => {
     expect(waitingLine([{ name: "Tess Navarro", role: "Purchasing" }], "to send it for approval", "purchasing")).toBe("Waiting for Tess Navarro (Purchasing) to send it for approval.");
-    expect(waitingLine([], "to send it", "purchasing")).toMatch(/^Waiting for purchasing to send it\. Nobody at this site can do it yet: .*Management › People, rules and settings › People who use the app\.$/);
+    expect(waitingLine([], "to send it", "purchasing")).toMatch(/^Waiting for purchasing to send it\. Nobody at this site can do it yet: .*Set-up › People, rules and settings › People who use the app\.$/);
   });
 });
 

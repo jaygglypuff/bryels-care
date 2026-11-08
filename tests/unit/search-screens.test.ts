@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { PERMISSIONS, ROLE_BUNDLES, type Permission } from "@/lib/permissions";
-import { NAV, productionItems } from "@/app/(app)/nav";
+import { NAV } from "@/app/(app)/nav";
 import { SCREEN_SYNONYMS, allScreens, commonScreens, searchScreens, synonymTargets } from "@/app/(app)/search-screens";
 
 const everyone = (_p: Permission) => true;
@@ -56,7 +56,7 @@ describe("synonyms → screens", () => {
       expect(h.length).toBeGreaterThan(6);
       expect(h.length).toBeLessThanOrEqual(10);
     }
-    expect(searchScreens("master data", everyone, OWNER)[0].where).toBe("Management › Master data");
+    expect(searchScreens("master data", everyone, OWNER)[0].where).toBe("Set-up › Products and recipes");
   });
 
   it("menu words work too (prefix of the words: 'supp bi', 'expir')", () => {
@@ -102,7 +102,7 @@ describe("screens are filtered by permission", () => {
   });
 
   it("no entry is returned without its permission, for any role and any synonym", () => {
-    const all = [...new Set([...NAV.flatMap((g) => g.items), ...productionItems("planner")])];
+    const all = NAV.flatMap((g) => g.items);
     for (const role of Object.keys(ROLE_BUNDLES)) {
       const can = bundle(role);
       for (const word of Object.keys(SCREEN_SYNONYMS)) {

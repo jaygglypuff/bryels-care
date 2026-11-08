@@ -47,7 +47,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
         <NextStep text={l.status === "blocked" ? "Blocked: no stock goes in or out. Turn it on again below when it may be used." : "Switched off: no longer used. Kept on record."} />
       )}
       <LocationHelp canSeeSites={ctx.can("masterdata.site.view")} />
-      {created === "1" && <Banner tone="ok" title="Location added">It can receive stock now. Print its shelf label from the shelf's page (Inventory › Shelves).</Banner>}
+      {created === "1" && <Banner tone="ok" title="Location added">It can receive stock now. Print its shelf label from the shelf's page (Buy & stock › Shelves).</Banner>}
       <Card>
         <Dl
           items={[
