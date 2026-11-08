@@ -87,7 +87,9 @@ A: #1–#4, #7–#10, #12–#14, bugs B1–B9, B11–B12, B15–B19 (part 2). B:
 
 - `tests/e2e/top-bar-fit.cjs` (updated: menu row "Menu", labelled Search right after it, bar ends inside the window):
   roles owner, manager.nfd, finance, sales, procurement, qa.nfd, warehouse.rvs, warehouse.nfd, operator.nfd at 1280,
-  1366, 1440, 1536 and 1920 px, every area. Result in the hand-off report (ADR-129).
+  1366, 1440, 1536 and 1920 px, every area: 210 checks, **all fit**. Free space between the Search box and the right
+  buttons at 1280 px: owner (two sites) 61 px, finance (two sites) 37 px, sales 93 px, QA 195 px, manager 163 px,
+  purchasing 282 px. The Search box starts 12 px after the menu row at every width.
 - Walk at 390, 820, 1366, 1440 px for owner, manager, operator, checker, warehouse, sales, purchasing, finance, QA:
   no sideways scroll; no frame target under 44 px; exactly one menu button on phones for office roles and none for
   floor roles; Esc closes the drawer; "0003" + Enter never opens a record.
