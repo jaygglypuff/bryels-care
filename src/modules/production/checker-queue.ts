@@ -142,7 +142,7 @@ export async function checkerQueue(ctx: AuthContext): Promise<CheckerQueue> {
     .leftJoin(users, eq(users.id, processStepRecords.conductedBy))
     .where(and(inArray(processStepRecords.batchId, [...byId.keys()]), eq(processStepRecords.status, "awaiting_check")))
     .orderBy(asc(processStepRecords.stepNo));
-  const mine = steps.filter((s) => s.conductedBy !== ctx.userId && ctx.canAt(checkPermission(s.kind), siteId));
+  const mine = steps.filter((s) => s.conductedBy !== ctx.userId && ctx.canAt(checkPermission(s.kind ?? ""), siteId));
   const readings = mine.length
     ? await db
         .select({ recId: processStepReadings.processStepRecordId, id: processStepReadings.id, supersedesId: processStepReadings.supersedesId, name: processStepReadings.parameterName, num: processStepReadings.valueNumeric, text: processStepReadings.valueText, bool: processStepReadings.valueBoolean, uom: processStepReadings.uom, within: processStepReadings.isWithinLimits })
@@ -155,7 +155,7 @@ export async function checkerQueue(ctx: AuthContext): Promise<CheckerQueue> {
     const facts = readings
       .filter((r) => r.recId === s.id && !superseded.has(r.id))
       .map((r) => `${plainWords(r.name)}: ${r.num !== null ? `${plainNumber(r.num)}${r.uom ? ` ${r.uom}` : ""}` : r.text ?? (r.bool === null ? "" : r.bool ? "yes" : "no")}${r.within === false ? " (outside the range)" : ""}`);
-    cards.push({ kind: "step", key: `s:${s.id}`, batchId: s.batchId, batchNumber: b.batchNumber, productName: b.productName, stepNo: s.stepNo, stepName: plainWords(s.name), stepKind: s.kind, doneBy: s.doneBy ?? "someone", facts, batchHref: flowHref({ batchId: s.batchId, workOrderId: b.workOrderId }, `step/${s.stepNo}`) });
+    cards.push({ kind: "step", key: `s:${s.id}`, batchId: s.batchId, batchNumber: b.batchNumber, productName: b.productName, stepNo: s.stepNo, stepName: plainWords(s.name), stepKind: s.kind ?? "", doneBy: s.doneBy ?? "someone", facts, batchHref: flowHref({ batchId: s.batchId, workOrderId: b.workOrderId }, `step/${s.stepNo}`) });
     count += 1;
   }
   return { cards, count, together };

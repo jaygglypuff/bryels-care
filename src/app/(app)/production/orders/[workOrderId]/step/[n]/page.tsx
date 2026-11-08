@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import Link from "next/link";
-import { batchBoxInfoFor, batchRecordHref, finishHref, floorCheckNext, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
+import { batchBoxInfoFor, batchRecordHref, finishHref, floorCheckNext, getFinishView, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
+import { FinishPanel } from "../../../../[batchId]/finish/finish-panel";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
@@ -31,7 +32,7 @@ function plainStep(kind: string, isCheck: boolean, isWait: boolean, perPiece = f
       ? "Wrap or fill the pieces, stick a label on each piece, pack them in boxes and stick one label on each box."
       : "Wrap or fill the pieces, pack them in boxes and stick one label on each box.";
   if (kind === "dispensing" || kind === "weighing") return "Weigh out each ingredient on the Weigh screen.";
-  if (kind === "transfer") return "Count the pieces and put the batch in the hold area on the Finish screen.";
+  if (kind === "transfer") return "Answer the questions about what was made and the packing left over, then tap Finish and send to QA. The batch goes to the QA waiting area.";
   return "Do this step, write the numbers it asks for, then tap Step done.";
 }
 
@@ -63,7 +64,10 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   const next = nextBatchScreen(facts);
   // Who checks this step next, by name and role (never the person who did it; docs/NEXT_APPROVER.md).
   const checkNext = v.step.status === "awaiting_check" ? await floorCheckNext(ctx, v.step.kind === "line_clearance" ? "start_check" : "step_check", b.id, v.step.record?.conductedById ?? null) : null;
-  const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : v.next.kind === "transfer" ? finishHref(b.id) : href(v.next.stepNo)) : null;
+  // Round 5 B19: the step after packing is "Move to the QA waiting area" (step 7 of 7), which holds the Finish form;
+  // "Done — go to …" opens that step, it is never skipped.
+  const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : href(v.next.stepNo)) : null;
+  const finishView = v.step.isTransfer ? await getFinishView(ctx, b.id) : null;
   return (
     <div className="mx-auto max-w-5xl pb-24 text-[16px]">
       <FlowHeader
@@ -93,9 +97,11 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         checkers={v.checkers}
         checkNext={checkNext}
         approvers={v.approvers}
-        passwordRequired={v.passwordRequired}
+        sameDevice={v.sameDevice}
         nextHref={nextHref}
-        nextLabel={v.next ? (v.next.kind === "transfer" ? "Go to Finish" : v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : plainWords(v.next.name)) : null}
+        // Round 5 problem 10: the button says what it does, not only the next step's name.
+        nextLabel={v.next ? `Done — go to ${v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : plainWords(v.next.name)}` : null}
+        finishPanel={finishView ? <FinishPanel v={finishView} /> : undefined}
         weighHref={`/production/orders/${workOrderId}/weigh?batch=${b.id}`}
         finishHref={finishHref(b.id)}
         fullRecordHref={batchRecordHref(b.id)}

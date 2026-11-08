@@ -40,7 +40,9 @@ export async function coSign(operator: AuthContext, input: CoSignInput): Promise
   const what = input.role === "checker" ? "checker" : "approver";
   if (!input.userId) throw new DomainError("validation", `Choose the ${what}.`, { field: "checkerId" });
   operator.assertSeparation(input.userId === operator.userId, `You cannot sign as ${what} for your own work. The ${what} checks on their own phone.`);
-  const sameDevice = await getSetting(db, operator.organizationId, "production.sign_off.same_device");
+  // The setting covers second-person CHECKS (they have a list on the checker's own phone). An approver of an exception
+  // (QA accepting a value outside its range) has no such list yet, so it always signs here with their own password.
+  const sameDevice = input.role !== "checker" || (await getSetting(db, operator.organizationId, "production.sign_off.same_device"));
   if (!sameDevice) {
     throw new DomainError("validation", `The ${what} checks on their own phone. It is on their list "Waiting for you to check".`, { field: "checkerId", code: "CHECK_ON_OWN_PHONE" });
   }

@@ -62,14 +62,17 @@ export const PICK_PAYLOAD_TYPES: Record<PickKind, ScanType[]> = {
   equipment: ["EQP"], // ADR-125: machines and scales; the app prints no BC:EQP label yet (follow-up), the code is typed or tapped
 };
 
-/** The user's words for each kind (singular, plural). */
+/**
+ * The user's words for each kind (singular, plural). `example` is the grey text in the typing box. Round 5 B8: it
+ * is never a real record number (people typed the example and got another order's box): it says what to type.
+ */
 export const PICK_WORDS: Record<PickKind, { one: string; many: string; label: string; example: string }> = {
-  lot: { one: "lot", many: "lots", label: "lot label", example: "L-2611-00016" },
-  container: { one: "box", many: "boxes", label: "box label", example: "BX-00000005" },
-  location: { one: "shelf", many: "shelves", label: "shelf label", example: "A-01" },
-  batch: { one: "batch", many: "batches", label: "batch sheet", example: "B-26-0003" },
-  item: { one: "item", many: "items", label: "item label", example: "MAT-0001" },
-  equipment: { one: "machine", many: "machines", label: "machine label", example: "MIX-01" },
+  lot: { one: "lot", many: "lots", label: "lot label", example: "e.g. the last 4 numbers on the label" },
+  container: { one: "box", many: "boxes", label: "box label", example: "e.g. the last 4 numbers on the box label" },
+  location: { one: "shelf", many: "shelves", label: "shelf label", example: "e.g. the code on the shelf" },
+  batch: { one: "batch", many: "batches", label: "batch sheet", example: "e.g. the batch number on the sheet" },
+  item: { one: "item", many: "items", label: "item label", example: "e.g. the code on the label" },
+  equipment: { one: "machine", many: "machines", label: "machine label", example: "e.g. the number on the machine" },
 };
 
 const TYPE_WORDS: Record<ScanType, string> = { LOT: "a lot label", BOX: "a box label", LOC: "a shelf label", MAT: "a material label", SKU: "a product label", EQP: "a machine label", DOC: "a document" };
@@ -189,7 +192,7 @@ export function notListedMessage(kind: PickKind): string {
 /** Plain message when the typed text is words but a number is needed (verification fields). */
 export function typeNumberMessage(kind: PickKind): string {
   const w = PICK_WORDS[kind];
-  return `Type the number printed on the ${w.label}, for example ${w.example}.`;
+  return `Type the number printed on the ${w.label} (all of it or the last 4).`;
 }
 
 /** Plain message when two expected codes end with what was typed. */

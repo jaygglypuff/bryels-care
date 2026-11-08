@@ -37,9 +37,15 @@ export function FormMessage({ state }: { state: ActionState }) {
   return (
     <div
       role={state.ok ? "status" : "alert"}
+      data-tone={state.ok ? "ok" : (state.tone ?? "bad")}
       className={cx(
-        "rounded-[10px] border px-3 py-2 text-[13px]",
-        state.ok ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]",
+        "rounded-[10px] border px-3 py-2",
+        state.tone === "warn" && !state.ok ? "text-[15px]" : "text-[13px]",
+        state.ok
+          ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]"
+          : state.tone === "warn"
+            ? "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]"
+            : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]",
       )}
     >
       {state.message}

@@ -128,6 +128,8 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
     batch: b,
     product: ex.product,
     step: step ? { stepNo: step.stepNo, name: step.name, status: step.status, requiresEquipment: !!step.requiresEquipment, blockers: step.blockers, index: ex.steps.findIndex((s) => s.stepNo === step.stepNo) + 1, total: ex.steps.length } : null,
+    /** Round 5 problem 10: the button after the weighing step says "Done — go to <next step>". */
+    nextStep: step ? (() => { const n = [...ex.steps].sort((x, y) => x.stepNo - y.stepNo).find((s) => s.stepNo > step.stepNo); return n ? { stepNo: n.stepNo, name: plainWords(n.name) } : null; })() : null,
     cards,
     weighedCount,
     uncheckedCount,

@@ -253,6 +253,9 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
     /** ADR-106 §4: left-over wrappers that can go back to their shelf in one tap (after Finish). */
     leftOver: await leftOverWrappers(db, batch.id),
     needsChecker,
+    /** Round 5 B19: Finish is the step "Move to the QA waiting area" (step N of N) when the recipe has it. */
+    transferStepNo: transfer?.stepNo ?? null,
+    batchWorkOrderId: batch.workOrderId,
     checkers,
     defectTypes,
     can: { finish: ctx.canAt("production.batch.post", batch.siteId) && ctx.canAt("production.yield_record.create", batch.siteId) && ctx.canAt("production.batch_output.create", batch.siteId) },
