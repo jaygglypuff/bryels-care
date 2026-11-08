@@ -25,6 +25,9 @@ export const SCREEN_GUIDES: readonly (readonly [RegExp, string])[] = [
   [/^\/sales\/returns/, "sales.return"],
   [/^\/sales\/(picking|packing|dispatch|shipments)/, "sales.fulfilment"],
   [/^\/sales/, "sales.order"],
+  // ADR-131: buying (what to buy → delivery problems) and money (invoices, payments, bills, month end)
+  [/^\/procurement/, "procurement.buying"],
+  [/^\/finance/, "finance.money"],
   [/^\/admin\/imports/, "platform.import"],
   [/^\/(analytics|reports)/, "analytics.reports"],
   [/^\/masterdata\/lists/, "masterdata.lists"],

@@ -47,6 +47,9 @@ export const GUIDE_FILES: Record<string, string> = {
   "quality.check": "check-quality.md",
   "production.bmr": "bmr.md",
   "sales.order": "order.md",
+  // ADR-131: buying from shortage to delivery problem; invoices, payments, bills and month end
+  "procurement.buying": "buying.md",
+  "finance.money": "money.md",
   "sales.fulfilment": "pick-pack-dispatch.md",
   "quality.complaint": "complaint.md",
   "sales.return": "return.md",

@@ -3219,6 +3219,18 @@ Then for the master search (owner request 2026-11-08): `0040_master_search_index
 (organization_id, order_number)` and `stock_movements (organization_id, source_document_number)`, the three numbers the
 search looks up that had no index (every other number column already had a unique `(organization_id, number)` index).
 The next generated file must be renamed to `0041_<description>` (snapshot `0041_snapshot.json`).
+Done that way for round 5 office fixes (ADR-131): `0041_adr131_custom_sql` (idx 40, snapshot `0041_snapshot.json`). Its
+generated part adds `quotes.given_to_customer_at / given_via / given_by` and `invoices.given_to_customer_at / given_via /
+given_by` (when and how a price offer or a booked invoice really reached the customer, `email` | `print`, CHECK
+`quotes_given_ck` / `ck_invoices_given`), the table `delivery_problem_decisions` (purchasing's decision on a short,
+damaged or wrong delivery line: `send_more` | `money_back` | `close_rest`, one per goods receipt line, idempotency key),
+and changes `uq_supplier_bills_supplier_ref` to exclude voided bills as well as cancelled ones ("Fix a mistake"
+re-enters a voided bill under the same supplier number). It ends with the verbatim text of `src/db/sql/adr131.sql`:
+`bc_sod_distinct()` accepts an UPDATE that changes none of the checked columns (the pair was checked when written), so
+an order the owner made and approved alone can still be sent, answered and received (bug B1); every INSERT and every
+UPDATE that writes a checked column is checked as before (drift test in `tests/integration/procurement/r5-purchasing.test.ts`:
+the migration ends with the canonical file). `pnpm -s drizzle-kit generate` reports no changes. The next generated file
+must be renamed to `0042_<description>` (snapshot `0042_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

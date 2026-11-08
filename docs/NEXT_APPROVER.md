@@ -68,6 +68,12 @@ after the second slice (2026-11-06). Every message is in-app, links to the exact
 | 26 | Delivery proof | dispatch, after delivery | Order page | ✓ (existing) | n/a | ~ unchanged |
 | 27 | Billing a delivery (ADR-124) | no invoice: `finance.invoice.create`; draft: `finance.invoice.submit`; sent for approval: row 20 (`nextActors` "invoice", open step roles, creator and sender kept out, owner fallback ADR-122); approved: `finance.invoice.post`, never an approver when the rules forbid it | Delivery page, customer order page | n/a (row 20) | n/a | ✗ → ✓ "Waiting for Ana (owner) to approve the invoice" on the delivery and the order (`billingStepOfShipment`, `billingStepOfOrder`) |
 
+| 28 | Delivery problem (ADR-131) | `procurement.purchase_order.edit` at the site (role `procurement` is told) | Buy & stock › Buying › Delivery problems, message `procurement.delivery_problem` | ✓ at posting of a receipt with a short / damaged / wrong-item line (clears once every problem line is decided, `notification-done.ts`) | n/a | ✓ "Decided" with what was agreed |
+| 29 | Money back expected (ADR-131) | finance (role `finance` is told) | message `finance.supplier_credit_expected` | ✓ when purchasing chooses "Ask the supplier for money back" (informational, no auto-clear) | n/a | n/a |
+| 30 | Order line changed (ADR-131) | the set-aside people (`set_aside` hand-off) | message on the order | ✓ when set-aside stock is let go by a line change (once per line and amount) | n/a | the order's history shows the change |
+| 31 | One approval per purchase, own request (ADR-131) | a top role's own approved request covers their purchase order (ADR-088 §2) | purchase order page "Approved with request …" | the "Send it to the supplier" message as before | n/a | Step 4 of the wizard says whether a second OK is needed |
+| 32 | Invoice / payment below the owner's amount (ADR-131) | no approval step: one person with `*.submit`/`*.create` and `*.post` | invoice / payment page "Save to the books" | none needed | n/a | "Next: give it to the customer" (invoice) |
+
 ### The older "Waiting for" helpers now use `nextActors`
 
 | Helper | Used on | Same-person rule now |

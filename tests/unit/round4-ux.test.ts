@@ -43,8 +43,11 @@ describe("frame Help (UX re-audit C #9)", () => {
     expect(guideKeyFor("/production/orders", [])).toBe("production.production_order");
     expect(guideKeyFor("/sales/dispatch", [])).toBe("sales.fulfilment");
     expect(guideKeyFor("/dashboard", ["owner_director"])).toBe("role.owner");
-    expect(guideKeyFor("/finance", ["finance"])).toBe("role.site_manager");
-    expect(guideKeyFor("/finance", [])).toBe("start.everyday_basics");
+    // ADR-131: purchasing and finance screens have their own guides now; a screen without one gets the role guide.
+    expect(guideKeyFor("/finance", ["finance"])).toBe("finance.money");
+    expect(guideKeyFor("/procurement/orders/x", [])).toBe("procurement.buying");
+    expect(guideKeyFor("/admin/users", ["finance"])).toBe("role.site_manager");
+    expect(guideKeyFor("/admin/users", [])).toBe("start.everyday_basics");
   });
   it("the shell shows one 44 px Help button on every screen", () => {
     expect(src("src/ui/help/frame-help.tsx")).toMatch(/h-11 min-w-11/);
