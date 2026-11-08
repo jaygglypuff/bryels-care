@@ -23,6 +23,7 @@ import { assertReasonCode, findConversionStep, toBasePair } from "@/modules/mast
 // Direct import (not the platform index): the platform runtime imports the job registry, which imports this module.
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
 import { postMovement } from "./ledger";
+import { getSetting } from "@/lib/settings";
 import { isUuid } from "./lots";
 import { receivingPoHooks, type PoReceiptLine } from "./receiving-po";
 import {
@@ -34,6 +35,7 @@ import {
   receiptLocationKinds,
   type DiscrepancyKind,
   supplierLotRequired,
+  expiryRequired,
 } from "./receiving-state";
 
 // Read side lives in receiving-queries.ts; re-exported here for existing callers (receipt and label pages).
@@ -53,7 +55,8 @@ export type ReceiptLineInput = {
   /** ADR-076: brand on the delivered containers (optional; copied to the lot at posting). */
   brand?: string | null;
   manufacturedOn?: string | null;
-  expiresOn: string;
+  /** Null only for packaging when the site does not ask for it (expiryRequired, A-RCV-EXP-01). */
+  expiresOn?: string | null;
   retestOn?: string | null;
   containerCount?: number | null;
   storageConditionsConfirmed?: boolean;
@@ -138,7 +141,7 @@ async function resolveSupplier(tx: Tx, ctx: AuthContext, input: Pick<ReceiptHead
 type MaterialRow = typeof materials.$inferSelect;
 type LocationRow = typeof locations.$inferSelect;
 
-export { SUPPLIER_LOT_REQUIRED_KINDS, supplierLotRequired } from "./receiving-state";
+export { SUPPLIER_LOT_REQUIRED_KINDS, supplierLotRequired, expiryRequired } from "./receiving-state";
 
 export type NormalizedLine = {
   index: number;
@@ -151,7 +154,8 @@ export type NormalizedLine = {
   supplierLotNumber: string | null;
   brand: string | null;
   manufacturedOn: string | null;
-  expiresOn: string;
+  /** Null only for packaging when the site does not ask for it (expiryRequired, A-RCV-EXP-01). */
+  expiresOn: string | null;
   retestOn: string | null;
   containerCount: number | null;
   storageConditionsConfirmed: boolean;
@@ -166,6 +170,7 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
   if (!Array.isArray(lines) || lines.length === 0) throw new DomainError("validation", "Add at least one line.", { field: "lines" });
   if (lines.length > 50) throw new DomainError("validation", "A receipt can have at most 50 lines.", { field: "lines" });
   const today = manilaToday();
+  const packagingExpiry = await getSetting(tx, ctx.organizationId, "inventory.receiving.packaging_expiry_required", siteId);
   const matIds = [...new Set(lines.map((l) => l.materialId).filter((x) => isUuid(String(x ?? ""))))];
   const locIds = [...new Set(lines.map((l) => l.locationId).filter((x) => isUuid(String(x ?? ""))))];
   const mats = matIds.length ? await tx.select().from(materials).where(and(eq(materials.organizationId, ctx.organizationId), inArray(materials.id, matIds))) : [];
@@ -215,11 +220,12 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
     const brand = cleanText(l.brand, 80, f("brand"), `Line ${n} brand`);
     const manufacturedOn = optDate(l.manufacturedOn, f("manufacturedOn"), `Line ${n} manufacture date`);
     const expiresOn = optDate(l.expiresOn, f("expiresOn"), `Line ${n} expiry date`);
-    if (!expiresOn) throw new DomainError("validation", `Line ${n}: enter the expiry date.`, { field: f("expiresOn") });
+    // Round 5 (A-RCV-EXP-01): packaging needs no expiry unless the site asks for it; ingredients always do.
+    if (!expiresOn && expiryRequired(mat.materialKind, packagingExpiry)) throw new DomainError("validation", `Line ${n}: enter the expiry date printed on ${mat.name}.`, { field: f("expiresOn"), fieldErrors: { [f("expiresOn")]: "Enter the expiry date." } });
     const retestOn = optDate(l.retestOn, f("retestOn"), `Line ${n} retest date`);
     if (manufacturedOn && manufacturedOn > today) throw new DomainError("validation", `Line ${n}: the manufacture date cannot be in the future.`, { field: f("manufacturedOn") });
-    if (manufacturedOn && expiresOn <= manufacturedOn) throw new DomainError("validation", `Line ${n}: the expiry date must be after the manufacture date.`, { field: f("expiresOn") });
-    if (retestOn && retestOn > expiresOn) throw new DomainError("validation", `Line ${n}: the retest date cannot be after the expiry date.`, { field: f("retestOn") });
+    if (manufacturedOn && expiresOn && expiresOn <= manufacturedOn) throw new DomainError("validation", `Line ${n}: the expiry date must be after the manufacture date.`, { field: f("expiresOn") });
+    if (retestOn && expiresOn && retestOn > expiresOn) throw new DomainError("validation", `Line ${n}: the retest date cannot be after the expiry date.`, { field: f("retestOn") });
     let containerCount: number | null = null;
     if (l.containerCount !== null && l.containerCount !== undefined && String(l.containerCount) !== "") {
       containerCount = Number(l.containerCount);
@@ -563,7 +569,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
       supplierLotNumber: r.supplierLotNumber ?? "",
       brand: r.brand,
       manufacturedOn: r.manufacturedOn,
-      expiresOn: r.expiresOn ?? "",
+      expiresOn: r.expiresOn ?? null,
       retestOn: r.retestOn,
       containerCount: r.containerCount,
       storageConditionsConfirmed: r.storageConditionsConfirmed,
@@ -577,7 +583,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
   for (const l of lines) {
     const row = rows[l.index];
     const n = row.lineNo ?? l.index + 1;
-    if (l.expiresOn <= today && !row.discrepancyKind) {
+    if (l.expiresOn && l.expiresOn <= today && !row.discrepancyKind) {
       throw new DomainError(
         "validation",
         `Line ${n}: the expiry date must be after today. Expired or same-day material can only be received with a recorded discrepancy, as a reject candidate for QA.`,

@@ -26,7 +26,8 @@ const LineSchema = z
     supplierLotNumber: z.string().trim().max(80, { message: "Supplier's lot number: use at most 80 characters." }).optional(),
     brand: z.string().trim().max(80, { message: "Brand: use at most 80 characters." }).optional(),
     manufacturedOn: optDate,
-    expiresOn: z.string().regex(DATE_RE, { message: "Enter the expiry date." }),
+    // Round 5 (A-RCV-EXP-01): empty is allowed here; the service asks for it except for packaging.
+    expiresOn: optDate,
     retestOn: optDate,
     containerCount: z.union([z.literal(""), z.string().regex(/^\d{1,5}$/, { message: "Whole number of containers." })]).optional(),
     storageConditionsConfirmed: z.boolean().optional(),
@@ -98,7 +99,7 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
         supplierLotNumber: l.supplierLotNumber,
         brand: l.brand || null,
         manufacturedOn: l.manufacturedOn || null,
-        expiresOn: l.expiresOn,
+        expiresOn: l.expiresOn || null,
         retestOn: l.retestOn || null,
         containerCount: l.containerCount ? Number(l.containerCount) : null,
         storageConditionsConfirmed: !!l.storageConditionsConfirmed,

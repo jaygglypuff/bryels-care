@@ -38,6 +38,8 @@ type Material = {
   materialKind?: string;
   /** A-SCAN-14: the supplier's lot number is required for ingredients only (server rule `supplierLotRequired`). */
   supplierLotRequired?: boolean;
+  /** Round 5 (A-RCV-EXP-01): false for packaging unless the site asks for it (server rule `expiryRequired`). */
+  expiryRequired?: boolean;
 };
 
 /** Item list groups for a delivery without a purchase order (UX audit B #3): ingredients and packaging first, spare parts apart. */
@@ -435,8 +437,8 @@ export function ReceiveForm({
                       </p>
                     </div>
                   ) : (
-                    <Field label="Expiry date" htmlFor={id("exp")} error={err("expiresOn")} hint={mat?.shelfLifeDays && !l.expiryTouched ? `Filled in from the ${mat.shelfLifeDays}-day shelf life. Change it to the date on the label.` : "The date on the supplier's label."}>
-                      <Input id={id("exp")} type="date" value={l.expiresOn} onChange={(e) => update(l.key, { expiresOn: e.target.value, expiryTouched: true })} required className="min-w-0" />
+                    <Field label={mat?.expiryRequired === false ? "Expiry date (only if printed on it)" : "Expiry date"} htmlFor={id("exp")} error={err("expiresOn")} hint={mat?.expiryRequired === false ? "Packaging often has no expiry date: leave it empty. Never make one up." : mat?.shelfLifeDays && !l.expiryTouched ? `Filled in from the ${mat.shelfLifeDays}-day shelf life. Change it to the date on the label.` : "The date on the supplier's label."}>
+                      <Input id={id("exp")} type="date" value={l.expiresOn} onChange={(e) => update(l.key, { expiresOn: e.target.value, expiryTouched: true })} required={mat?.expiryRequired !== false} className="min-w-0" />
                     </Field>
                   )}
                 </div>

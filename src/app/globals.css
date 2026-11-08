@@ -154,3 +154,12 @@ html[data-navigating] main { opacity: 0.6; transition: opacity 150ms ease 300ms;
   html, body { background: #fff; }
   .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; }
 }
+
+/* Round 5 (C-office B3): a field the browser points at ("Please fill out this field") is never hidden under the
+   sticky top bar; the same margin keeps a scrolled-to message in view. */
+input,
+select,
+textarea,
+[role="alert"] {
+  scroll-margin-top: 120px;
+}
