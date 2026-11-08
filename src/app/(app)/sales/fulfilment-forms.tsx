@@ -102,7 +102,12 @@ export function ScanPanel({
       }
       setOffline(false);
       // A tap is never a scan: it is saved as entered by hand, with the reason. A typed number is saved as typed.
-      const manualReason = via === "tap" ? manual.trim() || "Label would not scan: tapped in the list" : "";
+      // Round 5 B9: a tap without the reason is refused here (and on the server); no made-up reason is sent.
+      if (via === "tap" && manual.trim().length < 3) {
+        setResult({ ok: false, tone: "warn", message: "Why can't you scan it? Tap a reason first (Label torn, Scanner broken or Other), then tap the box again." });
+        return;
+      }
+      const manualReason = via === "tap" ? manual.trim() : "";
       const sig = `${value}|${pieces ?? ""}|${via}|${manualReason}|${labelBad}`;
       if (!last.current || last.current.payload !== sig) last.current = { payload: sig, key: newKey() };
       const k = last.current.key;
@@ -203,9 +208,19 @@ export function ScanPanel({
       {(allowManual || labelCheck) && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {allowManual && (
-            <Field label="Label will not scan? Say why, then tap it in the list" htmlFor="scan-manual" hint="Saved as entered by hand">
-              <Input id="scan-manual" value={manual} onChange={(e) => setManual(e.target.value)} maxLength={200} placeholder="e.g. Label torn" />
-            </Field>
+            <fieldset className="grid gap-2" data-testid="manual-reason">
+              <legend className="text-[15px] font-medium">Label will not scan? Tap why, then tap the box in the list</legend>
+              <div className="flex flex-wrap gap-2">
+                {["Label torn", "Scanner broken"].map((r) => (
+                  <button key={r} type="button" aria-pressed={manual === r} onClick={() => setManual(manual === r ? "" : r)} className={`min-h-[48px] rounded-full border px-4 text-[15px] ${manual === r ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface"}`}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <Field label="Other reason" htmlFor="scan-manual" hint="Saved as entered by hand">
+                <Input id="scan-manual" value={manual === "Label torn" || manual === "Scanner broken" ? "" : manual} onChange={(e) => setManual(e.target.value)} maxLength={200} placeholder="A few words" />
+              </Field>
+            </fieldset>
           )}
           {labelCheck && (
             <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
@@ -291,8 +306,8 @@ function SignaturePad({ inputName }: { inputName: string }) {
       />
       <input ref={file} type="file" name={inputName} accept="image/png" className="hidden" tabIndex={-1} aria-hidden="true" />
       <div className="flex items-center justify-between gap-2 text-[12px] text-muted">
-        <span>{hasInk ? "Signature saved." : "Ask the person receiving to sign with a finger."}</span>
-        <Button type="button" variant="ghost" size="sm" onClick={clear}>
+        <span>{hasInk ? "Signed ✓ (not saved yet: tap Save)" : "Ask the person receiving to sign with a finger."}</span>
+        <Button type="button" variant="ghost" size="sm" onClick={clear} className="min-h-[44px] min-w-[64px]">
           Clear
         </Button>
       </div>

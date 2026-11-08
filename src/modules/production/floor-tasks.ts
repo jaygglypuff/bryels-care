@@ -73,6 +73,10 @@ export type FloorTask = {
   pauseNote: string | null;
 };
 
+/** ADR-130: the checker's list "Waiting for you to check" (one card per thing to check). */
+import { CHECKS_HREF } from "./checks-href";
+export { CHECKS_HREF };
+
 const RUNNING = ["materials_staged", "in_process", "rework_approved"];
 const APPROVED_ORDER = ["released", "in_progress"];
 const ORDER_RANK: Record<FloorTaskKind, number> = { finish: 0, check: 1, step: 2, weigh: 3, redo: 4, start: 5, get_materials: 6, wait: 7 };
@@ -192,7 +196,8 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     if (r.assignedOperatorId && r.assignedOperatorId !== ctx.userId && !(t.kind === "check" && canDo)) continue;
     // Waiting (curing, a check by someone else, no permission): the same flow screen, which shows why.
     const ref = { batchId: r.id, workOrderId: r.workOrderId };
-    const href = toCheck > 0 ? flowHref(ref, "weigh") : action.kind === "link" ? action.href : r.status === "planned" ? flowHref(ref, "materials") : flowHref(ref, `step/${cur?.stepNo ?? firstStepNo(planned)}`);
+    // ADR-130 one checker flow (round 5 B18): every check opens the checker's list, never the operator's next screen.
+    const href = t.kind === "check" && canDo ? CHECKS_HREF : action.kind === "link" ? action.href : r.status === "planned" ? flowHref(ref, "materials") : flowHref(ref, `step/${cur?.stepNo ?? firstStepNo(planned)}`);
     // ADR-104 §5: a batch started on an earlier day reads "Continue <product> <batch> · step 4 · started yesterday".
     const cont = (t.kind === "step" || t.kind === "weigh") && r.status === "in_process" ? continueTitle(r.productName, r.batchNumber, index, r.startedAt, now) : null;
     if (cont) t.title = cont;
@@ -225,5 +230,7 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
 
 /** The three counts of "Your tasks today": batches the user can act on, of those weighing, and waiting ones. */
 export function floorTaskCounts(tasks: FloorTask[]) {
-  return { forYou: tasks.filter((t) => t.canDo).length, weighing: tasks.filter((t) => t.kind === "weigh").length, waiting: tasks.filter((t) => !t.canDo).length };
+  // Round 5 B13: `checking` = batches with something waiting for MY check (the tile said "0 Weighing" while a weighing waited).
+  // For the number of things to check (4 weighings = 4) use checksWaitingCount (checker-queue.ts).
+  return { forYou: tasks.filter((t) => t.canDo).length, weighing: tasks.filter((t) => t.kind === "weigh").length, checking: tasks.filter((t) => t.kind === "check" && t.canDo).length, waiting: tasks.filter((t) => !t.canDo).length };
 }

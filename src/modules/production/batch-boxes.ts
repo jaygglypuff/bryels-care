@@ -220,7 +220,14 @@ export async function batchBoxPrintJobs(ctx: AuthContext, batchId: string) {
   const [b] = await db.select({ siteId: batches.siteId, workOrderId: batches.workOrderId }).from(batches).where(and(eq(batches.id, batchId), eq(batches.organizationId, ctx.organizationId))).limit(1);
   if (!b || !ctx.allowedSiteIds.includes(b.siteId)) throw new DomainError("not_found", "Batch not found in your sites.");
   const boxes = (await currentBoxPlan(db, batchId)).map((r) => ({ boxId: r.id, boxNo: r.boxNo, boxCount: r.boxCount, pieces: r.pieces, containerNumber: r.containerNumber, jobId: r.labelJobId }));
-  return { workOrderId: b.workOrderId, boxes };
+  // Round 5 problem 3: ONE print trip. The batch's piece labels that wait to print come on the same page, first
+  // (bottles are labelled before they go in boxes).
+  const pieceJobs = await db
+    .select({ id: labelJobs.id, copies: labelJobs.copies, status: labelJobs.status })
+    .from(labelJobs)
+    .where(and(eq(labelJobs.organizationId, ctx.organizationId), eq(labelJobs.entityType, "batch"), eq(labelJobs.entityId, batchId), inArray(labelJobs.status, ["ready", "printed"])))
+    .orderBy(asc(labelJobs.requestedAt));
+  return { workOrderId: b.workOrderId, boxes, pieceJobs };
 }
 
 /**

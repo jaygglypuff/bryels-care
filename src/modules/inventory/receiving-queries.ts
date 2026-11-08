@@ -1,3 +1,4 @@
+import { getSetting } from "@/lib/settings";
 import "server-only";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -22,7 +23,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { enterableUnits, reasonCodeOptions, reasonLabels, sectionForItem, sectionSql, toCsv } from "@/modules/masterdata";
 import { isUuid } from "./lots";
-import { DISCREPANCY_LABELS, receiptLocationKinds, supplierLotRequired, type DiscrepancyKind } from "./receiving-state";
+import { DISCREPANCY_LABELS, expiryRequired, receiptLocationKinds, supplierLotRequired, type DiscrepancyKind } from "./receiving-state";
 
 type Q = Tx | typeof db;
 
@@ -45,6 +46,7 @@ export async function receivingFormData(ctx: AuthContext) {
   ctx.require("procurement.goods_receipt.create");
   ctx.requireSite(ctx.currentSiteId);
   const kinds = [...new Set([...receiptLocationKinds("quarantine"), ...receiptLocationKinds("released")])];
+  const packagingExpiry = await getSetting(db, ctx.organizationId, "inventory.receiving.packaging_expiry_required", ctx.currentSiteId);
   const [mats, locs, sups] = await Promise.all([
     db
       .select({
@@ -95,7 +97,8 @@ export async function receivingFormData(ctx: AuthContext) {
     supplierPacks: packs,
     // Units from the approved conversions (W2G UOM service), incl. a material's own pack units.
     // S6 (ADR-077): the section the item belongs in (raw material → Raw materials, packaging → Packaging).
-    materials: await Promise.all(mats.map(async (m) => ({ ...m, supplierLotRequired: supplierLotRequired(m.materialKind), pastQtyBase: pastBy.get(m.id) ?? [], section: sectionForItem({ itemKind: "material", materialKind: m.materialKind }), units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
+    // Round 5 (A-RCV-EXP-01): packaging is received without an expiry date unless the site asks for one.
+    materials: await Promise.all(mats.map(async (m) => ({ ...m, supplierLotRequired: supplierLotRequired(m.materialKind), expiryRequired: expiryRequired(m.materialKind, packagingExpiry), pastQtyBase: pastBy.get(m.id) ?? [], section: sectionForItem({ itemKind: "material", materialKind: m.materialKind }), units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
     locations: locs,
     // Storage places per section, to tell the operator where the stock goes after the QA check.
     storageBySection: await storageCodesBySection(ctx.currentSiteId),

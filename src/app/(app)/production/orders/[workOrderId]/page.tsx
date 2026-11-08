@@ -1,3 +1,4 @@
+import { ScrollHere } from "../../scroll-here";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
@@ -242,11 +243,13 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
       {sp.finished && v.batches.some((b) => b.batchNumber === sp.finished) && (
         <div className="mb-4">
-          {/* ADR-080 G3: back from Finish batch (UX review S6). */}
-          <Banner tone="ok" title={`Batch ${sp.finished} finished`}>
-            It waits in the QA hold area for the quality check; when QA says OK it moves to the finished-goods shelf.{" "}
-            <NextApprover next={finishedQaNext} inline />
-          </Banner>
+          {/* ADR-080 G3: back from Finish batch (UX review S6). Round 5 B5: brought into view (it opened scrolled to the bottom). */}
+          <ScrollHere testId="finished-banner">
+            <Banner tone="ok" title={`Batch ${sp.finished} finished`}>
+              It waits in the QA waiting area for the quality check; when QA says OK it moves to the finished-goods shelf. Nothing more for you on this batch.{" "}
+              <NextApprover next={finishedQaNext} inline />
+            </Banner>
+          </ScrollHere>
         </div>
       )}
       {v.status === "cancelled" ? (

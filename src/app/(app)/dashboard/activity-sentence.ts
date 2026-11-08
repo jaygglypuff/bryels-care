@@ -97,6 +97,8 @@ const EXACT: Record<string, string> = {
   "inventory.stock_reservation.released": "gave back the reserved stock for",
   "procurement.purchase_order.receipt_posted": "received goods for",
   "production.pick_line.confirmed": "got the materials for",
+  // Round 5 B12: "Lito Pascual entered a box by hand on the pick list", not "manual entry the pick list".
+  "sales.pick_line.manual_entry": "entered a box by hand on",
 };
 const VERB: Record<string, string> = {
   created: "made",

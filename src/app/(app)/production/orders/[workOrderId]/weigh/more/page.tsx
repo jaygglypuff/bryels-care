@@ -5,11 +5,9 @@ import { floorCheckNext } from "@/modules/production";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { uuidv7 } from "uuidv7";
-import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtQty } from "@/lib/qty";
-import { getSetting } from "@/lib/settings";
 import { equipmentOptions, getBatchExecution, getBatchRecord, isWeighingStep, signerOptions, usableLotsForBatch } from "@/modules/production";
 import { PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
@@ -56,7 +54,8 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
     running ? signerOptions(ctx, b.siteId, "production.dispense_record.approve") : Promise.resolve([]),
     running ? signerOptions(ctx, b.siteId, "production.over_tolerance_dispense.approve") : Promise.resolve([]),
     canWeigh ? usableLotsForBatch(ctx, b.id) : Promise.resolve({} as Awaited<ReturnType<typeof usableLotsForBatch>>),
-    getSetting(db, ctx.organizationId, "production.sign_off.require_password"),
+    // ADR-130: a co-signer always types their own password (a name alone never signs).
+    Promise.resolve(true),
   ]);
   const lots = r ? (fefo[r.materialId] ?? []) : [];
   const lastVoided = [...ing.weighings].reverse().find((w) => w.voided && !ing.weighings.some((x) => x.supersedesId === w.id));

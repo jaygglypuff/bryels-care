@@ -52,7 +52,8 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
  * `needs`: the permission a refused step needs, so the form can name who can do it (ADR-073 "who can do this").
  * `next`: after a hand-off, who does the next step by name and role (`nextActors`, docs/NEXT_APPROVER.md).
  */
-export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string>; needs?: { permission: string; siteId: string | null }; next?: NextActors | null } | null;
+/** `tone: "warn"` (round 5): a refusal that is not an error ("90 °C is above the 75 °C limit…"), shown in amber. */
+export type ActionState = { ok: boolean; message?: string; tone?: "warn"; fieldErrors?: Record<string, string>; needs?: { permission: string; siteId: string | null }; next?: NextActors | null } | null;
 
 /**
  * The words a person reads: a leading machine tag such as "SEPARATION_OF_DUTIES: " (kept in the thrown

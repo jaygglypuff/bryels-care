@@ -36,7 +36,8 @@ export type FinishFormProps = {
   holdOptions: { id: string; code: string; name: string }[];
   needsChecker: boolean;
   checkers: { id: string; displayName: string }[];
-  requirePassword: boolean;
+  /** ADR-130: the checker of the counts types their OWN password here (a name alone never signs). Always true. */
+  requirePassword?: boolean;
 };
 
 const n = (v: string) => {
@@ -80,6 +81,8 @@ export function FinishForm(p: FinishFormProps) {
     Object.fromEntries(p.packaging.map((m) => [m.materialId, { damaged: m.step?.damaged !== null && m.step?.damaged !== undefined ? String(Number(m.step.damaged)) : "", leftOver: m.step?.leftOver !== null && m.step?.leftOver !== undefined ? String(Number(m.step.leftOver)) : "", used: "" }])),
   );
   const [editStep, setEditStep] = useState<Record<string, boolean>>({});
+  // Round 5: "All used, none broken? [Yes] [No, count them]" per packaging item; unanswered is never read as 0 (B2).
+  const [sure, setSure] = useState<Record<string, "yes" | "no" | undefined>>({});
   const rejectTotal = p.existingScrap.length ? p.existingScrap.reduce((t, r) => t + n(r.qty), 0) : Object.values(rejects).reduce((t, v) => t + n(v), 0);
   const goodN = n(good);
   const yieldPct = useMemo(() => {
@@ -108,10 +111,16 @@ export function FinishForm(p: FinishFormProps) {
     if (goodN <= 0) out.push(`Enter the good ${p.pieceWord}.`);
     if (n(samples) >= goodN && goodN > 0) out.push(`Samples kept must be fewer than the good ${p.pieceWord}.`);
     if (tooMany) out.push("More wrappers are counted than were taken. Count the left-over and damaged ones again.");
-    if (balances.some((b) => b.diff > 0 && !b.counted && (pkg[b.materialId]?.leftOver ?? "") === "")) out.push("Count the left-over wrappers.");
+    // Round 5 B2: an empty count is never 0 (the server refuses it too).
+    for (const b of balances) {
+      if (b.counted) continue;
+      const v = pkg[b.materialId];
+      const stepDamaged = !!b.step && !editStep[b.materialId] && b.step.damaged !== null;
+      if ((v?.leftOver ?? "") === "" || (!stepDamaged && (v?.damaged ?? "") === "")) out.push(`Count the ${wrapperWord(b.materialName)}: how many are left over? Tap Yes if all are as expected.`);
+    }
     if ((needsReport || missingWrappers) && problemReason.trim().length < 10) out.push(missingWrappers && !needsReport ? "Some wrappers are missing: count the left-over ones again, or write what happened (at least 10 characters)." : "Write what happened (at least 10 characters).");
     if (p.needsChecker && !checkerId) out.push("Choose who checked.");
-    if (p.needsChecker && p.requirePassword && !checkerPassword) out.push("The checker types their password.");
+    if (p.needsChecker && !checkerPassword) out.push("The checker types their own password.");
     return out;
   }
   function askToConfirm() {
@@ -212,7 +221,7 @@ export function FinishForm(p: FinishFormProps) {
         <section className="rounded-[16px] border border-line p-4" aria-labelledby="fin-wrappers">
           {/* ADR-106 §4: wrappers in plain words; labels are counted in the label panel, not here. */}
           <h2 id="fin-wrappers" className="text-[16px] font-semibold">
-            Wrappers
+            Wrappers, bottles and boxes
           </h2>
           {balances.map((b) => {
             const word = wrapperWord(b.materialName);
@@ -255,6 +264,33 @@ export function FinishForm(p: FinishFormProps) {
                       const showDamaged = !(fromStep && b.step!.damaged !== null);
                       const showLeft = !(fromStep && b.step!.leftOver !== null);
                       if (!showDamaged && !showLeft) return null;
+                      // Round 5 problem 2 / B2: one question, already answered with what we expect; the two boxes only on "No".
+                      const expectLeft = Math.max(taken - b.used, 0);
+                      const answer = sure[b.materialId];
+                      if (answer !== "no" && showDamaged && showLeft)
+                        return (
+                          <div className="mt-2 grid gap-2" data-testid={`pkg-question-${b.materialId}`}>
+                            <p className="text-[17px] font-semibold">
+                              {goodN > 0 ? (expectLeft === 0 ? `All ${taken} ${word} used, none broken?` : `${b.used} ${word} used and ${expectLeft} left over, none broken?`) : `Enter the good ${p.pieceWord} first.`}
+                            </p>
+                            {goodN > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                <button type="button" aria-pressed={answer === "yes"} onClick={() => { setSure({ ...sure, [b.materialId]: "yes" }); setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: "0", leftOver: String(expectLeft) } }); }} className={cx("inline-flex min-h-[56px] flex-1 items-center justify-center rounded-full border text-[17px] font-semibold", answer === "yes" ? "border-transparent bg-primary text-white" : "border-line-strong bg-surface text-fg")} data-testid={`pkg-yes-${b.materialId}`}>
+                                  Yes{answer === "yes" ? " ✓" : ""}
+                                </button>
+                                <button type="button" onClick={() => { setSure({ ...sure, [b.materialId]: "no" }); setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: "", leftOver: "" } }); }} className="inline-flex min-h-[56px] flex-1 items-center justify-center rounded-full border border-line-strong bg-surface text-[17px] font-semibold text-fg" data-testid={`pkg-no-${b.materialId}`}>
+                                  No, count them
+                                </button>
+                              </div>
+                            )}
+                            {answer === "yes" && (
+                              <>
+                                <input type="hidden" name={`pkg-${b.materialId}-damaged`} value={pkg[b.materialId].damaged} />
+                                <input type="hidden" name={`pkg-${b.materialId}-leftOver`} value={pkg[b.materialId].leftOver} />
+                              </>
+                            )}
+                          </div>
+                        );
                       return (
                         <div className="mt-2 grid gap-3 sm:grid-cols-2">
                           {showLeft && <Count id={`pkg-${b.materialId}-leftOver`} label={`How many ${word} are left over?`} value={pkg[b.materialId].leftOver} onChange={(v) => setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], leftOver: v } })} error={fe[`pkg-${b.materialId}-leftOver`]} hint="Count them now." />}
@@ -287,7 +323,7 @@ export function FinishForm(p: FinishFormProps) {
       {p.needsChecker && (
         <fieldset className="grid gap-3 rounded-[16px] border border-line p-4 sm:grid-cols-2">
           <legend className="px-1 text-[14px] font-semibold">A second person checks your counts</legend>
-          <p className="text-[13px] text-fg-2 sm:col-span-2">The recipe asks for this. Ask someone from production to look at the counts above, then pick their name{p.requirePassword ? " and let them type their password" : ""}.</p>
+          <p className="text-[13px] text-fg-2 sm:col-span-2">The recipe asks for this. Ask someone from production to look at the counts above, then they choose their name and type their own password.</p>
           {p.checkers.length === 0 && <p className="text-[14px] text-[var(--bad-fg)] sm:col-span-2">Nobody else from production can check at this site yet. Ask the site manager to add a second person.</p>}
           <Field label="Name" htmlFor="checkerId" error={fe.checkerId}>
             <Select id="checkerId" name="checkerId" required value={checkerId} onChange={(e) => setCheckerId(e.target.value)}>
@@ -299,7 +335,7 @@ export function FinishForm(p: FinishFormProps) {
               ))}
             </Select>
           </Field>
-          {p.requirePassword && (
+          {(
             <Field label="Their password (typed by them)" htmlFor="checkerPassword" error={fe.checkerPassword}>
               <Input id="checkerPassword" name="checkerPassword" type="password" autoComplete="off" required value={checkerPassword} onChange={(e) => setCheckerPassword(e.target.value)} />
             </Field>
@@ -366,8 +402,8 @@ export function FinishForm(p: FinishFormProps) {
         </div>
       ) : (
         <div>
-          <Button type="button" size="lg" onClick={askToConfirm} disabled={tooMany || goodN <= 0} data-testid="finish-batch">
-            {needsReport || missingWrappers ? "Finish and report the problem" : "Finish batch"}
+          <Button type="button" variant="cta" size="lg" className="w-full" onClick={askToConfirm} disabled={tooMany || goodN <= 0} data-testid="finish-batch">
+            {needsReport || missingWrappers ? "Finish and report the problem" : "Finish and send to QA"}
           </Button>
           {tooMany && goodN > 0 && <p className="mt-2 text-[14px] text-muted">More wrappers are counted than were taken. Count the left-over and damaged ones again.</p>}
         </div>

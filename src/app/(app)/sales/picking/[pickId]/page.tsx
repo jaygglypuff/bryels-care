@@ -70,10 +70,10 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
       <RecordHeader
         back={{ href: "/sales/picking", label: "To get from shelf" }}
         typeLabel="Get from shelf"
-        reference={v.pick.pickNumber}
-        title={v.customerName}
+        // Round 5 problem 13: the customer is the title ("Luntian Wellness Stores · 2 boxes"); the list number is small.
+        title={`${v.customerName} · ${v.rows.length === 1 ? "1 place" : `${v.rows.length} places`}`}
         chip={<ShipChip status={v.pick.status} />}
-        meta={[["Deliver by", fmtDate(v.order.requestedDeliveryOn)]]}
+        meta={[["Deliver by", fmtDate(v.order.requestedDeliveryOn)], ["List", v.pick.pickNumber]]}
         actions={
           <MoreMenu compact>
             <div className="flex flex-col gap-3">
@@ -110,7 +110,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
 
         <Card>
           <CardTitle>
-            To take · {v.progress.picked} of {v.progress.toPick} ({v.progress.pct}%)
+            {canScan && short.length > 0 ? "Taken so far" : "To take"} · {v.progress.picked} of {v.progress.toPick} ({v.progress.pct}%)
           </CardTitle>
           <div className="mb-3 h-3 w-full overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
             <div className="h-3 rounded-full bg-primary" style={{ width: `${v.progress.pct}%` }} />
@@ -119,7 +119,9 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
             <EmptyState title="Nothing set aside">This order has no stock set aside any more. Ask the office.</EmptyState>
           ) : (
             <ul className="flex flex-col gap-2">
-              {v.rows.map((r) => (
+              {/* Round 5 problem 13: each box once. While scanning, the open ones are the list in "Scan the box" above;
+                  this list shows what is taken (and what QA stopped). */}
+              {v.rows.filter((r) => !(canScan && short.length > 0) || r.done || r.blocked).map((r) => (
                 <li
                   key={r.id}
                   data-testid="pick-row"
@@ -149,7 +151,17 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
           )}
         </Card>
 
-        {short.length > 0 && open && <Banner tone="info" title="Something you cannot find?">Use ⋯ More → Finish with items missing, and say why. The rest stays set aside for later.</Banner>}
+        {/* Round 5 problem 13: a visible "A box is missing", not hidden in ⋯ More. */}
+        {short.length > 0 && open && canFinish && (
+          <Card>
+            <Cmd action={completePickAction} fields={finishFields} label="A box is missing" pending="Finishing…" variant="secondary">
+              <p className="text-[14px] text-fg-2">Finish with what you have. {plural(short.length, "place")} not fully taken stay set aside for later.</p>
+              <Field label="Why is it missing?" htmlFor="shortPickReasonInline">
+                <Input id="shortPickReasonInline" name="shortPickReason" maxLength={300} required placeholder="e.g. Box damaged on the shelf" />
+              </Field>
+            </Cmd>
+          </Card>
+        )}
 
         <MoreDetails title={`Scans so far (${v.lines.filter((l) => !l.voidedAt).length})`}>
           {v.lines.length === 0 ? (

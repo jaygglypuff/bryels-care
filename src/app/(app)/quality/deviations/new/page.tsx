@@ -8,7 +8,7 @@ import { DeviationForm } from "../../w2c-forms";
 export const dynamic = "force-dynamic";
 
 /** Raise sheet pre-filled from the page the user came from (batch, lot, inspection result). */
-export default async function NewDeviationPage({ searchParams }: { searchParams: Promise<{ batchId?: string; lotId?: string; inspectionId?: string; testResultId?: string }> }) {
+export default async function NewDeviationPage({ searchParams }: { searchParams: Promise<{ batchId?: string; lotId?: string; inspectionId?: string; testResultId?: string; back?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("quality.deviation.create")) return <Forbidden what="raising deviations" permission="quality.deviation.create" />;
   const sp = await searchParams;
@@ -31,7 +31,7 @@ export default async function NewDeviationPage({ searchParams }: { searchParams:
       <PageIntro>This screen is for anyone who saw something go wrong: write what happened. QA is told at once and looks into it.</PageIntro>
       <Card className="max-w-2xl">
         <CardTitle>What went wrong?</CardTitle>
-        <DeviationForm batchId={f.batch?.id} lotId={f.lot?.id} inspectionId={sp.inspectionId} testResultId={sp.testResultId} steps={f.batch?.steps ?? []} />
+        <DeviationForm batchId={f.batch?.id} lotId={f.lot?.id} inspectionId={sp.inspectionId} testResultId={sp.testResultId} steps={f.batch?.steps ?? []} back={sp.back && sp.back.startsWith("/") && !sp.back.startsWith("//") ? sp.back : undefined} />
         {sp.testResultId && <p className="mt-3 text-[12px] text-muted">This report is about a test result that was not OK. When QA closes it, QA writes whether the product may still be made OK to use.</p>}
       </Card>
     </>

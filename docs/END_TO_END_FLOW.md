@@ -72,7 +72,7 @@ each.
 | QA → warehouse (put away) | Message with lot and shelf + Home tile | **Good** (the model for the rest) |
 | Sales → planner (needs making) | **None** | **Broken** |
 | Planner → manager → operator | To approve; then "Anyone can take it" | Weak |
-| Operator → second person | Name picked from a list on the same phone | Acceptable for now (see P8) |
+| Operator → second person | Round 5 (ADR-130): every check lands on the checker's list **Waiting for you to check** (`/production/checks`, one card per batch of weighings, one per step; their Home "Check" task opens it). A checker standing beside the operator may sign on her phone only with **their own password** (setting `production.sign_off.same_device`); a name alone never signs | **Good** |
 | Production → QA (batch finished) | QA queue only, no message | Weak |
 | QA → warehouse / sales (stock now available) | **None** | **Broken** |
 | Picker → checker (second check) | **None**, not even a Home tile | **Broken** |
@@ -200,6 +200,20 @@ Branch `worktree-agent-a74afdca240ffb0c0` (UX/front-end slice of ADR-110). C1–
 | C17 | **Fixed** | Titles: Home, Request to buy, Purchase order, QA check of a lot, Quality test, Check a batch or delivery, How work flows. |
 | C18 | **Fixed** | A lot number typed by hand at pick and second check keeps the counted pieces (`scan-qty.ts`, unit test). |
 | C19 | **Fixed** | Header "123 bars made so far · 1 of 4 batches finished" (or "378 bars expected · 4 batches"); body "1 of 4 finished · 0 of 4 decided by QA". Finish says the stock waits in the QA hold area and moves to the finished-goods shelf when QA says OK. |
+
+### Round 5 floor fixes (8 Nov 2026, ADR-130 draft; `docs/ux-audit/round5/A-floor.md`)
+
+| Stage | What changed on the path |
+|---|---|
+| Get materials | One short block per item (name and amount, shelf, lot …last 4 and how much is in it), the same numbers as Weigh, no stale "1 of 7 taken", "Container almost empty? Use a second lot", and the green button names the next step ("Next: Check the area is clean"). |
+| Weigh | kg for 1 kg or more (grams stored), the lot shown once, Save under the keypad, "Saved: …" after each line; the operator goes on to the next ingredient while checks wait. No signal: queued on a phone that may work offline, else the typed values stay (never a full-page error). |
+| Second person | Every check is on the checker's list **Waiting for you to check** (`/production/checks`): one card per batch of weighings (A-CHK-01), one per step, "Looks right" / "Not right" (tapped reason). The checker stays on the list. On the operator's phone only with the checker's own password (`production.sign_off.same_device`). |
+| Steps | Plain sentences: "90 °C is above the 75 °C limit. Check again. If it is right, say why."; an empty required value is refused, nothing saved; tapped correction reasons; "Done — go to <next step>". |
+| Label and pack | Work listed in order, one green button, piece and box labels on one print page (same size), QA samples get no label (A-LBL-SAMPLES-01). |
+| Finish | It is the last step ("Move to the QA waiting area", step 7 of 7) in the step template; one Yes/No per packing item (counts open on "No"); an empty count is refused by the server; the success message is scrolled into view on the order. |
+| Receive | Packaging may be received without an expiry date (A-RCV-EXP-01, setting). |
+| Get from shelf / send out | Customer name as the title, each box once, a tap needs a tapped reason, "A box is missing" visible; the delivery receipt is printed (draft) before the truck leaves; the last driver and plate are filled in. |
+| Problems | "Report a problem" on the batch record, each step and the lot page; the reporter sees "Sent to QA" and goes back. |
 
 ## (d) Taps and screens per role (one order through the whole chain)
 

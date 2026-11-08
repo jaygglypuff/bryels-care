@@ -23,6 +23,7 @@ import { changeLotInTx, lineForLotChange } from "./material-swaps";
 import { offPlanWarning } from "./pick-plan";
 import { notifyNextActors } from "@/modules/governance";
 import { flowHref } from "./flow-paths";
+import { CHECKS_HREF } from "./checks-href";
 
 /** Tolerance window at the typed resolution (shared with the weigh card, weigh-window.ts). */
 export { toleranceRange } from "./weigh-window";
@@ -436,7 +437,8 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         await notifyNextActors(tx, ctx, "weighing_check", { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
           title: `Check a weighing of batch ${batch.batchNumber}`,
           body: `${ctx.displayName} weighed ${material.name}. Watch the container and the scale, then confirm it on the Weigh screen.`,
-          link: flowHref({ batchId: batch.id, workOrderId: batch.workOrderId }, "weigh"),
+          // ADR-130: the message opens the checker's list, where the check is done (never the operator's screen).
+          link: CHECKS_HREF,
           entityType: "batch",
           entityId: batch.id,
           dedupeKey: `handoff.weighing_check:${batch.id}:${rec.id}`,
@@ -452,7 +454,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
  * The checker verifies a saved weighing (W05-08): sees material, lot, target, actual and signs.
  * The operator can never check their own row (409 separation_of_duties; CHECK dispense_records_sod_ck).
  */
-export async function checkDispense(checker: AuthContext, input: { dispenseRecordId: string; idempotencyKey?: string | null; signedOn?: "own_session" | "operator_device" }) {
+export async function checkDispense(checker: AuthContext, input: { dispenseRecordId: string; idempotencyKey?: string | null }) {
   checker.require("production.dispense_record.approve");
   return db.transaction(async (tx) => {
     const [r] = await tx
@@ -480,9 +482,62 @@ export async function checkDispense(checker: AuthContext, input: { dispenseRecor
         entityId: rec.id,
         entityNumber: batch.batchNumber,
         siteId: batch.siteId,
-        after: { material: r.materialName, lot: r.lotNumber, actualQtyG: rec.actualQtyG, signedOn: input.signedOn ?? "own_session" },
+        // ADR-130: where it was signed comes from the context (coSign marks a password co-signature), never from the form.
+        after: { material: r.materialName, lot: r.lotNumber, actualQtyG: rec.actualQtyG, signedOn: checker.signedOn },
       });
       return { dispenseRecordId: rec.id, materialName: r.materialName };
+    });
+    return result;
+  });
+}
+
+/**
+ * ADR-130 "Check 4 weighings for B-26-0004": the checker confirms every listed weighing of ONE batch in one
+ * transaction (all or nothing), each with the same rules as `checkDispense` (not voided, not checked, not the
+ * checker's own weighing, permission at the batch's site). Whether one confirmation may cover several weighings
+ * is a QA rule: `production.weighing.check_together` (default on, A-CHK-01). Off: one weighing per call.
+ */
+export async function checkDispenses(checker: AuthContext, input: { batchId: string; dispenseRecordIds: string[]; idempotencyKey?: string | null }) {
+  checker.require("production.dispense_record.approve");
+  const ids = [...new Set(input.dispenseRecordIds)];
+  if (ids.length === 0) throw new DomainError("validation", "Nothing to check.");
+  if (ids.length > 50) throw new DomainError("validation", "Check at most 50 weighings at once.");
+  return db.transaction(async (tx) => {
+    const batch = await lockBatch(tx, checker, input.batchId);
+    if (!checker.canAt("production.dispense_record.approve", batch.siteId)) checker.requireAt("production.dispense_record.approve", batch.siteId);
+    if (ids.length > 1 && !(await getSetting(tx, checker.organizationId, "production.weighing.check_together", batch.siteId))) {
+      throw new DomainError("validation", "Check each weighing on its own (company rule).", { code: "CHECK_ONE_BY_ONE" });
+    }
+    const { result } = await idempotent(tx, checker, input.idempotencyKey, "production.dispense_record.check_many", async () => {
+      const rows = await tx
+        .select({ rec: dispenseRecords, batchId: batchMaterials.batchId, materialName: materials.name, lotNumber: inventoryLots.lotNumber })
+        .from(dispenseRecords)
+        .innerJoin(batchMaterials, eq(batchMaterials.id, dispenseRecords.batchMaterialId))
+        .innerJoin(materials, eq(materials.id, batchMaterials.materialId))
+        .innerJoin(inventoryLots, eq(inventoryLots.id, dispenseRecords.lotId))
+        .where(inArray(dispenseRecords.id, ids))
+        .for("update", { of: dispenseRecords });
+      if (rows.length !== ids.length || rows.some((x) => x.batchId !== batch.id)) throw new DomainError("not_found", "A weighing on this card is not part of this batch.");
+      const now = new Date();
+      for (const r of rows) {
+        if (r.rec.voidedAt) throw new DomainError("state", `${r.materialName}: this weighing was undone. Go back to your list.`);
+        if (r.rec.checkerId) throw new DomainError("state", `${r.materialName} is already checked. Go back to your list.`);
+        if (checker.sodBlocks(r.rec.operatorId === checker.userId, "You weighed this ingredient; another person must check it.")) {
+          throw new DomainError("separation_of_duties", `You weighed ${r.materialName}; another person must check it.`, { ...checker.refusalDetails(), rule: "V-SOD" });
+        }
+      }
+      for (const r of rows) {
+        await tx.update(dispenseRecords).set({ checkerId: checker.userId, checkedAt: now }).where(eq(dispenseRecords.id, r.rec.id));
+        await audit(tx, checker, {
+          action: "production.dispense_record.checked",
+          entityType: "dispense_record",
+          entityId: r.rec.id,
+          entityNumber: batch.batchNumber,
+          siteId: batch.siteId,
+          after: { material: r.materialName, lot: r.lotNumber, actualQtyG: r.rec.actualQtyG, signedOn: checker.signedOn, together: rows.length },
+        });
+      }
+      return { checked: rows.length, batchNumber: batch.batchNumber, materials: rows.map((r) => r.materialName) };
     });
     return result;
   });

@@ -204,7 +204,8 @@ so they change from month to month.
 - Browser rehearsal of the whole story (ADR-122): reset the demo, then
   `BASE=http://localhost:PORT node tests/e2e/demo-rehearsal.cjs` (screenshots in `SHOTS_DIR`, default the system temp
   folder). It runs scenes 1–8 and carries the lotion order on to the invoice: Get materials, Weigh (each lot label
-  scanned, Jun confirms on his own session), the steps, box labels, Finish, Check quality, set aside, get from shelf,
+  scanned, Jun confirms from his list "Waiting for you to check", one card for the batch's weighings, ADR-130), the steps,
+  piece and box labels in one print trip, Finish as the last step, Check quality, set aside, get from shelf,
   second check (Dino), send out, proof of delivery, invoice (Ana approves because Rosa sent it; Rosa saves it to the
   books). `ONLY=d,e` runs single sections. The server needs `FILE_STORAGE` (the signature on the proof of delivery is a
   file); a production build (`pnpm build && pnpm start`) is steadier than `next dev` for a full run.

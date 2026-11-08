@@ -230,6 +230,35 @@ export const SETTINGS = {
     requiresApproval: true,
     restricted: true,
   },
+  /**
+   * ADR-130 (A-CHK-01, QA to confirm): the checker may confirm all of a batch's waiting weighings with one "Looks
+   * right" ("Check 4 weighings for B-26-0004": each one listed). Off: one weighing per confirmation.
+   */
+  "production.weighing.check_together": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-CHK-01",
+    group: "Production",
+    label: "Checker confirms a batch's weighings together",
+    description: "On: one card lists every weighing of the batch that waits for a check, and one \"Looks right\" confirms them all (each is still recorded). Off: one card per weighing. QA decides.",
+    restricted: true,
+  },
+  /**
+   * Round 5 (C-office B3, A-RCV-EXP-01, QA to confirm): whether receiving asks for an expiry date on packaging
+   * (wrappers, bottles, caps, boxes, labels). Default "not required for packaging"; ingredients always follow the
+   * material's own rule.
+   */
+  "inventory.receiving.packaging_expiry_required": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: false as boolean,
+    assumption: "A-RCV-EXP-01",
+    group: "Inventory",
+    label: "Packaging needs an expiry date when received",
+    description: "Off (recommended): wrappers, bottles, caps, boxes and labels are received without an expiry date. On: an expiry date is required like for ingredients. QA decides.",
+    requiresApproval: true,
+  },
   /** ADR-080 §6 (G3): where Finish puts the finished batch: a quarantine-class location code of the site; empty = the first active one in the section "Waiting for QA / on hold". */
   "production.output.default_hold_location": {
     scopes: ["site"],
@@ -369,19 +398,19 @@ export const SETTINGS = {
   "approvals.sod.production_plan": sodSetting("Separation of duties: production plans"),
   "approvals.sod.customer_return": sodSetting("Separation of duties: customer returns"),
   /**
-   * Owner decision 2026-10-25 (ADR-078): a checker or approver signing on the operator's device picks
-   * their name; their password is asked only when this is on. The record still names the signer and the
-   * session it was entered from (audit `identity.co_signature.by_name`), but it no longer proves the
-   * signer was present — flagged for qualified review (GMP second-person checks).
+   * ADR-130 (supersedes ADR-078 §1 and the old `production.sign_off.require_password`): a second-person check
+   * or an approval is never signed by picking a name. The checker signs on their own phone (their list "Waiting
+   * for you to check"), or — while this is on — on the operator's device by typing their OWN password
+   * (ADR-030). Off: own phone only. Stored values of the retired key are ignored (listed as orphans).
    */
-  "production.sign_off.require_password": {
+  "production.sign_off.same_device": {
     scopes: ["organization"],
     schema: z.boolean(),
-    default: false as boolean,
+    default: true as boolean,
     assumption: "A-SIGN-01",
     group: "Production",
-    label: "Checker types their password to sign",
-    description: "Off: the checker or approver just picks their name on the tablet (fast). On: they also type their own password, which proves they were there.",
+    label: "Checker may sign on the operator's phone with their own password",
+    description: "On: a checker who is standing next to the operator may type their own password on the operator's phone. Off: every check is done on the checker's own phone. A name alone is never enough.",
     restricted: true,
   },
   /**

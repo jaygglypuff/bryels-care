@@ -84,7 +84,7 @@ describe("weighing check", () => {
     const first = await sent();
     expect(first.map((n) => n.recipientUserId)).toContain(checker.userId);
     expect(first.map((n) => n.recipientUserId)).not.toContain(operator.userId);
-    expect(first[0].link).toContain(`/weigh?batch=${batchId}`);
+    expect(first[0].link).toBe("/production/checks"); // ADR-130: the message opens the checker's list
 
     // A second weighing of the same step does not tell the same people again.
     await recordDispense(operator, { batchId, batchMaterialId: lines[1].id, lotRef: palm.id, qty: "503", equipmentRef: "SC-01" });

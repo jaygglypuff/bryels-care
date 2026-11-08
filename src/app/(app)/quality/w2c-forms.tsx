@@ -165,9 +165,9 @@ export function CancelInspectionForm({ inspectionId }: { inspectionId: string })
   );
 }
 
-export function DeviationForm({ batchId, lotId, inspectionId, testResultId, steps }: { batchId?: string; lotId?: string; inspectionId?: string; testResultId?: string; steps: { stepNo: number; name: string }[] }) {
+export function DeviationForm({ batchId, lotId, inspectionId, testResultId, steps, back }: { batchId?: string; lotId?: string; inspectionId?: string; testResultId?: string; steps: { stepNo: number; name: string }[]; back?: string }) {
   return (
-    <ActionForm action={openDeviationAction} hidden={{ batchId, lotId, inspectionId, testResultId }} submit="Send problem report" pending="Sending…" variant="cta">
+    <ActionForm action={openDeviationAction} hidden={{ batchId, lotId, inspectionId, testResultId, back }} submit="Send to QA" pending="Sending…" variant="cta">
       {(fe) => (
         <>
           {steps.length > 0 && (

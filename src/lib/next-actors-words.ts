@@ -151,5 +151,6 @@ const capital = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
  */
 export function checkerAfterSave(n: NextActors): string {
   const names = waitingForNames(n);
-  return names ? `After you save, ${names} checks it.` : `After you save, ${n.roleWords} checks it. Nobody else here can check it yet.`;
+  // Round 5 B12: "Jun, Dino or 2 others check it" (the verb agrees with "others").
+  return names ? `After you save, ${names} ${/\d+ others$/.test(names) ? "check" : "checks"} it.` : `After you save, ${n.roleWords} checks it. Nobody else here can check it yet.`;
 }

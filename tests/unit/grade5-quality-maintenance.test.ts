@@ -22,8 +22,8 @@ const all = [...files(join(ROOT, "quality")), ...files(join(ROOT, "maintenance")
 const pages = all.filter((p) => p.endsWith("page.tsx"));
 
 describe("grade-5 quality and maintenance screens", () => {
-  it("covers the 38 screens listed in PAGE_REVIEW.md", () => {
-    expect(pages.length).toBe(38);
+  it("covers the 39 screens listed in PAGE_REVIEW.md", () => {
+    expect(pages.length).toBe(39);
   });
 
   it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro)", (rel) => {

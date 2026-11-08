@@ -135,7 +135,9 @@ describe("process parameters, CX-TOL, holds and checkers (US-3-11)", () => {
     expect(r.isWithinLimits).toBe(false);
     expect(r.limits).toBe("70–80 °C");
     const e = await expectCode(completeStep(operator, { batchId, stepNo: 3 }, { checker }), "state");
-    expect(e.message).toMatch(/outside 70–80 °C/);
+    // Round 5 B3: one plain sentence, no "CX-TOL", no trailing zeros.
+    expect(e.message).toMatch(/85 °C is above the 80 °C limit\. Check again\. If it is right, say why\./);
+    expect(e.message).not.toMatch(/CX-TOL|85\.0/);
     expect((e.details?.blockers as { exceptionable: boolean }[])[0].exceptionable).toBe(true);
     await expectCode(recordReading(operator, { batchId, stepNo: 3, parameterId: temp.id, value: "abc", correctionReason: "typo fix" }), "validation");
   });
@@ -312,19 +314,20 @@ describe("yield, scrap and transfer controls (US-3-13)", () => {
 });
 
 describe("co-signature on the operator's device", () => {
-  it("ADR-078 default: the checker just picks their name (no password); recorded with the operator's session", async () => {
+  it("ADR-130 (supersedes ADR-078 §1): picking a name alone is refused; nothing is recorded as signed", async () => {
     const [u] = await db.select().from(users).where(eq(users.email, "checker.nfd@bryels-care.test"));
     const base = { role: "checker" as const, permission: "production.line_clearance.approve" as const, siteId: kit.nfd.id };
     await expectCode(coSign(operator, { ...base, userId: operator.userId, password: "" }), "separation_of_duties");
-    const signer = await coSign(operator, { ...base, userId: u.id, password: "" });
-    expect(signer.userId).toBe(u.id);
+    await expectCode(coSign(operator, { ...base, userId: u.id, password: "" }), "validation");
     const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, u.id), eq(auditEvents.action, "identity.co_signature.by_name")));
-    expect(ev.length).toBeGreaterThanOrEqual(1);
-    expect(ev[0].actorId).toBe(operator.userId);
+    expect(ev).toHaveLength(0);
+    // A stored value of the retired setting changes nothing.
+    await db.insert(settings).values({ organizationId: kit.orgId, scope: "organization", key: "production.sign_off.require_password", value: false }).onConflictDoNothing();
+    await expectCode(coSign(operator, { ...base, userId: u.id, password: "" }), "validation");
+    await db.delete(settings).where(and(eq(settings.organizationId, kit.orgId), eq(settings.key, "production.sign_off.require_password")));
   });
 
-  it("with the password setting on: refuses the operator signing for themself, a wrong password (audited) and a signer without the permission", async () => {
-    await db.insert(settings).values({ organizationId: kit.orgId, scope: "organization", key: "production.sign_off.require_password", value: true }).onConflictDoUpdate({ target: [settings.organizationId, settings.scope, settings.siteId, settings.userId, settings.key], set: { value: true } });
+  it("with their own password: refuses the operator signing for themself, a wrong password (audited) and a signer without the permission", async () => {
     const [u] = await db.select().from(users).where(eq(users.email, "checker.nfd@bryels-care.test"));
     const [wh] = await db.select().from(users).where(eq(users.email, "warehouse.nfd@bryels-care.test"));
     const base = { role: "checker" as const, permission: "production.line_clearance.approve" as const, siteId: kit.nfd.id };

@@ -149,6 +149,7 @@ export async function cancelInspectionAction(_p: ActionState, fd: FormData): Pro
 
 export async function openDeviationAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   let id: string;
+  let isQa = false;
   try {
     const ctx = await requireContext();
     const r = await openDeviation(ctx, {
@@ -161,11 +162,15 @@ export async function openDeviationAction(_p: ActionState, fd: FormData): Promis
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
     id = r.deviationId;
+    isQa = ctx.roleCodes.includes("qa_qc");
   } catch (e) {
     return toActionState(e);
   }
   revalidatePath("/quality/deviations");
   revalidatePath("/quality");
+  // Round 5 (B-owner-manager B4): the reporter sees "Sent to QA" and goes back; QA opens the investigation form.
+  const back = opt(fd, "back");
+  if (!isQa) redirect(`/quality/deviations/${id}/sent${back && back.startsWith("/") && !back.startsWith("//") ? `?back=${encodeURIComponent(back)}` : ""}`);
   redirect(`/quality/deviations/${id}?opened=1`);
 }
 

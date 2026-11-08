@@ -1,8 +1,8 @@
 ---
 key: production.line_clearance
 title: Line clearance (the Start check)
-version: 2
-updated_at: 2026-11-06
+version: 3
+updated_at: 2026-11-08
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -17,8 +17,8 @@ Before a batch starts, check that the area and the machines are clean and that n
 
 ## The second person checks
 
-1. Under **Checked by (they pick their name)** the checker picks their own name on your tablet. If your company asks for it, they type **Their password** themselves.
-2. Or leave **Checks later from their own tablet**. Their Home then shows **Check start check**. They tap **Yes, I checked it**, or **Something is wrong: send it back** with what to correct.
+1. After **Save** the check goes to the checker's own phone: their list **Waiting for you to check** shows it. They tap **Looks right**, or **Not right** and tap why.
+2. If your company allows it and the checker is standing next to you, they may sign now: under **Or the checker is here and signs now** they choose their name and type **their own password**. A name alone is never enough.
 3. Never type someone else's password. You can never check your own Start check.
 
 ## After the Start check

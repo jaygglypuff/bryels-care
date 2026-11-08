@@ -36,7 +36,7 @@ const Hidden = ({ v }: { v: Record<string, string | number> }) => (
   </>
 );
 
-/** Whether a co-signer must also type their password (setting production.sign_off.require_password, ADR-078). */
+/** Whether a co-signer must also type their password: always (ADR-130 retired the name-only signature of ADR-078). */
 const SignOffPassword = createContext(false);
 export function SignOffProvider({ requirePassword, children }: { requirePassword: boolean; children: ReactNode }) {
   return <SignOffPassword.Provider value={requirePassword}>{children}</SignOffPassword.Provider>;
