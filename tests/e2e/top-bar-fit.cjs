@@ -59,6 +59,7 @@ fs.mkdirSync(OUT, { recursive: true });
       for (const href of [home, ...dests.filter((d) => d !== home)]) {
         await page.goto(BASE + href, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+        await page.waitForSelector('nav[aria-label=Menu]', { state: 'attached', timeout: 60000 }).catch(() => {});
         const m = await page.evaluate(() => {
           const nav = document.querySelector('nav[aria-label=Menu]');
           const ul = nav.querySelector('ul');
