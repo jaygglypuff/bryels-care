@@ -12,6 +12,7 @@ CREATE TABLE "delivery_problem_decisions" (
 	CONSTRAINT "ck_delivery_problem_decisions_decision" CHECK ("delivery_problem_decisions"."decision" in ('send_more','money_back','close_rest'))
 );
 --> statement-breakpoint
+DROP INDEX "uq_supplier_bills_supplier_ref";--> statement-breakpoint
 ALTER TABLE "quotes" ADD COLUMN "given_to_customer_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "quotes" ADD COLUMN "given_via" text;--> statement-breakpoint
 ALTER TABLE "quotes" ADD COLUMN "given_by" uuid;--> statement-breakpoint
@@ -27,6 +28,7 @@ CREATE UNIQUE INDEX "uq_delivery_problem_decisions_line" ON "delivery_problem_de
 CREATE UNIQUE INDEX "uq_delivery_problem_decisions_idem" ON "delivery_problem_decisions" USING btree ("organization_id","idempotency_key") WHERE "delivery_problem_decisions"."idempotency_key" is not null;--> statement-breakpoint
 ALTER TABLE "quotes" ADD CONSTRAINT "quotes_given_by_users_id_fk" FOREIGN KEY ("given_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_given_by_users_id_fk" FOREIGN KEY ("given_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_supplier_bills_supplier_ref" ON "supplier_bills" USING btree ("supplier_id",lower("supplier_reference")) WHERE "supplier_bills"."status" not in ('cancelled', 'voided');--> statement-breakpoint
 ALTER TABLE "quotes" ADD CONSTRAINT "quotes_given_ck" CHECK (("quotes"."given_to_customer_at" is null) = ("quotes"."given_via" is null) and ("quotes"."given_via" is null or "quotes"."given_via" in ('email','print')));--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "ck_invoices_given" CHECK (("invoices"."given_to_customer_at" is null) = ("invoices"."given_via" is null) and ("invoices"."given_via" is null or "invoices"."given_via" in ('email','print')));--> statement-breakpoint
 -- ADR-131 (round 5 office fixes, bug B1 "Send to the supplier says Something went wrong although it was sent"): the

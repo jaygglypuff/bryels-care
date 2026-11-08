@@ -439,8 +439,8 @@ export const supplierBills = pgTable(
   (t) => [
     uniqueIndex("uq_supplier_bills_org_number").on(t.organizationId, t.billNumber),
     uniqueIndex("uq_supplier_bills_org_idem").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
-    // V-FIN-DUP: the supplier's own number once per supplier (cancelled bills excluded).
-    uniqueIndex("uq_supplier_bills_supplier_ref").on(t.supplierId, sql`lower(${t.supplierReference})`).where(sql`${t.status} <> 'cancelled'`),
+    // V-FIN-DUP: the supplier's own number once per supplier (cancelled and voided bills excluded; ADR-131 "Fix a mistake" re-enters a voided bill under the same number).
+    uniqueIndex("uq_supplier_bills_supplier_ref").on(t.supplierId, sql`lower(${t.supplierReference})`).where(sql`${t.status} not in ('cancelled', 'voided')`),
     index("ix_supplier_bills_site_status").on(t.siteId, t.status),
     check("ck_supplier_bills_status", sql`${t.status} in (${inList(SUPPLIER_BILL_STATUSES)})`),
     check("ck_supplier_bills_kind", sql`${t.billKind} in (${inList(SUPPLIER_BILL_KINDS)})`),

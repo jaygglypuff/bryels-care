@@ -1,5 +1,5 @@
 {
-  "id": "48068b7e-3fe2-425d-a556-52706a42f391",
+  "id": "1d1970f1-dec1-4985-851e-ce1f135e60e8",
   "prevId": "b00757de-8bd8-4912-ab83-c75cc2e92dc3",
   "version": "7",
   "dialect": "postgresql",
@@ -48740,7 +48740,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"supplier_bills\".\"status\" <> 'cancelled'",
+          "where": "\"supplier_bills\".\"status\" not in ('cancelled', 'voided')",
           "concurrently": false,
           "method": "btree",
           "with": {}

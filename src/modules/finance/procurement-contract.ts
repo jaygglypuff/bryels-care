@@ -28,6 +28,9 @@ export type PoLineForMatch = {
   qtyOrderedBase: string;
   /** PO price per BASE unit (bill quantities are base units, A-W4B-05); W4A reports line_amount / qty_base. */
   unitAmount: string;
+  /** ADR-131: the unit the order was placed in (kg, pcs…) and the price per that unit, so a bill is typed the way the paper reads. */
+  uomEntered?: string;
+  unitAmountEntered?: string;
   currency: string;
 };
 

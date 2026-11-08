@@ -8,6 +8,8 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
+import { toBaseQty } from "@/lib/units";
+import { type InTx, runInTx } from "@/lib/tx";
 import { requireReauthentication } from "@/modules/governance";
 import { claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { approvalProgress, assertPosterAllowed, canDecide, decisionsOf, evaluateAtSubmit, notifyNextStep, recordDecision, type Progress } from "./approvals";
@@ -84,6 +86,8 @@ export type BillLineInput = {
   qty: string;
   unitAmount: string;
   taxCode?: string | null;
+  /** ADR-131: the unit qty and price are typed in (the order's unit, e.g. kg); converted to the base unit on save. */
+  uom?: string | null;
 };
 
 export type CreateBillInput = {
@@ -112,8 +116,8 @@ async function buildLines(tx: Tx, ctx: AuthContext, input: CreateBillInput, gr: 
     const field = `lines.${i}`;
     const kind = l.chargeKind ?? "goods";
     if (!(CHARGE_KINDS as readonly string[]).includes(kind)) throw new DomainError("validation", "Choose the line kind.", { field: `${field}.chargeKind` });
-    const qty = parseAmount(l.qty, `${field}.qty`);
-    const unit = parseAmount(l.unitAmount, `${field}.unitAmount`, { allowZero: true });
+    let qty = parseAmount(l.qty, `${field}.qty`);
+    let unit = parseAmount(l.unitAmount, `${field}.unitAmount`, { allowZero: true });
     let materialId = l.materialId && isUuid(l.materialId) ? l.materialId : null;
     let description = (l.description ?? "").trim();
     let uom: string | null = null;
@@ -123,6 +127,15 @@ async function buildLines(tx: Tx, ctx: AuthContext, input: CreateBillInput, gr: 
       materialId = g.l.materialId;
       description ||= `${g.code} · ${g.name}`;
       uom = g.uom;
+      // ADR-131 (C-office problem 7): typed per the order's unit (25 kg at ₱185 per kg); stored in the base unit as before
+      // (A-W4B-05). The price per base unit keeps every decimal so the line amount is exactly 25 × 185.
+      const entered = (l.uom ?? "").trim();
+      if (entered && entered !== g.uom) {
+        const per = toBaseQty("1", entered, g.uom);
+        if (!per.ok || per.qtyBase.lte(0)) throw new DomainError("validation", `${g.name}: ${entered} does not fit this item (it is counted in ${g.uom}).`, { field: `${field}.qty` });
+        qty = qty.times(per.qtyBase);
+        unit = unit.div(per.qtyBase);
+      }
     }
     if (l.purchaseOrderLineId && !isUuid(l.purchaseOrderLineId)) throw new DomainError("validation", "Choose a valid purchase order line.", { field: `${field}.purchaseOrderLineId` });
     if (!description) throw new DomainError("validation", "Describe the line.", { field: `${field}.description` });
@@ -139,14 +152,14 @@ async function buildLines(tx: Tx, ctx: AuthContext, input: CreateBillInput, gr: 
 }
 
 /** P-01: enter the supplier's bill (against a posted receipt, or a non-stock category without one). */
-export async function createSupplierBill(ctx: AuthContext, input: CreateBillInput) {
+export async function createSupplierBill(ctx: AuthContext, input: CreateBillInput, opts?: InTx) {
   ctx.require("finance.supplier_bill.create");
   if (!isUuid(input.supplierId)) throw new DomainError("validation", "Choose the supplier.", { field: "supplierId" });
   const ref = (input.supplierReference ?? "").trim();
   if (ref.length < 1 || ref.length > 60) throw new DomainError("validation", "Enter the supplier's bill number (max 60).", { field: "supplierReference" });
   if (!DATE_RE.test(input.billDate)) throw new DomainError("validation", "Choose the bill date.", { field: "billDate" });
   const kind = input.billKind ?? "bill";
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     if (input.idempotencyKey) {
       const replay = await claimIdempotencyKey<{ billId: string; billNumber: string }>(tx, ctx.organizationId, input.idempotencyKey, "finance.supplier_bill.create", { ...input, idempotencyKey: undefined });
       if (replay) return replay.replay;
@@ -256,7 +269,7 @@ export async function editSupplierBill(ctx: AuthContext, id: string, input: { su
     if (input.supplierReference !== undefined) {
       const r = input.supplierReference.trim();
       if (!r || r.length > 60) throw new DomainError("validation", "Enter the supplier's bill number (max 60).", { field: "supplierReference" });
-      const [dup] = await tx.select({ id: supplierBills.id }).from(supplierBills).where(and(eq(supplierBills.supplierId, b.supplierId), sql`lower(${supplierBills.supplierReference}) = lower(${r})`, ne(supplierBills.id, b.id), ne(supplierBills.status, "cancelled"))).limit(1);
+      const [dup] = await tx.select({ id: supplierBills.id }).from(supplierBills).where(and(eq(supplierBills.supplierId, b.supplierId), sql`lower(${supplierBills.supplierReference}) = lower(${r})`, ne(supplierBills.id, b.id), notInArray(supplierBills.status, ["cancelled", "voided"]))).limit(1);
       if (dup) throw new DomainError("conflict", "DUPLICATE_DOCUMENT: this supplier bill number is already entered.", { code: "DUPLICATE_DOCUMENT", field: "supplierReference" });
       set.supplierReference = r;
     }
@@ -268,6 +281,108 @@ export async function editSupplierBill(ctx: AuthContext, id: string, input: { su
     const [after] = await tx.update(supplierBills).set(set).where(eq(supplierBills.id, b.id)).returning();
     await audit(tx, ctx, { action: "finance.supplier_bill.edited", entityType: "supplier_bill", entityId: b.id, entityNumber: b.billNumber, siteId: b.siteId, before: { supplierReference: b.supplierReference, billDate: b.billDate, notes: b.notes }, after: { supplierReference: after.supplierReference, billDate: after.billDate, notes: after.notes } });
     return { ok: true };
+  });
+}
+
+/**
+ * ADR-131 (C-office problem 7, bug B12) "Change the bill": the lines of a draft or a "does not match" bill are replaced
+ * (a typo is fixed instead of cancelled). A bill that did not match goes back to draft, so it is checked again when it
+ * is sent. Same rules as entering it (delivery lines, tax, units); audited with before/after totals and the reason.
+ */
+export async function changeSupplierBillLines(ctx: AuthContext, id: string, input: { lines: BillLineInput[]; reason: string; idempotencyKey?: string | null }) {
+  ctx.require("finance.supplier_bill.edit");
+  const reason = requireReason(input.reason);
+  return db.transaction(async (tx) => {
+    if (input.idempotencyKey) {
+      const replay = await claimIdempotencyKey<{ billId: string; total: string }>(tx, ctx.organizationId, input.idempotencyKey, "finance.supplier_bill.change_lines", { id, lines: input.lines });
+      if (replay) return replay.replay;
+    }
+    const b = await lockBill(tx, ctx, id);
+    ctx.requireAt("finance.supplier_bill.edit", b.siteId);
+    if (!["draft", "disputed"].includes(b.status)) throw new DomainError("state", `${label(b)} is ${BILL_STATUS_LABEL[b.status].toLowerCase()}. A bill in the books is fixed with “Fix a mistake”.`);
+    const [gr] = b.goodsReceiptId ? await tx.select().from(goodsReceipts).where(eq(goodsReceipts.id, b.goodsReceiptId)).limit(1) : [];
+    const { lines, calc } = await buildLines(tx, ctx, { supplierId: b.supplierId, supplierReference: b.supplierReference, billDate: b.billDate, lines: input.lines }, gr ?? null);
+    const before = await tx.select().from(supplierBillLines).where(eq(supplierBillLines.supplierBillId, b.id));
+    await tx.delete(supplierBillLines).where(eq(supplierBillLines.supplierBillId, b.id));
+    await tx.insert(supplierBillLines).values(
+      lines.map((l, i) => ({
+        supplierBillId: b.id,
+        lineNo: i + 1,
+        chargeKind: l.kind,
+        materialId: l.materialId,
+        goodsReceiptLineId: l.goodsReceiptLineId,
+        purchaseOrderLineId: l.purchaseOrderLineId,
+        description: l.description,
+        qty: l.qty.toString(),
+        uom: l.uom,
+        unitAmount: m4(l.unit),
+        taxCode: l.tax?.code ?? null,
+        taxConfigurationId: l.tax?.id ?? null,
+        taxRatePct: l.tax?.ratePct ?? "0",
+        lineAmount: calc.lines[i].lineAmount,
+        taxAmount: calc.lines[i].taxAmount,
+        currency: b.currency,
+      })),
+    );
+    const now = new Date();
+    await tx.update(supplierBills).set({ subtotalAmount: calc.subtotal, taxAmount: calc.tax, totalAmount: calc.total, matchSummary: null, status: "draft", updatedAt: now }).where(eq(supplierBills.id, b.id));
+    if (b.status === "disputed") await logTransition(tx, ctx, doc(b), "disputed", "draft", `Bill changed: ${reason}`);
+    await audit(tx, ctx, {
+      action: "finance.supplier_bill.lines_changed",
+      entityType: "supplier_bill",
+      entityId: b.id,
+      entityNumber: b.billNumber,
+      siteId: b.siteId,
+      reason,
+      before: { status: b.status, total: b.totalAmount, lines: before.map((l) => ({ lineNo: l.lineNo, qty: l.qty, unitAmount: l.unitAmount, lineAmount: l.lineAmount })) },
+      after: { status: "draft", total: calc.total, lines: lines.map((l, i) => ({ lineNo: i + 1, qty: l.qty.toString(), unitAmount: m4(l.unit), lineAmount: calc.lines[i].lineAmount })) },
+    });
+    const result = { billId: b.id, total: calc.total };
+    if (input.idempotencyKey) await storeIdempotentResult(tx, ctx.organizationId, input.idempotencyKey, { id, lines: input.lines }, result);
+    return result;
+  });
+}
+
+/**
+ * ADR-131 (C-office problem 7) "Fix a mistake" on a bill already in the books: in ONE transaction the bill is undone
+ * (reversal, kept on record, nothing paid) and a new draft copy is made with the same supplier number, delivery and
+ * lines, to be changed and saved to the books again. Needs void and create at the bill's site, with the password.
+ */
+export async function fixPostedSupplierBill(ctx: AuthContext, id: string, input: { reason: string; password?: string | null; idempotencyKey?: string | null }) {
+  ctx.require("finance.supplier_bill.void");
+  ctx.require("finance.supplier_bill.create");
+  const reason = requireReason(input.reason);
+  await requireReauthentication(ctx, input.password, "finance.supplier_bill.void");
+  return db.transaction(async (tx) => {
+    if (input.idempotencyKey) {
+      const replay = await claimIdempotencyKey<{ billId: string; billNumber: string; replacedBillNumber: string }>(tx, ctx.organizationId, input.idempotencyKey, "finance.supplier_bill.fix", { id });
+      if (replay) return replay.replay;
+    }
+    const b = await lockBill(tx, ctx, id);
+    ctx.requireAt("finance.supplier_bill.void", b.siteId);
+    ctx.requireAt("finance.supplier_bill.create", b.siteId);
+    const lines = await tx.select().from(supplierBillLines).where(eq(supplierBillLines.supplierBillId, b.id)).orderBy(asc(supplierBillLines.lineNo));
+    // The password was checked above; the undo itself runs with the same rules (posted, nothing paid, not a credit).
+    await voidSupplierBillLocked(tx, ctx, b, `Fix a mistake: ${reason}`);
+    const created = await createSupplierBill(
+      ctx,
+      {
+        supplierId: b.supplierId,
+        supplierReference: b.supplierReference,
+        billDate: b.billDate,
+        goodsReceiptId: b.goodsReceiptId,
+        purchaseOrderId: b.purchaseOrderId,
+        categoryCode: b.categoryCode,
+        billKind: b.billKind as "bill" | "charge",
+        notes: b.notes,
+        lines: lines.map((l) => ({ chargeKind: l.chargeKind as BillLineInput["chargeKind"], goodsReceiptLineId: l.goodsReceiptLineId, purchaseOrderLineId: l.purchaseOrderLineId, materialId: l.materialId, description: l.description, qty: D(l.qty).toString(), unitAmount: D(l.unitAmount).toString(), taxCode: l.taxCode })),
+      },
+      { tx },
+    );
+    await audit(tx, ctx, { action: "finance.supplier_bill.fixed", entityType: "supplier_bill", entityId: b.id, entityNumber: b.billNumber, siteId: b.siteId, reason, after: { replacedBy: created.billId, replacementNumber: created.billNumber } });
+    const result = { billId: created.billId, billNumber: created.billNumber, replacedBillNumber: b.billNumber };
+    if (input.idempotencyKey) await storeIdempotentResult(tx, ctx.organizationId, input.idempotencyKey, { id }, result);
+    return result;
   });
 }
 
@@ -495,22 +610,27 @@ export async function postSupplierBill(ctx: AuthContext, id: string, input: { pa
 }
 
 /** Reversal of a posted bill with nothing paid (restricted). A replacement is a new bill. */
-export async function voidSupplierBill(ctx: AuthContext, id: string, input: { reason: string; password?: string | null }) {
+export async function voidSupplierBill(ctx: AuthContext, id: string, input: { reason: string; password?: string | null }, opts?: InTx) {
   ctx.require("finance.supplier_bill.void");
   const reason = requireReason(input.reason);
   await requireReauthentication(ctx, input.password, "finance.supplier_bill.void");
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const b = await lockBill(tx, ctx, id);
     ctx.requireAt("finance.supplier_bill.void", b.siteId);
-    if (b.billKind === "credit") throw new DomainError("conflict", "A supplier credit already in the books can't be undone here; enter a new bill for the difference.");
-    if (b.status !== "posted" || D(b.paidAmount).gt(0)) throw new DomainError("state", "Only a bill in the books with nothing paid or credited can be undone; cancel its payments first.");
-    await reverseDocumentPosting(tx, ctx, "supplier_bill", b.id, reason);
-    const now = new Date();
-    await tx.update(supplierBills).set({ status: "voided", voidedBy: ctx.userId, voidedAt: now, voidReason: reason, updatedAt: now }).where(eq(supplierBills.id, b.id));
-    await logTransition(tx, ctx, doc(b), "posted", "voided", reason);
-    await audit(tx, ctx, { action: "finance.supplier_bill.reversed", entityType: "supplier_bill", entityId: b.id, entityNumber: b.billNumber, siteId: b.siteId, reason, before: { status: b.status }, after: { status: "voided" } });
+    await voidSupplierBillLocked(tx, ctx, b, reason);
     return { status: "voided" };
   });
+}
+
+/** The undo of a locked bill in the books (reversal posting, kept on record); the caller checked permission and site. */
+async function voidSupplierBillLocked(tx: Tx, ctx: AuthContext, b: SupplierBillRow, reason: string) {
+  if (b.billKind === "credit") throw new DomainError("conflict", "A supplier credit already in the books can't be undone here; enter a new bill for the difference.");
+  if (b.status !== "posted" || D(b.paidAmount).gt(0)) throw new DomainError("state", "Only a bill in the books with nothing paid or credited can be undone; cancel its payments first.");
+  await reverseDocumentPosting(tx, ctx, "supplier_bill", b.id, reason);
+  const now = new Date();
+  await tx.update(supplierBills).set({ status: "voided", voidedBy: ctx.userId, voidedAt: now, voidReason: reason, updatedAt: now }).where(eq(supplierBills.id, b.id));
+  await logTransition(tx, ctx, doc(b), "posted", "voided", reason);
+  await audit(tx, ctx, { action: "finance.supplier_bill.reversed", entityType: "supplier_bill", entityId: b.id, entityNumber: b.billNumber, siteId: b.siteId, reason, before: { status: b.status }, after: { status: "voided" } });
 }
 
 /* ------------------------------------------------------------------ queries */
@@ -616,6 +736,12 @@ export async function billableReceipts(ctx: AuthContext, q: DbOrTx = db) {
     .innerJoin(supplierBills, eq(supplierBills.id, supplierBillLines.supplierBillId))
     .where(and(inArray(supplierBillLines.goodsReceiptLineId, lines.map((l) => l.l.id)), notInArray(supplierBills.status, ["cancelled", "voided"]), eq(supplierBills.billKind, "bill")))
     .groupBy(supplierBillLines.goodsReceiptLineId);
+  // ADR-131 (C-office problem 7): each delivery line carries its order's unit and price, so the bill is typed per kg or
+  // per piece (as on the supplier's paper), prefilled from the purchase order, never "price per g".
+  const source = purchaseOrderMatchSource();
+  const poOf = source?.poLineOfReceiptLine ? await source.poLineOfReceiptLine(q, lines.map((l) => l.l.id)) : new Map<string, string>();
+  const poLines = source && poOf.size ? await source.linesById(q, ctx.organizationId, [...new Set(poOf.values())]) : [];
+  const poFor = (grLineId: string) => poLines.find((p) => p.purchaseOrderLineId === poOf.get(grLineId)) ?? null;
   return grs
     .map((g) => ({
       id: g.g.id,
@@ -623,9 +749,13 @@ export async function billableReceipts(ctx: AuthContext, q: DbOrTx = db) {
       supplierId: g.g.supplierId!,
       supplierName: g.supplierName ?? g.g.supplierName,
       receivedAt: g.g.receivedAt,
+      poNumber: lines.filter((l) => l.l.goodsReceiptId === g.g.id).map((l) => poFor(l.l.id)?.poNumber).find(Boolean) ?? null,
       lines: lines
         .filter((l) => l.l.goodsReceiptId === g.g.id)
-        .map((l) => ({ id: l.l.id, lineNo: l.l.lineNo, material: `${l.code} · ${l.name}`, uom: l.uom, qtyReceived: l.l.qtyBase, qtyUnbilled: m4(D(l.l.qtyBase).minus(billed.find((b) => b.id === l.l.id)?.qty ?? 0)) })),
+        .map((l) => {
+          const po = poFor(l.l.id);
+          return { id: l.l.id, lineNo: l.l.lineNo, material: `${l.code} · ${l.name}`, uom: l.uom, qtyReceived: l.l.qtyBase, qtyUnbilled: m4(D(l.l.qtyBase).minus(billed.find((b) => b.id === l.l.id)?.qty ?? 0)), poUom: po?.uomEntered ?? null, poUnitAmount: po?.unitAmountEntered ?? null, poNumber: po?.poNumber ?? null };
+        }),
     }))
     .filter((g) => g.lines.some((l) => D(l.qtyUnbilled).gt(0)));
 }
