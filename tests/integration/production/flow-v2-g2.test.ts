@@ -19,6 +19,7 @@ import { db } from "@/db/client";
 import { auditEvents, batchMaterialPicks, batchMaterials, batches, inventoryLots, notifications, processStepRecords, settings, stockMovements, stockReservations } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { getSetting } from "@/lib/settings";
+import { coSign } from "@/lib/auth/co-sign";
 import {
   type FormulaSnapshot,
   approveProductionOrder,
@@ -346,8 +347,10 @@ describe("Start check and Weigh cards (V2-4)", () => {
     await expectCode(checkDispense(w.operator, { dispenseRecordId: waiting.id }), "separation_of_duties");
     await expectCode(checkDispense(w.sales, { dispenseRecordId: waiting.id }), "forbidden");
     const k = key();
-    await checkDispense(checker, { dispenseRecordId: waiting.id, signedOn: "operator_device", idempotencyKey: k });
-    await checkDispense(checker, { dispenseRecordId: waiting.id, signedOn: "operator_device", idempotencyKey: k });
+    // ADR-130: "signed on the operator's phone" comes from a password co-signature, never from the form.
+    const cosigned = await coSign(w.operator, { role: "checker", permission: "production.dispense_record.approve", siteId: w.nfd.id, userId: checker.userId, password: "demo1234" });
+    await checkDispense(cosigned, { dispenseRecordId: waiting.id, idempotencyKey: k });
+    await checkDispense(cosigned, { dispenseRecordId: waiting.id, idempotencyKey: k });
     const [au] = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, waiting.id), eq(auditEvents.action, "production.dispense_record.checked")));
     expect((au.after as { signedOn: string }).signedOn).toBe("operator_device");
     expect((await getWeighView(w.operator, batchId)).uncheckedCount).toBe(0);
@@ -403,7 +406,7 @@ describe("second-person check mode all | marked | none (frozen per line)", () =>
     const marked = await recordDispense(w.operator, { batchId: id, batchMaterialId: ls[0].id, lotRef: coconut.id, lotPreselected: true, lotConfirm: coconut.lotNumber.slice(-4), qty: "1000" });
     const e = await expectCode(completeStep(w.operator, { batchId: id, stepNo: 2 }), "state");
     expect(e.message).toMatch(/1 weighing still needs the checker/);
-    await checkDispense(checker, { dispenseRecordId: marked.dispenseRecordId, signedOn: "operator_device" });
+    await checkDispense(checker, { dispenseRecordId: marked.dispenseRecordId });
     const r = await completeStep(w.operator, { batchId: id, stepNo: 2, idempotencyKey: key() });
     expect(r.status).toBe("completed");
   });

@@ -11,6 +11,8 @@ import type { PrintLabelsState } from "@/ui/labels/actions";
 import { floorCheckNext } from "@/modules/production";
 import { approveStepException, batchSiteId, requestMaterialSubstitution, stopForToday, useApprovedAlternative, withdrawMaterialSubstitution, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
+import { correctionReasonText } from "@/modules/production/floor-words";
+import { plainWords } from "@/modules/production/plain-words";
 import { recordServiceRecord } from "@/modules/masterdata";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
@@ -99,7 +101,8 @@ export async function weighAction(_: FlowActionState, fd: FormData): Promise<Flo
       lotConfirmVia: parseVia(opt(fd, "lotConfirmVia")),
       locationRef: opt(fd, "locationId"),
       qty: opt(fd, "qty"),
-      uom: "g",
+      // Round 5 problem 4: typed in the unit the scale shows (kg or g); the service stores grams.
+      uom: z.enum(["g", "kg", "mg", "mL", "L", "pcs"]).catch("g").parse(str(fd, "uom") ?? "g"),
       equipmentRef: opt(fd, "equipmentRef"),
       // ADR-106 §3: weighing from a lot that was not taken at Get materials (one-tap reason; QA sees a note).
       offPlanReasonCode: opt(fd, "offPlanReasonCode"),
@@ -121,7 +124,7 @@ export async function checkWeighingAction(_: ActionState, fd: FormData): Promise
     const batchId = uuid.parse(str(fd, "batchId"));
     const checker = await signer(ctx, fd, "checker", "production.dispense_record.approve", batchId);
     if (!checker) throw new DomainError("validation", "Pick the name of the person who watched you weigh.", { field: "checkerId" });
-    const r = await checkDispense(checker, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), signedOn: "operator_device", idempotencyKey: opt(fd, "idempotencyKey") });
+    const r = await checkDispense(checker, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), idempotencyKey: opt(fd, "idempotencyKey") });
     refreshCurrentPage();
     return { ok: true, message: `${r.materialName}: checked by ${checker.displayName}.` };
   } catch (e) {
@@ -145,9 +148,9 @@ export async function checklistCardAction(_: ActionState, fd: FormData): Promise
     const checker = await signer(ctx, fd, "checker", "production.line_clearance.approve", batchId);
     const r = await submitChecklist(ctx, { batchId, stepNo, answers, idempotencyKey: opt(fd, "idempotencyKey") }, { checker });
     refreshCurrentPage();
-    if (r.blocked) return { ok: false, message: `Saved. This step is not done yet: ${r.blockers.join(" ")}` };
-    if (r.status === "completed") return { ok: true, message: `${answers.length} checks recorded as OK. ${r.name} done.` };
-    return { ok: true, message: `${answers.length} checks saved.`, next: await nextCheck(ctx, "start_check", batchId) };
+    if (r.blocked) return { ok: false, tone: "warn", message: `Your answers are kept. This step is not done yet: ${r.blockers.join(" ")}` };
+    if (r.status === "completed") return { ok: true, message: `Saved. ${plainWords(r.name)} is done.` };
+    return { ok: true, message: "Saved. It waits for the second check on the checker's phone.", next: await nextCheck(ctx, "start_check", batchId) };
   } catch (e) {
     return toActionState(e);
   }
@@ -160,13 +163,15 @@ export async function stepDoneAction(_: ActionState, fd: FormData): Promise<Acti
     const batchId = uuid.parse(str(fd, "batchId"));
     const stepNo = stepNoOf(fd);
     const ids = (str(fd, "parameterIds") ?? "").split(",").filter(Boolean);
-    const readings = ids.map((parameterId) => ({ parameterId, value: str(fd, `param-${parameterId}`) ?? "", correctionReason: opt(fd, `correction-${parameterId}`) }));
+    // Round 5 B3: the reason for changing a saved value is tapped ("I typed it wrong", "I measured again", "Other") plus optional words.
+    const readings = ids.map((parameterId) => ({ parameterId, value: str(fd, `param-${parameterId}`) ?? "", correctionReason: correctionReasonText(opt(fd, `correctionCode-${parameterId}`), opt(fd, `correction-${parameterId}`)) }));
     const checker = await signer(ctx, fd, "checker", "production.process_step_record.approve", batchId);
     const r = await stepDone(ctx, { batchId, stepNo, readings, notes: opt(fd, "notes"), idempotencyKey: opt(fd, "idempotencyKey") }, { checker });
     refreshCurrentPage();
-    if (r.blocked) return { ok: false, message: `Saved. ${r.blockers.map((b) => b.message).join(" ")}` };
-    if (r.status === "completed") return { ok: true, message: `${r.name}: step done.` };
-    return { ok: true, message: `${r.name}: saved.`, next: await nextCheck(ctx, "step_check", batchId) };
+    // Round 5 B3/B4: never "Saved." in red. An out-of-range value is kept on record (GMP) and said plainly, in amber.
+    if (r.blocked) return { ok: false, tone: "warn", message: r.blockers.map((b) => b.message).join(" ") };
+    if (r.status === "completed") return { ok: true, message: `Saved. ${plainWords(r.name)} is done.` };
+    return { ok: true, message: "Saved. It waits for the second check on the checker's phone.", next: await nextCheck(ctx, "step_check", batchId) };
   } catch (e) {
     return toActionState(e);
   }
@@ -286,7 +291,7 @@ export async function equipmentCardAction(_: ActionState, fd: FormData): Promise
 export async function checkWeighingOwnAction(_: ActionState, fd: FormData): Promise<ActionState> {
   try {
     const ctx = await requireContext();
-    const r = await checkDispense(ctx, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), signedOn: "own_session", idempotencyKey: opt(fd, "idempotencyKey") });
+    const r = await checkDispense(ctx, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), idempotencyKey: opt(fd, "idempotencyKey") });
     refreshCurrentPage();
     return { ok: true, message: `${r.materialName}: checked by you (${ctx.displayName}).` };
   } catch (e) {
@@ -328,7 +333,13 @@ export type BoxLabelsState = (NonNullable<ActionState> & { href?: string; boxes?
 export async function planBatchBoxesAction(_: BoxLabelsState, fd: FormData): Promise<BoxLabelsState> {
   try {
     const ctx = await requireContext();
-    const r = await planBatchBoxes(ctx, { batchId: uuid.parse(str(fd, "batchId")), pieces: str(fd, "pieces") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    const batchId = uuid.parse(str(fd, "batchId"));
+    const r = await planBatchBoxes(ctx, { batchId, pieces: str(fd, "pieces") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    // Round 5 problem 3 (one print trip): a product labelled piece by piece gets its piece labels in the same job
+    // list, one per boxed piece (QA samples get none: A-LBL-SAMPLES-01). Same service and rules as the label panel.
+    if (str(fd, "withPieceLabels") === "1" && r.pieces <= 999) {
+      await printBatchLabels(ctx, { batchId, copies: String(r.pieces), idempotencyKey: `${opt(fd, "idempotencyKey") ?? batchId}-pieces` });
+    }
     refreshCurrentPage();
     return { ok: true, href: r.printHref, boxes: r.boxes, message: `${r.boxes} box ${r.boxes === 1 ? "label is" : "labels are"} ready for ${r.pieces} pieces.${r.replacedPlan ? " The old box labels are cancelled: destroy any you printed." : ""}` };
   } catch (e) {

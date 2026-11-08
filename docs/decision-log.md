@@ -2760,3 +2760,54 @@ Open:
 - a "Delivery problems" list;
 - address search;
 - the record header's second "?".
+
+## ADR-130 Round 5 floor: a name never signs, one checker list, plain floor screens (2026-11-08)
+
+Status: Accepted (round 5 floor audit A). Supersedes ADR-078 §1; refines ADR-030, ADR-080 §4/§6, ADR-100, ADR-104 §2 and
+ADR-106 §4.
+
+1. **A second-person check is signed by the checker's own session, or by their own password on the operator's device.**
+   - The password on the operator's device is allowed only while `production.sign_off.same_device` is on (default on,
+     restricted).
+   - Picking a name alone is refused in `coSign`. An exception approver always types their password.
+   - Every check audit records `signedOn` from the context (A-SIGN-03). `production.sign_off.require_password` is
+     retired.
+   - Audit finding fixed: the operator could tap the checker's name and "Yes, I checked".
+2. **One checker list.** Weighing, step and start checks wait on `/production/checks` (`checkerQueue`), one card per
+   thing.
+   - A batch's weighings share one card (`checkDispenses`, setting `production.weighing.check_together`, default on;
+     A-CHK-01, QA to confirm).
+   - "Not right" takes a reason the checker picks from a list. The checker returns to the list after each card.
+   - The weighing-step check stays as its own card until QA decides.
+3. **Weigh** asks in the scale's unit: kg for 1 kg or more (grams are still stored; A-WGH-UNIT-01).
+   - The lot is shown once, and each line confirms when saved.
+   - With no signal, the weighing is queued on the phone (A-OFF-WGH-01).
+4. **Steps** use plain sentences for missing and out-of-range values, never "Saved." on a refusal.
+   - An empty required value writes nothing.
+   - Correction reasons are picked from a list.
+   - The next button says "Done — go to <step>".
+5. **Finish is the last step** ("Move to the QA waiting area"). Each packing item gets one Yes / "No, count them"
+   question, and the server refuses an empty count.
+6. **Packing prints piece and box labels in one trip.** QA samples get no label (A-LBL-SAMPLES-01).
+7. **Receiving** may take packaging without an expiry date (`inventory.receiving.packaging_expiry_required`, default
+   off; A-RCV-EXP-01).
+8. **Get from shelf and send out:**
+   - the customer is the title, and each box is listed once;
+   - a tap needs a reason picked from a list;
+   - the draft delivery receipt comes before sending out;
+   - the last driver is prefilled.
+9. **Report a problem** is on the batch record, every step and the lot page. Reporters see "Sent to QA".
+10. **Placeholders** are never real record numbers.
+
+Consequences: no migration and no seed change.
+
+Tests:
+- `tests/integration/production/round5-floor.test.ts`
+- `tests/integration/inventory/round5-receiving-expiry.test.ts`
+- updated execution-controls, one-path, flow-v2-g2, batch-execution and next-actors tests
+- the demo rehearsal
+
+Open:
+- a Finish checker on the checker's own phone when same-device signing is off;
+- a display unit per scale;
+- an intermittent proof-of-delivery submit.

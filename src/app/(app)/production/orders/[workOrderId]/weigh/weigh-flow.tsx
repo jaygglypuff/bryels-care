@@ -1,26 +1,25 @@
 "use client";
 import Decimal from "decimal.js";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Circle, UserCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { fmtDate, fmtMass, fmtQty } from "@/lib/qty";
+import { AlertTriangle, CheckCircle2, Circle, CloudOff, UserCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { fmtDate, fmtQty } from "@/lib/qty";
 import type { WeighView } from "@/modules/production";
+import { plainNumber } from "@/modules/production/floor-words";
+import { syncAgent } from "@/lib/offline/agent";
 import { Button, cx, Input, Select } from "@/ui/core";
-import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
+import { FormMessage, SubmitButton, useInPlaceAction, type FormAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
 import { ScanOrPick, type PickVia } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
-import { NextApprover } from "@/ui/next-approver";
 import { useClientKey } from "@/ui/use-client-key";
 import { EquipmentWhy } from "../equipment-why";
-import { checkerAfterSave, type NextActors } from "@/lib/next-actors-words";
+import { checkerAfterSave, waitingForNames, type NextActors } from "@/lib/next-actors-words";
 import {
   askOtherMaterialAction,
   takeAlternativeAction,
   withdrawAskAction,
   checkWeighingAction,
-  checkWeighingOwnAction,
-  returnWeighingAction,
   stepDoneAction,
   weighAction,
   type FlowActionState,
@@ -29,16 +28,22 @@ import {
 type Card = WeighView["cards"][number];
 type Person = { id: string; displayName: string };
 
-const g = (v: Decimal.Value) => fmtQty(v, "g", 1);
+/** Base amount (grams for a gram material) → the unit the operator weighs in (round 5 problem 4). */
+const factorOf = (card: Card) => (card.baseUom === "g" && card.unit === "kg" ? 1000 : 1);
+const inUnit = (card: Card, base: Decimal.Value) => new Decimal(base || 0).div(factorOf(card));
+const show = (card: Card, base: Decimal.Value) => `${plainNumber(inUnit(card, base).toDecimalPlaces(3))} ${card.unit}`;
+const firstName = (name: string | null | undefined) => (name ?? "the operator").split(/\s+/)[0];
 
 /**
- * Weigh screen (S4). Portrait: ingredient chips, the current card, the keypad under it. Landscape
- * (≥ 1024 px): the ingredient list on the left, card and keypad on the right, no scrolling at
- * 1180 × 820. Save sits on the keypad (✓) and next to the field. A marked line asks for the second
- * check right after Save: pick a name, then the checker confirms on a screen addressed to them.
+ * Weigh screen (S4, round 5). Portrait: ingredient chips, the current card, the keypad under the field, Save under
+ * the keypad. The weight is typed in the unit the scale shows (kg for 1 kg or more, stored in grams). After Save the
+ * operator sees "✓ Saved" and goes on to the next ingredient; a weighing that needs a second check waits on the
+ * checker's own list (ADR-130) — a checker standing here may sign with their own password when the company allows it.
+ * With no signal, Save keeps what was typed and queues it on this phone when the phone may work offline (B6).
  */
 export function WeighFlow(p: {
   batchId: string;
+  siteId: string;
   stepNo: number | null;
   stepDone: boolean;
   canWeigh: boolean;
@@ -60,11 +65,14 @@ export function WeighFlow(p: {
   }[];
   requiresScale: boolean;
   checkers: Person[];
-  passwordRequired: boolean;
+  /** ADR-130 `production.sign_off.same_device`: a checker standing here may type their own password. */
+  sameDevice: boolean;
   totalWeighed: string;
   totalTarget: string;
   stepBlockers: string[];
   nextHref: string | null;
+  /** "Done — go to <next step>" (round 5 problem 10). */
+  nextLabel: string | null;
   /** "Other ways to weigh" for one ingredient (container weight, two lots, approval, undo): `${moreHref}&line=<id>`. */
   moreHref: string;
   /** The signed-in person: may they confirm a weighing in their own name (own phone)? */
@@ -75,97 +83,78 @@ export function WeighFlow(p: {
   /** Who can check a weighing of each weigher (docs/NEXT_APPROVER.md), by weigher's user id. */
   nextByOperator?: Record<string, NextActors | null>;
 }) {
-  const firstOpen = Math.max(
-    0,
-    p.cards.findIndex((c) => !c.done || c.waitingForCheck.length > 0),
-  );
+  // Lines saved on this phone while there was no signal (B6): shown as "waiting for signal", not weighed again.
+  const [queued, setQueued] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<string | null>(null);
+  const open = (c: Card) => !c.done && !queued[c.batchMaterialId];
+  const firstOpen = Math.max(0, p.cards.findIndex(open));
   const [idx, setIdx] = useState(firstOpen);
   useEffect(() => setIdx(firstOpen), [firstOpen]);
   const card = p.cards[idx];
-  const allDone = p.cards.every(
-    (c) => c.done && c.waitingForCheck.length === 0,
-  );
+  const allDone = p.cards.every((c) => !open(c));
+  const waiting = p.cards.flatMap((c) => c.waitingForCheck);
+  const nextOpen = p.cards.findIndex((c, i) => i !== idx && open(c));
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <nav
-        aria-label="Ingredients"
-        className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible"
-      >
+      <nav aria-label="Ingredients" className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
         {p.cards.map((c, i) => {
-          const waiting = c.waitingForCheck.length > 0;
+          const w = c.waitingForCheck.length > 0;
+          const q = !!queued[c.batchMaterialId];
           return (
             <button
               key={c.batchMaterialId}
               type="button"
               onClick={() => setIdx(i)}
               aria-current={i === idx}
-              className={cx(
-                "flex min-h-[56px] min-w-[150px] shrink-0 items-center gap-2 rounded-[14px] border px-3 text-left text-[15px] lg:min-w-0",
-                i === idx
-                  ? "border-ring bg-primary-soft"
-                  : "border-line bg-surface",
-              )}
+              className={cx("flex min-h-[56px] min-w-[150px] shrink-0 items-center gap-2 rounded-[14px] border px-3 text-left text-[15px] lg:min-w-0", i === idx ? "border-ring bg-primary-soft" : "border-line bg-surface")}
             >
-              {c.done && !waiting ? (
-                <CheckCircle2
-                  size={20}
-                  className="text-[var(--ok-fg)]"
-                  aria-label="Weighed"
-                />
-              ) : waiting ? (
-                <UserCheck
-                  size={20}
-                  className="text-[var(--warn-fg)]"
-                  aria-label="Second check needed"
-                />
+              {q ? (
+                <CloudOff size={20} className="text-[var(--warn-fg)]" aria-label="Saved on this phone" />
+              ) : c.done && !w ? (
+                <CheckCircle2 size={20} className="text-[var(--ok-fg)]" aria-label="Weighed" />
+              ) : w ? (
+                <UserCheck size={20} className="text-[var(--warn-fg)]" aria-label="Waiting for the check" />
               ) : (
-                <Circle
-                  size={20}
-                  className="text-muted"
-                  aria-label="Not weighed"
-                />
+                <Circle size={20} className="text-muted" aria-label="Not weighed" />
               )}
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-fg">
-                  {c.materialName}
-                </span>
-                <span className="block text-[13px] tabular text-muted">
-                  {c.done ? g(c.weighed) : `target ${g(c.target)}`}
-                </span>
+                <span className="block truncate font-medium text-fg">{c.materialName}</span>
+                <span className="block text-[13px] tabular text-muted">{c.done ? show(c, c.weighed) : q ? "waiting for signal" : `weigh ${show(c, c.target)}`}</span>
               </span>
             </button>
           );
         })}
       </nav>
-      <div className="min-w-0">
+      <div className="grid min-w-0 content-start gap-3">
+        {saved && (
+          <p role="status" className="flex items-start gap-2 rounded-[14px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-3 text-[17px] font-semibold text-[var(--ok-fg)]" data-testid="weigh-saved">
+            <CheckCircle2 size={20} className="mt-0.5 shrink-0" aria-hidden /> {saved}
+          </p>
+        )}
         {allDone ? (
-          <WeighSummary {...p} />
+          <WeighSummary {...p} queuedCount={Object.keys(queued).length} waitingCount={waiting.length} />
         ) : card ? (
-          card.waitingForCheck.length > 0 ? (
-            <SecondCheck
-              key={card.waitingForCheck[0].id}
-              batchId={p.batchId}
-              card={card}
-              weighing={card.waitingForCheck[0]}
-              checkers={p.checkers}
-              passwordRequired={p.passwordRequired}
-              viewer={p.viewer}
-              next={p.nextByOperator?.[card.waitingForCheck[0].operatorId ?? ""] ?? null}
-            />
-          ) : card.done ? (
-            <p className="rounded-[20px] border border-line bg-surface p-5 text-[17px]">
-              <CheckCircle2
-                size={22}
-                className="mr-2 inline text-[var(--ok-fg)]"
-                aria-hidden
-              />
-              {card.materialName}: {g(card.weighed)} weighed.
+          queued[card.batchMaterialId] ? (
+            <p className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5 text-[17px]" data-testid="weigh-queued">
+              <CloudOff size={20} className="mr-2 inline" aria-hidden />
+              {queued[card.batchMaterialId]}
             </p>
+          ) : card.done ? (
+            <DoneCard {...p} card={card} onNext={nextOpen >= 0 ? () => setIdx(nextOpen) : null} nextName={nextOpen >= 0 ? p.cards[nextOpen].materialName : null} />
           ) : card.waitingForQa ? (
             <WaitingForQa batchId={p.batchId} card={card} />
           ) : (
             <>
-              <WeighCard key={card.batchMaterialId} {...p} card={card} />
+              <WeighCard
+                key={card.batchMaterialId}
+                {...p}
+                card={card}
+                onSaved={(msg) => setSaved(msg)}
+                onQueued={(msg) => {
+                  setQueued((q) => ({ ...q, [card.batchMaterialId]: msg }));
+                  setSaved(msg);
+                }}
+              />
               <OtherIngredient key={`other-${card.batchMaterialId}`} batchId={p.batchId} card={card} substitutes={p.substitutes} />
             </>
           )
@@ -175,19 +164,21 @@ export function WeighFlow(p: {
   );
 }
 
-function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
+/** True when the Save failed because the phone has no signal (the server action could not be reached). */
+function noSignal(e: unknown) {
+  return (typeof navigator !== "undefined" && !navigator.onLine) || e instanceof TypeError || (e instanceof Error && /fetch|network|load failed/i.test(e.message));
+}
+
+function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (msg: string) => void; onQueued: (msg: string) => void }) {
   const { card } = p;
-  const [state, action] = useInPlaceAction<FlowActionState>(weighAction);
-  const form = useRef<HTMLFormElement>(null);
   const [lotIdx, setLotIdx] = useState(0);
   const [lotCode, setLotCode] = useState("");
   const [qty, setQty] = useState("");
   // Owner decision 2026-11-08 (A-SCAN-TYPED-01): the lot on the container is confirmed by scanning its label OR by
   // typing the lot number printed on it (all of it or the last 4), recorded as typed. A tap in the list is not a
-  // confirmation (ADR-080 §3, A-SCAN-11). Replaces the "Label damaged? Type the last 4" fallback.
+  // confirmation (ADR-080 §3, A-SCAN-11).
   const [lotVia, setLotVia] = useState<PickVia | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
-  const [active, setActive] = useState<"lot" | "qty">("qty");
   // ADR-106 §3 one way to pick: the lots taken at Get materials first; other allowed lots only under "Use another lot".
   const [showOthers, setShowOthers] = useState(false);
   const [reason, setReason] = useState("");
@@ -209,18 +200,18 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
       if (pickable[i].offPlan) setShowOthers(true);
     } else {
       setLotCode("");
-      setScanNote(`This label says ${code}. It is not a lot of ${card.materialName} you may use (expired, stopped, waiting for QA or another ingredient). For another ingredient use "Ask to use something else".`);
+      const want = pickable[lotIdx]?.lotNumber;
+      setScanNote(`That label is not a lot of ${card.materialName} you may use here.${want ? ` Take lot …${want.slice(-4)} (${pickable[lotIdx].place}).` : ""} For another ingredient use "Ask to use something else".`);
     }
   };
-  const [scale, setScale] = useState(
-    p.scales.find((s) => s.usable)?.code ?? "",
-  );
+  const [scale, setScale] = useState(p.scales.find((s) => s.usable)?.code ?? "");
   const lot = pickable[lotIdx];
   const offPlan = !!lot?.offPlan;
   const reasonOk = !offPlan || (!!reason && (reason !== "other" || reasonNote.trim().length >= 3));
-  const fe = state?.fieldErrors ?? {};
+  // Typed in the weighing unit (kg or g), at most gram resolution; compared in the base unit like the server.
   const entered = /^\d+(\.\d{1,3})?$/.test(qty) ? new Decimal(qty) : null;
-  const total = entered ? entered.plus(card.weighed) : null;
+  const enteredBase = entered ? entered.mul(factorOf(card)) : null;
+  const total = enteredBase ? enteredBase.plus(card.weighed) : null;
   const tol = !total
     ? null
     : total.lt(card.min)
@@ -228,64 +219,81 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
       : total.gt(card.max)
         ? { kind: "high" as const, by: total.minus(card.max) }
         : { kind: "ok" as const, by: new Decimal(0) };
+  // While the first digits are typed the amount is always "too little": say so only once it could be a weight.
+  const typingStill = tol?.kind === "low" && entered !== null && qty.length < String(inUnit(card, card.min).toFixed(0)).length;
   const lotOk = p.lotConfirm === "none" || lotCode.startsWith("BC:LOT:");
-  const canSave =
-    p.canWeigh &&
-    !!lot &&
-    !!entered &&
-    lotOk &&
-    tol?.kind === "ok" &&
-    reasonOk &&
-    (!p.requiresScale || !!scale);
-  // Owner's screenshots 2026-11-01: a pale, disabled Save says why, right above it (one reason, the first missing thing).
+  const canSave = p.canWeigh && !!lot && !!entered && lotOk && tol?.kind === "ok" && reasonOk && (!p.requiresScale || !!scale);
   const whyNot = !p.canWeigh
     ? (p.block?.sentence ?? "You cannot weigh now.")
     : !lot
       ? null
       : !lotOk
-        ? "Scan the lot label, or type the lot number, first."
+        ? "Scan the lot label, or type its last 4 numbers, first."
         : !reasonOk
           ? "Tap why you use another lot first."
           : !entered
-          ? "Type the weight first."
-          : p.requiresScale && !scale
-            ? "No scale can be used now. See why above."
-            : null;
+            ? "Type the weight first."
+            : p.requiresScale && !scale
+              ? "No scale can be used now. See why above."
+              : null;
+  // B6: no signal → queue on this phone (when it may work offline), never a full-page error; typed values stay.
+  const offlineAware: FormAction<FlowActionState> = async (prev, fd) => {
+    const queue = async (): Promise<FlowActionState> => {
+      if (offPlan) return { ok: false, message: "No signal. What you typed is kept here. Tap Save again when you have signal." };
+      try {
+        await syncAgent().enqueue({
+          type: "production.dispense_record.create",
+          siteId: p.siteId,
+          summary: `${card.materialName} ${qty} ${card.unit}`,
+          payload: { batchId: p.batchId, batchMaterialId: card.batchMaterialId, lotRef: lotCode || `BC:LOT:${lot?.lotNumber ?? ""}`, lotVia: lotVia === "tap" ? undefined : (lotVia ?? undefined), locationRef: lot?.locationId ?? null, qty, uom: card.unit, equipmentRef: p.requiresScale ? scale || null : null },
+        });
+        const msg = `${card.materialName}: saved on this phone. It will send when you have signal.`;
+        p.onQueued(msg);
+        return { ok: true, message: msg };
+      } catch {
+        return { ok: false, message: "No signal. What you typed is kept here. Tap Save again when you have signal. If it keeps happening, call your supervisor." };
+      }
+    };
+    if (typeof navigator !== "undefined" && !navigator.onLine) return queue();
+    try {
+      const r = await weighAction(prev, fd);
+      if (r?.ok) p.onSaved(`Saved: ${card.materialName} ${qty} ${card.unit}.${card.needsCheck ? " It waits for the second check." : ""}`);
+      return r;
+    } catch (e) {
+      if (noSignal(e)) return queue();
+      throw e;
+    }
+  };
+  const [state, action] = useInPlaceAction<FlowActionState>(offlineAware);
+  const fe = state?.fieldErrors ?? {};
+  const last4 = lot ? lot.lotNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4) : "";
   return (
-    <section
-      className="rounded-[20px] border border-line bg-surface p-4 sm:p-5"
-      aria-label={`Weigh ${card.materialName}`}
-      data-testid="weigh-card"
-    >
+    <section className="rounded-[20px] border border-line bg-surface p-4 sm:p-5" aria-label={`Weigh ${card.materialName}`} data-testid="weigh-card">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 className="text-title text-fg">
-          {card.materialName}
-        </h2>
+        <h2 className="text-title text-fg">{card.materialName}</h2>
         {card.needsCheck && <Chip tone="warn">Second check</Chip>}
       </div>
-      <p className="mt-1 font-display text-readout leading-none tabular text-fg">
-        {g(card.target)}
+      <p className="mt-1 font-display text-readout leading-none tabular text-fg" data-testid="weigh-target">
+        {show(card, card.target)}
       </p>
       <p className="mt-1 text-[16px] text-muted">
-        OK from {g(card.minShown)} to {g(card.maxShown)}
-        {new Decimal(card.weighed).gt(0) ? ` · already ${g(card.weighed)}` : ""}
+        OK from {show(card, card.minShown)} to {show(card, card.maxShown)}
+        {new Decimal(card.weighed).gt(0) ? ` · already ${show(card, card.weighed)}` : ""}
       </p>
       {card.insteadOf && (
         <p className="mt-2 rounded-[12px] bg-[var(--info-bg,#eef4ff)] p-2 text-[14px]" data-testid="instead-of">Instead of {card.insteadOf.materialName} (for this batch only).</p>
       )}
-      {card.proposal && (
-        <p className="mt-2 text-[15px] text-fg-2" data-testid="weigh-proposal">
-          As taken at Get materials: weigh {card.proposal}.
-        </p>
-      )}
+      {/* Round 5 problem 4: the lot is shown ONCE: what to take and where, then the one way to confirm it. */}
       {lot ? (
         <div className={cx("mt-3 rounded-[14px] p-3 text-[16px]", offPlan ? "border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "bg-surface-2")} data-testid="weigh-lot">
-          Lot{" "}
-          <span className="font-mono text-[20px] font-bold">
-            {lot.lotNumber}
-          </span>{" "}
-          · {lot.place} · {offPlan ? "another lot" : lotIdx === 0 ? "use first" : "also taken"}
-          {lot.expiresOn ? ` · expires ${fmtDate(lot.expiresOn)}` : ""}
+          <p>
+            Take lot <span className="font-mono text-[20px] font-bold">…{last4}</span> · {lot.place}
+            {lot.expiresOn ? ` · expires ${fmtDate(lot.expiresOn)}` : ""}
+          </p>
+          <p className="text-[13px] text-muted">
+            Full number {lot.lotNumber}
+            {offPlan ? " · another lot" : lotIdx === 0 ? (card.lots.length > 1 ? " · use this one first" : "") : " · also taken"}
+          </p>
           {offPlan && (
             <div className="mt-2 grid gap-2" data-testid="off-plan">
               <p className="text-[15px] font-semibold text-[var(--warn-fg)]">
@@ -322,222 +330,236 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           <EquipmentWhy items={p.scales} title="No scale can be used now" />
         </div>
       )}
-      <form
-        ref={form}
-        action={action}
-        className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-      >
+      <form action={action} className="mt-3 grid gap-3">
         <input type="hidden" name="batchId" value={p.batchId} />
-        <input
-          type="hidden"
-          name="batchMaterialId"
-          value={card.batchMaterialId}
-        />
+        <input type="hidden" name="batchMaterialId" value={card.batchMaterialId} />
         <input type="hidden" name="lotId" value={lot?.lotId ?? ""} />
         {offPlan && <input type="hidden" name="offPlanReasonCode" value={reason} />}
         {offPlan && reason === "other" && <input type="hidden" name="offPlanNote" value={reasonNote} />}
         <input type="hidden" name="locationId" value={lot?.locationId ?? ""} />
         <input type="hidden" name="qty" value={qty} />
-        <input
-          type="hidden"
-          name="needsCheck"
-          value={card.needsCheck ? "1" : "0"}
-        />
-        {p.requiresScale && (
-          <input type="hidden" name="equipmentRef" value={scale} />
-        )}
-        <div className="grid gap-3">
-          {p.lotConfirm !== "none" && <input type="hidden" name="lotConfirm" value={lotCode} />}
-          {p.lotConfirm !== "none" && lotVia && <input type="hidden" name="lotConfirmVia" value={lotVia} />}
-          {(
-            <div className="grid gap-2" data-testid="lot-scan">
-              {lotCode.startsWith("BC:LOT:") ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]" data-testid="lot-confirmed" data-via={lotVia ?? ""}>
-                    <CheckCircle2 size={18} aria-hidden /> {lotVia === "typed" ? "Lot number typed" : lotVia === "tap" ? "Lot chosen" : "Label scanned"}: lot {lotCode.slice(7)}
-                  </p>
-                  <button type="button" className="min-h-[44px] text-[14px] text-primary-text underline" onClick={() => { setLotCode(""); setLotVia(null); }}>
-                    Not this lot
-                  </button>
-                </div>
-              ) : (
-                // ADR-098 ScanOrPick: the set-aside lots are listed, but the confirmation READS the container's label:
-                // a scan, or the lot number typed off it (A-SCAN-TYPED-01). A tap is not a check (A-SCAN-11; ADR-080 §3).
-                <>
-                  <ScanOrPick
-                    key={`scan-${card.batchMaterialId}-${showOthers ? "all" : "taken"}`}
-                    kind="lot"
-                    mode="emit"
-                    label={p.typedChecks === false && p.lotConfirm !== "none" ? "Scan the lot label on the container" : "Scan the lot label on the container, or type the lot number"}
-                    hint={p.typedChecks === false && p.lotConfirm !== "none" ? "Camera or handheld scanner." : "Camera, handheld scanner, or the lot number printed on the label (all of it or the last 4)."}
-                    allowTyping={p.typedChecks !== false || p.lotConfirm === "none"}
-                    notListed={`That is not a lot of ${card.materialName} you may use here. Check the label and type it again.`}
-                    candidatesLabel={showOthers ? "Taken at Get materials first, then other lots" : "Taken at Get materials"}
-                    candidates={pickable
-                      .filter((l) => showOthers || !l.offPlan)
-                      .map((l) => ({ value: l.lotId, title: card.materialName, detail: `lot ${l.lotNumber} · ${l.place}${l.expiresOn ? ` · expires ${fmtDate(l.expiresOn)}` : ""}`, code: l.lotNumber, codes: [l.lotNumber], badge: l.offPlan ? ("useFirst" in l && l.useFirst ? "another lot · use first" : "another lot") : "taken", badgeTone: l.offPlan ? ("warn" as const) : ("ok" as const) }))}
-                    allowTap={p.lotConfirm === "none"}
-                    onlyCandidates
-                    search={false}
-                    onEmit={(value, c, via) => onScan(c?.code ?? value, via)}
-                  />
-                  {!showOthers && card.otherLots.length > 0 && (
-                    <button type="button" className="min-h-[44px] text-left text-[15px] text-primary-text underline" onClick={() => setShowOthers(true)} data-testid="use-another-lot">
-                      Use another lot
-                    </button>
-                  )}
-                </>
-              )}
-              {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
-              {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}
-            </div>
-          )}
-          <KeypadField
-            id={`qty-${card.batchMaterialId}`}
-            label="Weight"
-            unit="g"
-            large
-            value={qty}
-            active={active === "qty"}
-            onFocus={() => setActive("qty")}
-            error={fe.qty ?? null}
-            hint={
-              tol ? (
-                tol.kind === "ok" ? (
-                  <span className="inline-flex items-center gap-1 font-semibold text-[var(--ok-fg)]">
-                    <CheckCircle2 size={16} aria-hidden /> OK
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 font-semibold text-[var(--bad-fg)]">
-                    <AlertTriangle size={16} aria-hidden /> Too{" "}
-                    {tol.kind === "low" ? "little" : "much"} by {g(tol.by)}
-                  </span>
-                )
-              ) : undefined
-            }
-          />
-          {tol && tol.kind !== "ok" ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="cta"
-                size="lg"
-                onClick={() => setQty("")}
-              >
-                Weigh again
-              </Button>
-              <Link
-                href={`${p.moreHref}&line=${card.batchMaterialId}`}
-                className="inline-flex min-h-[52px] items-center rounded-full border border-line px-5 text-[15px] text-fg"
-              >
-                Ask for approval
-              </Link>
+        <input type="hidden" name="uom" value={card.unit} />
+        <input type="hidden" name="needsCheck" value={card.needsCheck ? "1" : "0"} />
+        {p.requiresScale && <input type="hidden" name="equipmentRef" value={scale} />}
+        {p.lotConfirm !== "none" && <input type="hidden" name="lotConfirm" value={lotCode} />}
+        {p.lotConfirm !== "none" && lotVia && <input type="hidden" name="lotConfirmVia" value={lotVia} />}
+        <div className="grid gap-2" data-testid="lot-scan">
+          {lotCode.startsWith("BC:LOT:") ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]" data-testid="lot-confirmed" data-via={lotVia ?? ""}>
+                <CheckCircle2 size={18} aria-hidden /> {lotVia === "typed" ? "Lot number typed" : lotVia === "tap" ? "Lot chosen" : "Label scanned"}: lot …{lotCode.slice(7).replace(/[^A-Za-z0-9]/g, "").slice(-4)} ✓
+              </p>
+              <button type="button" className="min-h-[44px] text-[14px] text-primary-text underline" onClick={() => { setLotCode(""); setLotVia(null); }}>
+                Not this lot
+              </button>
             </div>
           ) : (
-            <div className="grid gap-1.5">
-              {!canSave && whyNot && (
-                <p className="text-[15px] font-medium text-fg-2" role="status" data-testid="save-why">
-                  {whyNot}
-                </p>
+            // ADR-098 ScanOrPick: the confirmation READS the container's label: a scan, or the number typed off it
+            // (A-SCAN-TYPED-01). A tap is not a check (A-SCAN-11; ADR-080 §3). The list shows only for "Use another lot".
+            <>
+              <ScanOrPick
+                key={`scan-${card.batchMaterialId}-${showOthers ? "all" : "taken"}`}
+                kind="lot"
+                mode="emit"
+                label={p.typedChecks === false && p.lotConfirm !== "none" ? "Scan the lot label on the container" : "Scan the label on the container, or type its last 4 numbers"}
+                allowTyping={p.typedChecks !== false || p.lotConfirm === "none"}
+                notListed={`That is not a lot of ${card.materialName} you may use here.${lot ? ` Take lot …${last4} (${lot.place}).` : ""}`}
+                candidatesLabel="Other lots you may use"
+                showCandidates={showOthers}
+                candidates={pickable
+                  .filter((l) => showOthers || !l.offPlan)
+                  .map((l) => ({ value: l.lotId, title: card.materialName, detail: `lot ${l.lotNumber} · ${l.place}${l.expiresOn ? ` · expires ${fmtDate(l.expiresOn)}` : ""}`, code: l.lotNumber, codes: [l.lotNumber], badge: l.offPlan ? ("useFirst" in l && l.useFirst ? "another lot · use first" : "another lot") : "taken", badgeTone: l.offPlan ? ("warn" as const) : ("ok" as const) }))}
+                allowTap={p.lotConfirm === "none"}
+                onlyCandidates
+                search={false}
+                onEmit={(value, c, via) => onScan(c?.code ?? value, via)}
+              />
+              {!showOthers && card.otherLots.length > 0 && (
+                <button type="button" className="min-h-[44px] text-left text-[15px] text-primary-text underline" onClick={() => setShowOthers(true)} data-testid="use-another-lot">
+                  Use another lot
+                </button>
               )}
-              {!p.canWeigh && p.block?.href && p.block.label && (
-                <Link href={p.block.href} className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-line px-5 text-[16px] font-medium text-fg" data-testid="weigh-block-fix">
-                  {p.block.label}
-                </Link>
-              )}
-              {p.canWeigh && card.needsCheck && p.nextByOperator?.[p.viewer.userId] && (
-                <p className="text-[14px] text-fg-2" data-testid="weigh-next-checker">
-                  {checkerAfterSave(p.nextByOperator[p.viewer.userId]!)}
-                </p>
-              )}
-              <SubmitButton
-                variant="cta"
-                size="lg"
-                disabled={!canSave}
-                pendingText="Saving…"
-                className="w-full"
-              >
-                Save
-              </SubmitButton>
-            </div>
+            </>
           )}
-          <FormMessage state={state} />
-          <details className="text-[14px]">
-            <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">
-              More details
-            </summary>
-            <div className="grid gap-2 pt-1">
-              {p.requiresScale && (
-                <ScanOrPick
-                  kind="equipment"
-                  id={`weigh-scale-${card.batchMaterialId}`}
-                  label="Scale"
-                  submit="code"
-                  onlyCandidates
-                  candidatesLabel="Scales at this site"
-                  value={scale || null}
-                  onChange={(v) => setScale(v ?? "")}
-                  candidates={p.scales.map((s) => ({
-                    value: s.id,
-                    title: s.name,
-                    detail: `${s.code}${s.calibrationDueDate ? ` · check due ${fmtDate(s.calibrationDueDate)}` : ""}`,
-                    code: s.code,
-                    codes: [s.code],
-                    disabledReason: s.usable ? undefined : "cannot be used",
-                  }))}
-                />
-              )}
-              <Link
-                href={`${p.moreHref}&line=${card.batchMaterialId}`}
-                className="inline-flex min-h-[44px] items-center text-primary-text underline"
-              >
-                Container weight, split over two lots, undo a weighing
+          {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
+          {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}
+        </div>
+        <KeypadField
+          id={`qty-${card.batchMaterialId}`}
+          label={`Weight on the scale (${card.unit})`}
+          unit={card.unit}
+          large
+          value={qty}
+          active
+          onFocus={() => undefined}
+          error={fe.qty ?? null}
+          hint={
+            tol && !typingStill ? (
+              tol.kind === "ok" ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-[var(--ok-fg)]">
+                  <CheckCircle2 size={16} aria-hidden /> OK
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 font-semibold text-[var(--bad-fg)]">
+                  <AlertTriangle size={16} aria-hidden /> Too {tol.kind === "low" ? "little" : "much"} by {show(card, tol.by)}
+                </span>
+              )
+            ) : undefined
+          }
+        />
+        {/* Round 5 problem 4: the keypad right under the field, Save under the keypad (no Save in mid-entry). */}
+        <Keypad value={qty} onChange={setQty} decimal maxLength={10} />
+        {tol && tol.kind !== "ok" && !typingStill ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="cta" size="lg" onClick={() => setQty("")}>
+              Weigh again
+            </Button>
+            <a href={`${p.moreHref}&line=${card.batchMaterialId}`} className="inline-flex min-h-[52px] items-center rounded-full border border-line px-5 text-[15px] text-fg">
+              Ask for approval
+            </a>
+          </div>
+        ) : (
+          <div className="grid gap-1.5">
+            {!canSave && whyNot && (
+              <p className="text-[15px] font-medium text-fg-2" role="status" data-testid="save-why">
+                {whyNot}
+              </p>
+            )}
+            {!p.canWeigh && p.block?.href && p.block.label && (
+              <Link href={p.block.href} className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-line px-5 text-[16px] font-medium text-fg" data-testid="weigh-block-fix">
+                {p.block.label}
               </Link>
+            )}
+            {p.canWeigh && card.needsCheck && p.nextByOperator?.[p.viewer.userId] && (
+              <p className="text-[14px] text-fg-2" data-testid="weigh-next-checker">
+                {checkerAfterSave(p.nextByOperator[p.viewer.userId]!)}
+              </p>
+            )}
+            <SubmitButton variant="cta" size="lg" disabled={!canSave} pendingText="Saving…" className="w-full">
+              Save
+            </SubmitButton>
+          </div>
+        )}
+        <FormMessage state={state} />
+        {/* Round 5 problem 4: the partial-container case is a visible link, not hidden under More details. */}
+        <Link href={`${p.moreHref}&line=${card.batchMaterialId}`} className="inline-flex min-h-[44px] items-center text-[15px] text-primary-text underline" data-testid="two-lots">
+          Container almost empty? Use two lots
+        </Link>
+        {p.requiresScale && (
+          <details className="text-[14px]">
+            <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">Change the scale</summary>
+            <div className="grid gap-2 pt-1">
+              <ScanOrPick
+                kind="equipment"
+                id={`weigh-scale-${card.batchMaterialId}`}
+                label="Scale"
+                submit="code"
+                onlyCandidates
+                candidatesLabel="Scales at this site"
+                value={scale || null}
+                onChange={(v) => setScale(v ?? "")}
+                candidates={p.scales.map((s) => ({
+                  value: s.id,
+                  title: s.name,
+                  detail: `${s.code}${s.calibrationDueDate ? ` · check due ${fmtDate(s.calibrationDueDate)}` : ""}`,
+                  code: s.code,
+                  codes: [s.code],
+                  disabledReason: s.usable ? undefined : "cannot be used",
+                }))}
+              />
             </div>
           </details>
-        </div>
-        <Keypad
-          value={active === "lot" ? lotCode : qty}
-          onChange={(v) =>
-            active === "lot" ? setLotCode(v.toUpperCase()) : setQty(v)
-          }
-          decimal={active === "qty"}
-          letters={active === "lot"}
-          maxLength={active === "lot" ? 6 : 10}
-          // One Save button (owner's screenshots 2026-11-01): the keypad has no ✓ Save; the Save above is the only one.
-        />
+        )}
       </form>
     </section>
   );
 }
 
-const firstName = (name: string | null | undefined) => (name ?? "the operator").split(/\s+/)[0];
+/**
+ * A weighed line. Waiting for the second check (ADR-130): the checker does it on their own phone (their list); a
+ * checker standing here may sign with their OWN password when the company allows it. A name alone never signs.
+ */
+function DoneCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onNext: (() => void) | null; nextName: string | null }) {
+  const { card } = p;
+  const w = card.waitingForCheck[0] ?? null;
+  const next = w ? (p.nextByOperator?.[w.operatorId ?? ""] ?? null) : null;
+  const names = next ? waitingForNames(next) : null;
+  const iAmChecker = !!w && p.viewer.canCheck && p.viewer.userId !== w.operatorId;
+  return (
+    <section className={cx("grid gap-3 rounded-[20px] border bg-surface p-5", w ? "border-2 border-[var(--warn-bd)]" : "border-line")} data-testid={w ? "second-check" : "weigh-done"}>
+      <p className="text-[18px] font-semibold text-fg">
+        <CheckCircle2 size={22} className="mr-2 inline text-[var(--ok-fg)]" aria-hidden />
+        {card.materialName}: {show(card, card.weighed)} weighed{w ? ` by ${firstName(w.operator)}` : ""}.
+      </p>
+      {w && iAmChecker && (
+        <div className="grid gap-2" data-testid="own-weigh-check">
+          <p className="text-[16px]">This weighing waits for your check.</p>
+          <Link href="/production/checks" className="inline-flex min-h-[56px] items-center justify-center rounded-full bg-cta px-6 text-[17px] font-semibold text-white">
+            Open my list: Waiting for you to check
+          </Link>
+        </div>
+      )}
+      {w && !iAmChecker && (
+        <>
+          <p className="text-[16px] text-fg" data-testid="check-on-own-phone">
+            <UserCheck size={18} className="mr-1 inline" aria-hidden />
+            {names ? `${names} ${/\d+ others$/.test(names) ? "check" : "checks"} it on their own phone.` : "A second person checks it on their own phone."} It is on their list &quot;Waiting for you to check&quot;.
+          </p>
+          {p.sameDevice && <CheckHere batchId={p.batchId} weighing={w} materialName={card.materialName} amount={show(card, w.qtyG)} checkers={p.checkers.filter((c) => c.id !== w.operatorId)} />}
+        </>
+      )}
+      {p.onNext && (
+        <Button type="button" variant="cta" size="lg" className="w-full" onClick={p.onNext} data-testid="weigh-next-ingredient">
+          Weigh the next ingredient{p.nextName ? `: ${p.nextName}` : ""}
+        </Button>
+      )}
+    </section>
+  );
+}
 
-/** "No, send it back" (re-audit N9): visible, secondary, asks what was wrong; the weighing is voided and weighed again. */
-function SendBack({ dispenseRecordId, batchId }: { dispenseRecordId: string; batchId: string }) {
-  const [state, action] = useInPlaceAction(returnWeighingAction);
+/** ADR-130: the checker is standing here and signs on this phone with their OWN password (never a name alone). */
+function CheckHere({ batchId, weighing, materialName, amount, checkers }: { batchId: string; weighing: Card["waitingForCheck"][number]; materialName: string; amount: string; checkers: Person[] }) {
+  const [state, action] = useInPlaceAction(checkWeighingAction);
   const [open, setOpen] = useState(false);
+  const [who, setWho] = useState<Person | null>(null);
+  if (checkers.length === 0) return null;
   if (!open)
     return (
-      <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(true)} data-testid="send-back">
-        No, send it back
+      <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(true)} data-testid="check-here">
+        The checker is here: sign on this phone
       </Button>
     );
   return (
-    <form action={action} className="grid gap-2 rounded-[14px] border border-line p-3" data-testid="send-back-form">
+    <form action={action} className="grid gap-3 rounded-[14px] bg-surface-2 p-3" data-testid="check-here-form">
       <input type="hidden" name="batchId" value={batchId} />
-      <input type="hidden" name="dispenseRecordId" value={dispenseRecordId} />
-      <label className="flex flex-col gap-1 text-[15px] font-medium">
-        What was wrong?
-        <Input name="reason" required minLength={5} maxLength={300} className="min-h-[52px] text-[16px]" placeholder="For example: wrong lot, scale not zeroed" />
-      </label>
-      {state?.fieldErrors?.reason && <p className="text-[14px] text-[var(--bad-fg)]">{state.fieldErrors.reason}</p>}
+      <input type="hidden" name="dispenseRecordId" value={weighing.id} />
+      <input type="hidden" name="checkerId" value={who?.id ?? ""} />
+      <p className="text-[16px] font-semibold">Who checks?</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {checkers.map((c) => (
+          <button key={c.id} type="button" aria-pressed={who?.id === c.id} onClick={() => setWho(c)} className={cx("min-h-[52px] rounded-full border px-4 text-left text-[16px]", who?.id === c.id ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+            {c.displayName}
+          </button>
+        ))}
+      </div>
+      {who && (
+        <>
+          <p className="text-[16px]">
+            {firstName(who.displayName)}, look at the scale: {amount} of {materialName}, lot …{weighing.lotNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4)}. Correct?
+          </p>
+          <label className="flex flex-col gap-1 text-[15px] font-medium">
+            {firstName(who.displayName)} types their own password
+            <Input type="password" name="checkerPassword" autoComplete="off" required className="min-h-[56px]" />
+          </label>
+          {state?.fieldErrors?.checkerPassword && <p className="text-[14px] text-[var(--bad-fg)]">{state.fieldErrors.checkerPassword}</p>}
+        </>
+      )}
       <div className="flex flex-wrap gap-2">
-        <SubmitButton variant="secondary" size="lg" pendingText="Sending back…">
-          Send it back
+        <SubmitButton variant="cta" size="lg" pendingText="Saving…" disabled={!who}>
+          Yes, correct
         </SubmitButton>
-        <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(false)}>
-          Back
+        <Button type="button" variant="secondary" size="lg" onClick={() => { setOpen(false); setWho(null); }}>
+          Cancel
         </Button>
       </div>
       <FormMessage state={state} />
@@ -545,172 +567,37 @@ function SendBack({ dispenseRecordId, batchId }: { dispenseRecordId: string; bat
   );
 }
 
-/** UX review S9: after Save on a marked line, pick the checker's name, then a confirm addressed to them (2 taps). */
-function SecondCheck({
-  batchId,
-  card,
-  weighing,
-  checkers,
-  passwordRequired,
-  viewer,
-  next,
-}: {
-  batchId: string;
-  card: Card;
-  weighing: Card["waitingForCheck"][number];
-  checkers: Person[];
-  passwordRequired: boolean;
-  viewer: { userId: string; displayName: string; canCheck: boolean };
-  next: NextActors | null;
-}) {
-  const [state, action] = useInPlaceAction(checkWeighingAction);
-  const [ownState, ownAction] = useInPlaceAction(checkWeighingOwnAction);
-  const [who, setWho] = useState<Person | null>(null);
-  const others = checkers.filter((c) => c.id !== weighing.operatorId);
-  // The checker opened this screen on their own phone: one tap in their own name (own session), or
-  // "No, send it back" with a reason (re-audit N9; ADR-100 "confirm or send back with a reason").
-  if (viewer.canCheck && viewer.userId !== weighing.operatorId)
-    return (
-      <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" data-testid="own-weigh-check" aria-label={`Check ${firstName(weighing.operator)}'s weighing`}>
-        <h2 className="text-title text-fg">Check {firstName(weighing.operator)}&apos;s weighing</h2>
-        <p className="text-[17px] text-fg">
-          {viewer.displayName}, did you watch {weighing.operator} weigh {g(weighing.qtyG)} of {card.materialName}, lot {weighing.lotNumber}?
-        </p>
-        <p className="text-[15px] text-muted">You sign with your own account.</p>
-        <form action={ownAction} className="grid gap-2">
-          <input type="hidden" name="batchId" value={batchId} />
-          <input type="hidden" name="dispenseRecordId" value={weighing.id} />
-          <SubmitButton variant="cta" size="lg" pendingText="Saving…">
-            <UserCheck size={20} aria-hidden /> Yes, I checked it
-          </SubmitButton>
-          <FormMessage state={ownState} />
-        </form>
-        <SendBack dispenseRecordId={weighing.id} batchId={batchId} />
-      </section>
-    );
-  return (
-    <section
-      className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5"
-      aria-label="Second check"
-      data-testid="second-check"
-    >
-      {!who ? (
-        <>
-          <h2 className="flex items-center gap-2 text-title text-fg">
-            <UserCheck size={24} aria-hidden /> Second check needed
-          </h2>
-          <p className="mt-1 text-[16px] text-muted">
-            Ask someone to watch you weigh {card.materialName}. They pick their
-            name.
-          </p>
-          {others.length ? (
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {others.map((c) => (
-                <Button
-                  key={c.id}
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="justify-start"
-                  onClick={() => setWho(c)}
-                >
-                  {c.displayName}
-                </Button>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-[16px]">
-              No one else here can check. The checker opens this Weigh screen on
-              their own phone and confirms it there.
-            </p>
-          )}
-          <NextApprover next={next} className="mt-3 text-[15px] text-fg" />
-          <p className="mt-3 text-[13px] text-muted">
-            The second check needs a connection.
-          </p>
-        </>
-      ) : (
-        <form action={action} className="grid gap-3">
-          <input type="hidden" name="batchId" value={batchId} />
-          <input type="hidden" name="dispenseRecordId" value={weighing.id} />
-          <input type="hidden" name="checkerId" value={who.id} />
-          <h2 className="text-title text-fg">
-            {who.displayName}, you watched {g(weighing.qtyG)} of{" "}
-            {card.materialName}, lot {weighing.lotNumber}?
-          </h2>
-          {passwordRequired && (
-            <label className="flex flex-col gap-1 text-[15px] font-medium">
-              {who.displayName}&apos;s password
-              <Input
-                type="password"
-                name="checkerPassword"
-                autoComplete="off"
-                className="min-h-[56px]"
-              />
-            </label>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <SubmitButton variant="cta" size="lg" pendingText="Saving…">
-              Yes, I checked
-            </SubmitButton>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              onClick={() => setWho(null)}
-            >
-              No
-            </Button>
-          </div>
-          <FormMessage state={state} />
-        </form>
-      )}
-    </section>
-  );
-}
-
-function WeighSummary(p: Parameters<typeof WeighFlow>[0]) {
+function WeighSummary(p: Parameters<typeof WeighFlow>[0] & { queuedCount: number; waitingCount: number }) {
   const [state, action] = useInPlaceAction(stepDoneAction);
   return (
-    <section
-      className="rounded-[20px] border border-line bg-surface p-5"
-      data-testid="weigh-summary"
-    >
+    <section className="rounded-[20px] border border-line bg-surface p-5" data-testid="weigh-summary">
       <h2 className="flex items-center gap-2 text-title text-fg">
-        <CheckCircle2 size={24} className="text-[var(--ok-fg)]" aria-hidden />{" "}
-        {p.cards.length} of {p.cards.length} weighed
+        <CheckCircle2 size={24} className="text-[var(--ok-fg)]" aria-hidden /> {p.cards.length - p.queuedCount} of {p.cards.length} weighed
       </h2>
       <p className="mt-1 text-[16px] tabular text-muted">
-        Total {fmtMass(p.totalWeighed)} of {fmtMass(p.totalTarget)}
+        Total {fmtQty(new Decimal(p.totalWeighed).div(1000), "kg", 2)} of {fmtQty(new Decimal(p.totalTarget).div(1000), "kg", 2)}
       </p>
+      {p.queuedCount > 0 && <p className="mt-2 text-[16px] text-[var(--warn-fg)]">{p.queuedCount === 1 ? "1 weighing is" : `${p.queuedCount} weighings are`} saved on this phone and will send when you have signal.</p>}
+      {p.waitingCount > 0 && (
+        <p className="mt-2 text-[16px] text-fg" data-testid="weigh-waiting-checks">
+          <UserCheck size={18} className="mr-1 inline" aria-hidden />
+          {p.waitingCount === 1 ? "1 weighing waits" : `${p.waitingCount} weighings wait`} for the second check on the checker&apos;s phone.
+        </p>
+      )}
       {p.stepDone ? (
         p.nextHref && (
-          <Link
-            href={p.nextHref}
-            className="mt-4 inline-flex min-h-[56px] items-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white"
-          >
-            Next step
+          <Link href={p.nextHref} className="mt-4 inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white" data-testid="weigh-next-step">
+            {p.nextLabel ?? "Next step"}
           </Link>
         )
       ) : p.stepNo ? (
         <form action={action} className="mt-4 grid gap-2">
           <input type="hidden" name="batchId" value={p.batchId} />
           <input type="hidden" name="stepNo" value={p.stepNo} />
-          {p.stepBlockers.length > 0 && (
-            <p className="text-[14px] text-[var(--warn-fg)]">
-              {p.stepBlockers.join(" ")}
-            </p>
-          )}
-          <div>
-            <SubmitButton
-              variant="cta"
-              size="lg"
-              pendingText="Saving…"
-              className="min-w-[220px]"
-            >
-              Step done
-            </SubmitButton>
-          </div>
+          {p.stepBlockers.length > 0 && <p className="text-[15px] text-[var(--warn-fg)]">{p.stepBlockers.join(" ")}</p>}
+          <SubmitButton variant="cta" size="lg" pendingText="Saving…" className="w-full">
+            Step done
+          </SubmitButton>
           <FormMessage state={state} />
         </form>
       ) : null}

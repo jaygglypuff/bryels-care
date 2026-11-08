@@ -17,6 +17,7 @@ import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./s
 import { stepBlockers } from "./steps";
 import { plainWords } from "./plain-words";
 import { pauseOfBatch } from "./batch-days";
+import { missingReadingSentence } from "./floor-words";
 
 /**
  * Production flow v2, slice V2-5 (ADR-080 §11, UX review S5): the generic Step screen. One step per
@@ -123,7 +124,8 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
     canPerform: canPerform && !blockedReason && step.status !== "completed",
     checkers: checkers.map((c) => ({ id: c.id, displayName: c.displayName })),
     approvers: approvers.map((c) => ({ id: c.id, displayName: c.displayName })),
-    passwordRequired: await getSetting(db, ctx.organizationId, "production.sign_off.require_password"),
+    // ADR-130: whether a checker standing here may type their own password on this device (never a name alone).
+    sameDevice: await getSetting(db, ctx.organizationId, "production.sign_off.same_device"),
     /** ADR-104 §5: "Stop for today" (prefilled where we stopped) and the last pause, plus the day of making. */
     pause: await pauseOfBatch(ctx, b, now),
     canStopForToday: canPerform && (b.status === "in_process" || b.status === "materials_staged") && step.status !== "completed",
@@ -212,6 +214,17 @@ export async function stepDone(ctx: AuthContext, input: StepDoneInput, signers: 
       const typed = (input.readings ?? []).filter((r) => (r.value ?? "").trim() !== "");
       if (typed.length && !(step.parameters ?? []).length) throw new DomainError("validation", "This step has no fields to fill.");
       if (typed.length) ctx.require("production.process_step_record.create");
+      // Round 5 B4: a required field left empty is refused before anything is written ("Saved." was shown before).
+      if (step.stepKind !== "line_clearance" && !(step.checklistItems ?? []).length) {
+        const existing = (await stepRecords(tx, batch.id)).find((r) => r.stepNo === step.stepNo);
+        const have = existing ? await currentReadings(tx, existing.id) : [];
+        const missing = (step.parameters ?? []).filter((p) => p.isRequired && !typed.some((t) => t.parameterId === p.id) && !have.some((h) => h.routingStepParameterId === p.id));
+        if (missing.length) {
+          throw new DomainError("validation", `${missing.map((p) => missingReadingSentence(p)).join(" ")} Nothing was saved.`, {
+            fieldErrors: Object.fromEntries(missing.map((p) => [`param-${p.id}`, "Type it first."])),
+          });
+        }
+      }
       if (signers.checker) {
         // Validated again in finishStep; checked early so nothing is written for a wrong checker.
         if (signers.checker.userId === ctx.userId && !ctx.ownerOverride) throw new DomainError("separation_of_duties", "The checker must be a different person.");

@@ -13,6 +13,7 @@ import { expectedLots } from "./staging";
 import { stepRecords } from "./execution";
 import { plainWords } from "./plain-words";
 import { weighBlockCode, weighBlockWords } from "./weigh-block";
+import { weighUnitFor } from "./floor-words";
 import { pickPlanForLine } from "./materials-list";
 import { weighProposal } from "./pick-plan";
 import { LOT_CHANGE_REASONS, alternativesForLine, batchMaterialChanges, otherLotOptions, qaDeciderNames, substitutionRequestsOf } from "./material-swaps";
@@ -76,6 +77,8 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
       materialCode: ing.materialCode,
       materialName: ing.materialName,
       baseUom: ing.baseUom,
+      /** Round 5 problem 4: the unit the operator types (kg for 1 kg or more of a gram material; stored in grams). */
+      unit: weighUnitFor(ing.baseUom, tol.target),
       // Rounded to the typed resolution (3 decimals) the same way the weigh service checks (weigh-window.ts).
       target: tol.target.toString(),
       min: tol.min.toString(),
@@ -125,6 +128,8 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
     batch: b,
     product: ex.product,
     step: step ? { stepNo: step.stepNo, name: step.name, status: step.status, requiresEquipment: !!step.requiresEquipment, blockers: step.blockers, index: ex.steps.findIndex((s) => s.stepNo === step.stepNo) + 1, total: ex.steps.length } : null,
+    /** Round 5 problem 10: the button after the weighing step says "Done — go to <next step>". */
+    nextStep: step ? (() => { const n = [...ex.steps].sort((x, y) => x.stepNo - y.stepNo).find((s) => s.stepNo > step.stepNo); return n ? { stepNo: n.stepNo, name: plainWords(n.name) } : null; })() : null,
     cards,
     weighedCount,
     uncheckedCount,
@@ -149,7 +154,8 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
       const code = weighBlockCode(facts);
       return code ? { code, ...weighBlockWords(code, { ...facts, firstStepName: first ? plainWords(first.name) : null }), buttonStepNo: code === "earlier_step" ? facts.earlierStep!.stepNo : (first?.stepNo ?? null) } : null;
     })(),
-    passwordRequired: await getSetting(db, ctx.organizationId, "production.sign_off.require_password"),
+    // ADR-130: a checker standing here may type their own password on this phone (never a name alone).
+    sameDevice: await getSetting(db, ctx.organizationId, "production.sign_off.same_device"),
     lotChangeReasons: Object.entries(LOT_CHANGE_REASONS).map(([code, label]) => ({ code, label })),
     changes: changes.map((c) => c.sentence),
   };

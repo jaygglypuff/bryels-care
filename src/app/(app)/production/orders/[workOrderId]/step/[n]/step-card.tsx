@@ -8,118 +8,98 @@ import type { StepCardView } from "@/modules/production";
 import { Button, cx, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
+import Decimal from "decimal.js";
 import {
   checklistCardAction,
   checkStepAction,
-  checkStepOwnAction,
   endEarlyAction,
   equipmentCardAction,
-  returnStepCardAction,
   stepDoneAction,
 } from "../../flow-actions";
 import { plainWords } from "@/modules/production/plain-words";
+import { CORRECTION_REASONS, outOfRangeSentence, rangeWords } from "@/modules/production/floor-words";
+
+/** "90.000000" → "90" for a saved number (no grouping commas: it goes back into the keypad). */
+const noZeros = (v: string) => {
+  try {
+    return new Decimal(v.replace(/,/g, "")).toFixed().replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  } catch {
+    return v;
+  }
+};
 import { PackagingBox } from "./packaging-box";
 import { EquipmentWhy } from "../../equipment-why";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 
 /**
- * The checker is signed in on THIS device (their own phone or tablet): one tap "Yes, I checked" in their
- * own name (checkStep on their session, like the old batch workspace), or send it back with a reason.
+ * A step waiting for its second check (ADR-130 one checker flow). The checker checks on their OWN phone, from
+ * their list "Waiting for you to check", and comes back to that list (round 5 B18). On the operator's phone: who
+ * checks, and — only when the company allows it — "The checker is here": they type their OWN password. A name
+ * alone never signs (round 5 B1).
  */
-function OwnCheck(p: Props) {
-  const { step } = p;
-  const [state, action] = useInPlaceAction(checkStepOwnAction);
-  const [back, setBack] = useState(false);
-  const [bState, bAction] = useInPlaceAction(returnStepCardAction);
-  return (
-    <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
-      <h2 className="text-title text-fg">
-        {p.viewer.displayName}, did you check {plainWords(step.name)}
-        {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
-      </h2>
-      <p className="text-[15px] text-muted">You sign with your own account. Look at the work first.</p>
-      <form action={action} className="grid gap-2">
-        <input type="hidden" name="batchId" value={p.batchId} />
-        <input type="hidden" name="stepNo" value={step.stepNo} />
-        <SubmitButton variant="cta" size="lg" pendingText="Saving…" className="w-full">
-          <UserCheck size={20} aria-hidden /> Yes, I checked it
-        </SubmitButton>
-        <FormMessage state={state} />
-      </form>
-      {!back ? (
-        <Button type="button" variant="secondary" size="lg" onClick={() => setBack(true)}>
-          Something is wrong: send it back
-        </Button>
-      ) : (
-        <form action={bAction} className="grid gap-2 rounded-[14px] bg-surface-2 p-3">
-          <input type="hidden" name="batchId" value={p.batchId} />
-          <input type="hidden" name="stepNo" value={step.stepNo} />
-          <label className="flex flex-col gap-1 text-[15px] font-medium">
-            What must be corrected?
-            <Textarea name="reason" required minLength={5} className="text-[16px]" />
-          </label>
-          <SubmitButton variant="primary" size="lg" pendingText="Saving…">
-            Send it back
-          </SubmitButton>
-          <FormMessage state={bState} />
-        </form>
-      )}
-    </section>
-  );
-}
-
-/** Second check of a step on this tablet: pick a name, then a confirm addressed to the checker (2 taps, ADR-078). */
 function StepCheck(p: Props) {
   const { step } = p;
   const [state, action] = useInPlaceAction(checkStepAction);
+  const [open, setOpen] = useState(false);
   const [who, setWho] = useState<Person | null>(null);
   const others = p.checkers.filter((c) => c.id !== step.record?.conductedById);
-  // The signed-in person may check (not the one who did the step): they sign in their own name.
-  if (p.viewer.canCheck && !p.viewer.isDoer) return <OwnCheck {...p} />;
-  if (!who)
+  if (p.viewer.canCheck && !p.viewer.isDoer)
     return (
-      <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check">
-        <h2 className="text-title text-fg">Second check needed</h2>
-        <p className="mt-1 text-[16px] text-muted">Ask someone to check {plainWords(step.name)}. They pick their name here, or open this step on their own phone (My work shows &quot;Check {step.name.toLowerCase()}&quot;).</p>
-        {others.length ? (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {others.map((c) => (
-              <Button key={c.id} type="button" variant="secondary" size="lg" className="justify-start" onClick={() => setWho(c)}>
-                {c.displayName}
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-4 text-[16px]">No one else here can check. They can check later from their own tablet.</p>
-        )}
+      <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
+        <h2 className="text-title text-fg">This step waits for your check</h2>
+        <p className="text-[16px] text-fg-2">
+          {plainWords(step.name)}
+          {step.record?.conductedBy ? `, done by ${step.record.conductedBy}` : ""}. Look at the work, then check it on your list.
+        </p>
+        <Link href="/production/checks" className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-6 text-[17px] font-semibold text-white">
+          Open my list: Waiting for you to check
+        </Link>
       </section>
     );
   return (
-    <form action={action} className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5">
-      <input type="hidden" name="batchId" value={p.batchId} />
-      <input type="hidden" name="stepNo" value={step.stepNo} />
-      <input type="hidden" name="stepKind" value={step.kind} />
-      <input type="hidden" name="checkerId" value={who.id} />
-      <h2 className="text-title text-fg">
-        {who.displayName}, you checked {plainWords(step.name)}
-        {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
+    <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check" data-testid="step-waits-check">
+      <h2 className="flex items-center gap-2 text-title text-fg">
+        <UserCheck size={24} aria-hidden /> Saved. Waiting for the second check
       </h2>
-      {p.passwordRequired && (
-        <label className="flex flex-col gap-1 text-[15px] font-medium">
-          {who.displayName}&apos;s password
-          <Input type="password" name="checkerPassword" autoComplete="off" className="min-h-[56px]" />
-        </label>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton variant="cta" size="lg" pendingText="Saving…">
-          Yes, I checked
-        </SubmitButton>
-        <Button type="button" variant="secondary" size="lg" onClick={() => setWho(null)}>
-          No
+      <NextApprover next={p.checkNext} className="text-[16px] text-fg" />
+      <p className="text-[16px] text-fg-2">They check it on their own phone (their list &quot;Waiting for you to check&quot;). You can go on when it is checked.</p>
+      {p.sameDevice && others.length > 0 && !open && (
+        <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(true)} data-testid="check-here">
+          The checker is here: sign on this phone
         </Button>
-      </div>
-      <FormMessage state={state} />
-    </form>
+      )}
+      {p.sameDevice && open && (
+        <form action={action} className="grid gap-3 rounded-[14px] bg-surface-2 p-3" data-testid="check-here-form">
+          <input type="hidden" name="batchId" value={p.batchId} />
+          <input type="hidden" name="stepNo" value={step.stepNo} />
+          <input type="hidden" name="stepKind" value={step.kind} />
+          <input type="hidden" name="checkerId" value={who?.id ?? ""} />
+          <p className="text-[16px] font-semibold">Who checks?</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {others.map((c) => (
+              <button key={c.id} type="button" aria-pressed={who?.id === c.id} onClick={() => setWho(c)} className={cx("min-h-[52px] rounded-full border px-4 text-left text-[16px]", who?.id === c.id ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+                {c.displayName}
+              </button>
+            ))}
+          </div>
+          {who && (
+            <label className="flex flex-col gap-1 text-[15px] font-medium">
+              {who.displayName.split(/\s+/)[0]} looked at {plainWords(step.name)} and types their own password
+              <Input type="password" name="checkerPassword" autoComplete="off" required className="min-h-[56px]" />
+            </label>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <SubmitButton variant="cta" size="lg" pendingText="Saving…" disabled={!who}>
+              Yes, it looks right
+            </SubmitButton>
+            <Button type="button" variant="secondary" size="lg" onClick={() => { setOpen(false); setWho(null); }}>
+              Cancel
+            </Button>
+          </div>
+          <FormMessage state={state} />
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -133,7 +113,12 @@ type Props = {
   /** Who can check this step (docs/NEXT_APPROVER.md); null when it does not wait for a check. */
   checkNext?: NextActors | null;
   approvers: Person[];
-  passwordRequired: boolean;
+  /** ADR-130 `production.sign_off.same_device`: a checker standing here may type their own password (never a name alone). */
+  sameDevice: boolean;
+  /** Round 5 problem 2 / B19: the last step (move to the QA waiting area) IS Finish: its form, in this template. */
+  finishPanel?: ReactNode;
+  /** Round 5 problem 3: while the labels are not printed, the label button is the one green button. */
+  quietDone?: boolean;
   nextHref: string | null;
   nextLabel: string | null;
   weighHref: string;
@@ -187,11 +172,7 @@ export function StepCard(p: Props) {
               </details>
             )}
           </>
-        ) : (
-          <p className="text-[16px] text-muted">
-            No instruction for this step.
-          </p>
-        )}
+        ) : null /* Round 5 problem 10: no empty "No instruction for this step." box. */}
         {step.workInstruction && (
           <details className="mt-3 text-[15px]">
             <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">
@@ -204,16 +185,10 @@ export function StepCard(p: Props) {
           </details>
         )}
         {step.status === "completed" && (
-          <p className="mt-3 inline-flex items-center gap-2 text-[17px] font-semibold text-[var(--ok-fg)]">
-            <CheckCircle2 size={22} aria-hidden /> Step done
-            {step.record?.conductedBy ? ` by ${step.record.conductedBy}` : ""}
+          <p className="mt-3 inline-flex items-center gap-2 text-[17px] font-semibold text-[var(--ok-fg)]" role="status" data-testid="step-saved">
+            <CheckCircle2 size={22} aria-hidden /> Saved. Step done
+            {step.record?.conductedBy ? ` by ${step.record.conductedBy}` : ""}.
           </p>
-        )}
-        {step.status === "awaiting_check" && (
-          <div className="mt-3 text-[16px] font-semibold text-[var(--warn-fg)]">
-            Waiting for the second check.
-            <NextApprover next={p.checkNext} className="text-[15px] text-fg" />
-          </div>
         )}
       </section>
       <div className="grid min-w-0 content-start gap-4">
@@ -221,6 +196,8 @@ export function StepCard(p: Props) {
         {p.equipment && <EquipmentBox {...p} equipment={p.equipment} />}
         {p.blocked && step.status !== "completed" ? (
           <p className="text-[15px] text-muted" data-testid="step-not-yet">This step opens when the earlier steps are done (see the yellow box above).</p>
+        ) : step.status === "completed" && step.isTransfer && p.finishPanel ? (
+          p.finishPanel
         ) : step.status === "completed" ? (
           p.nextHref && p.nextLabel ? (
             <Link
@@ -239,6 +216,8 @@ export function StepCard(p: Props) {
           >
             Weigh
           </Link>
+        ) : step.isTransfer && p.finishPanel ? (
+          p.finishPanel
         ) : step.isTransfer ? (
           <Link
             href={p.finishHref}
@@ -316,40 +295,35 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
   );
 }
 
-function CheckerPick({
-  checkers,
-  passwordRequired,
-}: {
-  checkers: Person[];
-  passwordRequired: boolean;
-}) {
+/**
+ * Who checks this step (ADR-130). Default: a second person checks it on their own phone after you save (it lands on
+ * their list). Only when the company allows it, a checker standing here may sign now with their OWN password.
+ */
+function CheckerPick({ checkers, sameDevice }: { checkers: Person[]; sameDevice: boolean }) {
+  const [who, setWho] = useState("");
   return (
-    <div className="grid gap-2 rounded-[14px] bg-surface-2 p-3">
-      <label className="flex flex-col gap-1 text-[15px] font-medium">
-        Checked by (they pick their name)
-        <Select
-          name="checkerId"
-          defaultValue=""
-          className="min-h-[52px] text-[16px]"
-        >
-          <option value="">Checks later from their own tablet</option>
-          {checkers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.displayName}
-            </option>
-          ))}
-        </Select>
-      </label>
-      {passwordRequired && (
-        <label className="flex flex-col gap-1 text-[15px] font-medium">
-          Their password
-          <Input
-            type="password"
-            name="checkerPassword"
-            autoComplete="off"
-            className="min-h-[52px]"
-          />
-        </label>
+    <div className="grid gap-2 rounded-[14px] bg-surface-2 p-3" data-testid="checker-pick">
+      <p className="text-[15px] text-fg">A second person checks this step on their own phone after you save.</p>
+      {sameDevice && checkers.length > 0 && (
+        <>
+          <label className="flex flex-col gap-1 text-[15px] font-medium">
+            Or the checker is here and signs now
+            <Select name="checkerId" value={who} onChange={(e) => setWho(e.target.value)} className="min-h-[52px] text-[16px]">
+              <option value="">No, on their own phone later</option>
+              {checkers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName}
+                </option>
+              ))}
+            </Select>
+          </label>
+          {who && (
+            <label className="flex flex-col gap-1 text-[15px] font-medium">
+              They type their own password
+              <Input type="password" name="checkerPassword" autoComplete="off" required className="min-h-[52px]" />
+            </label>
+          )}
+        </>
       )}
     </div>
   );
@@ -441,32 +415,22 @@ function CheckList(p: Props) {
       {step.requiresChecker && (
         <CheckerPick
           checkers={p.checkers}
-          passwordRequired={p.passwordRequired}
+          sameDevice={p.sameDevice}
         />
       )}
       {p.canPerform && (
-        <div className="flex flex-wrap gap-2 rounded-[20px] bg-surface/95 p-2 lg:static">
-          {!anyNo && (
-            <SubmitButton
-              name="allOk"
-              value="1"
-              variant="cta"
-              size="lg"
-              pendingText="Saving…"
-              className="min-w-[180px] flex-1"
-            >
+        // Round 5 problem 10: ONE button. Nothing answered yet: "All OK" (every answer Yes). Once answered: "Save".
+        <div className="rounded-[20px] bg-surface/95 p-2 lg:static">
+          {!allAnswered && !Object.values(answers).some(Boolean) ? (
+            <SubmitButton name="allOk" value="1" variant="cta" size="lg" pendingText="Saving…" className="w-full">
               All OK
             </SubmitButton>
+          ) : (
+            <SubmitButton variant="cta" size="lg" pendingText="Saving…" disabled={!allAnswered} className="w-full">
+              {anyNo ? "Save and report a problem" : "Save"}
+            </SubmitButton>
           )}
-          <SubmitButton
-            variant={anyNo ? "cta" : "secondary"}
-            size="lg"
-            pendingText="Saving…"
-            disabled={!allAnswered}
-            className="min-w-[180px] flex-1"
-          >
-            {anyNo ? "Save and report a problem" : "Save answers"}
-          </SubmitButton>
+          {!allAnswered && Object.values(answers).some(Boolean) && <p className="mt-1 text-[14px] text-fg-2">Answer every line, then tap Save.</p>}
         </div>
       )}
       {anyNo && (
@@ -537,7 +501,7 @@ function WaitCard(p: Props) {
           batchId={p.batchId}
           stepNo={step.stepNo}
           approvers={p.approvers}
-          passwordRequired={p.passwordRequired}
+          sameDevice={p.sameDevice}
           label="Ask to end early"
         />
       )}
@@ -550,13 +514,13 @@ function ApprovalForm({
   batchId,
   stepNo,
   approvers,
-  passwordRequired,
   label,
 }: {
   batchId: string;
   stepNo: number;
   approvers: Person[];
-  passwordRequired: boolean;
+  /** Unused: an approver always types their own password (ADR-130). Kept so callers pass the same props. */
+  sameDevice?: boolean;
   label: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -581,7 +545,7 @@ function ApprovalForm({
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="stepNo" value={stepNo} />
       <label className="flex flex-col gap-1 text-[15px] font-medium">
-        Approved by (they pick their name)
+        Who approves (QA or the site manager, standing here)
         <Select
           name="approverId"
           defaultValue=""
@@ -598,19 +562,12 @@ function ApprovalForm({
           ))}
         </Select>
       </label>
-      {passwordRequired && (
-        <label className="flex flex-col gap-1 text-[15px] font-medium">
-          Their password
-          <Input
-            type="password"
-            name="approverPassword"
-            autoComplete="off"
-            className="min-h-[52px]"
-          />
-        </label>
-      )}
       <label className="flex flex-col gap-1 text-[15px] font-medium">
-        Reason
+        They type their own password
+        <Input type="password" name="approverPassword" autoComplete="off" required className="min-h-[52px]" />
+      </label>
+      <label className="flex flex-col gap-1 text-[15px] font-medium">
+        Why it is right (they write it)
         <Textarea
           name="reason"
           required
@@ -634,15 +591,23 @@ type FieldDef = Step["fields"][number];
 function FieldsCard(p: Props) {
   const { step } = p;
   const [state, action] = useInPlaceAction(stepDoneAction);
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(step.fields.map((f) => [f.id, f.reading?.value ?? ""])),
-  );
+  // Round 5 B3: numbers without trailing zeros ("90", never "90.000000").
+  const saved = (f: FieldDef) => (f.reading ? (f.valueKind === "numeric" ? noZeros(f.reading.value) : f.reading.value) : "");
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(step.fields.map((f) => [f.id, saved(f)])));
+  const [why, setWhy] = useState<Record<string, string>>({});
   const numeric = step.fields.filter((f) => f.valueKind === "numeric");
   const [active, setActive] = useState<string | null>(numeric[0]?.id ?? null);
   const fe = state?.fieldErrors ?? {};
   const set = (id: string, v: string) => setValues({ ...values, [id]: v });
-  const changed = (f: FieldDef) =>
-    !!f.reading && values[f.id] !== f.reading.value;
+  const changed = (f: FieldDef) => !!f.reading && values[f.id] !== saved(f);
+  /** Live check while typing, like Weigh: the plain sentence when the typed number is outside its range. */
+  const outside = (f: FieldDef) => {
+    const v = values[f.id] ?? "";
+    if (f.valueKind !== "numeric" || !/^-?\d+(\.\d+)?$/.test(v) || (f.minValue === null && f.maxValue === null)) return null;
+    const d = new Decimal(v);
+    if ((f.maxValue !== null && d.gt(f.maxValue)) || (f.minValue !== null && d.lt(f.minValue))) return outOfRangeSentence({ name: plainWords(f.name), uom: f.uom, minValue: f.minValue, maxValue: f.maxValue, valueKind: f.valueKind }, v);
+    return null;
+  };
   const exceptionable =
     step.blockers.some((b) => b.exceptionable) && !step.exceptionApproved;
   const activeField = step.fields.find((f) => f.id === active) ?? null;
@@ -677,13 +642,16 @@ function FieldsCard(p: Props) {
                   value={values[f.id] ?? ""}
                   active={active === f.id}
                   onFocus={() => setActive(f.id)}
-                  error={
-                    fe[`param-${f.id}`] ??
-                    (f.reading && !f.reading.isWithinLimits && !changed(f)
-                      ? `Outside ${f.limits}`
-                      : null)
+                  error={fe[`param-${f.id}`] ?? null}
+                  hint={
+                    outside(f) ? (
+                      <span className="font-semibold text-[var(--warn-fg)]" data-testid="reading-outside">
+                        {outside(f)}
+                      </span>
+                    ) : (
+                      (rangeWords({ name: f.name, uom: f.uom, minValue: f.minValue, maxValue: f.maxValue, valueKind: f.valueKind }) ?? undefined)
+                    )
                   }
-                  hint={f.minValue || f.maxValue ? `OK ${f.limits}` : undefined}
                 />
               ) : f.valueKind === "boolean" ? (
                 <fieldset className="grid gap-1">
@@ -720,13 +688,20 @@ function FieldsCard(p: Props) {
                 </label>
               )}
               {changed(f) && (
-                <label className="flex flex-col gap-1 text-[14px] font-medium">
-                  Why change it? (the first value stays on record)
-                  <Input
-                    name={`correction-${f.id}`}
-                    className="min-h-[52px] text-[16px]"
-                  />
-                </label>
+                // Round 5 B3: the reason is tapped (gloves); words only for "Other". The first value stays on record.
+                <fieldset className="grid gap-2" data-testid="correction-reason">
+                  <legend className="text-[15px] font-medium">Why change it? ({saved(f)}{f.uom ? ` ${f.uom}` : ""} stays on record)</legend>
+                  <input type="hidden" name={`correctionCode-${f.id}`} value={why[f.id] ?? ""} />
+                  <div className="flex flex-wrap gap-2">
+                    {CORRECTION_REASONS.map((r) => (
+                      <button key={r.code} type="button" aria-pressed={why[f.id] === r.code} onClick={() => setWhy({ ...why, [f.id]: r.code })} className={cx("min-h-[52px] rounded-full border px-4 text-[16px]", why[f.id] === r.code ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  {why[f.id] === "other" && <Input name={`correction-${f.id}`} placeholder="A few words" className="min-h-[52px] text-[16px]" />}
+                  {fe[`correction-${f.id}`] && <p className="text-[14px] text-[var(--bad-fg)]">{fe[`correction-${f.id}`]}</p>}
+                </fieldset>
               )}
             </div>
           ))}
@@ -742,7 +717,7 @@ function FieldsCard(p: Props) {
         {step.requiresChecker && (
           <CheckerPick
             checkers={p.checkers}
-            passwordRequired={p.passwordRequired}
+            sameDevice={p.sameDevice}
           />
         )}
         <details className="text-[14px]">
@@ -761,13 +736,13 @@ function FieldsCard(p: Props) {
                 {f.minValue || f.maxValue ? <span className="text-[13px] font-normal text-muted">OK {f.limits}</span> : null}
                 <Input
                   name={`param-${f.id}`}
-                  defaultValue={f.reading?.value ?? ""}
+                  defaultValue={f.reading ? (f.valueKind === "numeric" ? noZeros(f.reading.value) : f.reading.value) : ""}
                   inputMode={f.valueKind === "numeric" ? "decimal" : undefined}
                   className="min-h-[52px] text-[16px]"
                 />
                 {f.reading && (
                   <span className="text-[13px] font-normal text-muted">
-                    Saved: {f.reading.value}
+                    Saved: {f.valueKind === "numeric" ? noZeros(f.reading.value) : f.reading.value}
                     {f.reading.isWithinLimits ? "" : " (outside the range)"}. To change it, type the new value and say why:
                     <Input name={`correction-${f.id}`} placeholder="Why change it?" className="mt-1 min-h-[48px] text-[15px]" />
                   </span>
@@ -776,26 +751,16 @@ function FieldsCard(p: Props) {
             ))}
           </div>
         </details>
-        {step.blockers.length > 0 && (
-          <p className="flex items-start gap-2 text-[15px] text-[var(--warn-fg)]">
-            <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />{" "}
-            {step.blockers
-              .map((b) =>
-                plainWords(
-                  b.message.replace(
-                    /controlled exception with a deviation \(CX-TOL\)/,
-                    "approval",
-                  ),
-                ),
-              )
-              .join(" ")}
+        {step.blockers.length > 0 && !state?.message && (
+          <p className="flex items-start gap-2 text-[15px] text-[var(--warn-fg)]" data-testid="step-blockers">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden /> {step.blockers.map((b) => b.message).join(" ")}
           </p>
         )}
         {p.canPerform && (
           <div className="rounded-[20px] bg-surface/95 p-2 lg:static">
             <SubmitButton
               id={`done-${step.stepNo}`}
-              variant="cta"
+              variant={p.quietDone ? "secondary" : "cta"}
               size="lg"
               pendingText="Saving…"
               className="w-full"
@@ -811,8 +776,8 @@ function FieldsCard(p: Props) {
           batchId={p.batchId}
           stepNo={step.stepNo}
           approvers={p.approvers}
-          passwordRequired={p.passwordRequired}
-          label="Ask for approval"
+          sameDevice={p.sameDevice}
+          label="It is right: ask QA to accept it"
         />
       )}
     </>

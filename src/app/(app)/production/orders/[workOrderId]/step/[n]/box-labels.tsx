@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { Boxes, CheckCircle2, Printer } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { LabelFaceData } from "@/modules/documents";
 import { boxPrintLabel, boxSplit, boxSplitText, parsePieces } from "@/modules/production/box-plan";
 import { Input } from "@/ui/core";
@@ -31,13 +32,18 @@ export type BoxLabelsProps = {
  * pieces per box; the server works it out again (planBatchBoxes) and takes a box number for each label. The
  * preview is the real label of box 1 (same renderer and layout as the print).
  */
-export function BoxLabels(p: BoxLabelsProps) {
+export function BoxLabels(p: BoxLabelsProps & { withPieceLabels?: boolean }) {
   const [state, action] = useInPlaceAction(planBatchBoxesAction);
   const [pieces, setPieces] = useState(String(p.plan?.pieces ?? p.defaultPieces));
   const n = parsePieces(pieces);
   const split = n ? boxSplit(n, p.unitsPerBox) : null;
   const href = state?.ok ? state.href : p.plan ? p.printHref : undefined;
   const same = !!p.plan && n === p.plan.pieces;
+  const router = useRouter();
+  // Round 5 problem 3: straight to the print page (no "Open the box labels" in between), piece labels included.
+  useEffect(() => {
+    if (state?.ok && state.href) router.push(`${state.href}${state.href.includes("?") ? "&" : "?"}auto=1`);
+  }, [state, router]);
   if (p.plan?.boxed) {
     return (
       <section className="grid gap-2 rounded-[16px] border border-line bg-surface p-4" aria-label="Boxes" data-testid="box-labels">
@@ -68,6 +74,7 @@ export function BoxLabels(p: BoxLabelsProps) {
       ) : (
         <form action={action} className="grid gap-3">
           <input type="hidden" name="batchId" value={p.batchId} />
+          {p.withPieceLabels && <input type="hidden" name="withPieceLabels" value="1" />}
           <label className="flex flex-col gap-1 text-[16px] font-medium" htmlFor={`pieces-${p.batchId}`}>
             How many {p.pieceWord} go in boxes?
             <Input id={`pieces-${p.batchId}`} name="pieces" inputMode="numeric" pattern="[0-9,]*" value={pieces} onChange={(e) => setPieces(e.target.value)} className="min-h-[56px] text-[18px]" required />
@@ -84,7 +91,7 @@ export function BoxLabels(p: BoxLabelsProps) {
           {p.plan && !same && <p className="text-[14px] text-[var(--warn-fg)]">You printed labels for {p.plan.pieces} {p.pieceWord}. Printing again cancels the old box labels: destroy any you stuck on.</p>}
           {!(same && href) && (
             <SubmitButton variant="cta" size="lg" pendingText="Making the box labels…" disabled={!split || !p.canPrint} className="w-full">
-              <Printer size={18} aria-hidden /> {split ? boxPrintLabel(split.boxes) : "Print box labels"}
+              <Printer size={18} aria-hidden /> {split ? (p.withPieceLabels && n ? `Print ${n} piece labels and ${split.boxes} box ${split.boxes === 1 ? "label" : "labels"}` : boxPrintLabel(split.boxes)) : "Print box labels"}
             </SubmitButton>
           )}
         </form>

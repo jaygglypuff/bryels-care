@@ -37,8 +37,8 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
   // Re-audit N9: the checker opening this screen sees "Check Jun's weighing", not "Weigh" (Home said "Check 2 weighings").
   const canCheck = ctx.can("production.dispense_record.approve") && ctx.canAt("production.dispense_record.approve", b.siteId);
   const toCheck = canCheck ? v.cards.flatMap((c) => c.waitingForCheck).filter((w) => w.operatorId !== ctx.userId) : [];
-  const weighers = [...new Set(toCheck.map((w) => (w.operator ?? "the operator").split(/\s+/)[0]))];
-  const title = toCheck.length === 0 ? "Weigh" : weighers.length === 1 ? `Check ${weighers[0]}'s ${toCheck.length === 1 ? "weighing" : "weighings"}` : "Check the weighings";
+  // ADR-130: checks are done on the checker's list, so this screen is always "Weigh"; a checker gets one link there.
+  const title = "Weigh";
   const substitutes = v.cards.some((c) => c.canAskOther) ? (await substituteMaterialOptions(ctx)).map((m) => ({ id: m.id, name: m.name, baseUom: m.baseUom })) : [];
   // Who can check each waiting weighing, by name and role (never the weigher; docs/NEXT_APPROVER.md).
   // The viewer too when they may weigh: "After you save, Jun or Dino checks it" (finding 2; nextActors, call only).
@@ -58,6 +58,13 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         actions={<Help screen="production.weigh" />}
       />
       <PageIntro>Weigh out each ingredient: check the lot printed on the container, put it on the scale, type the weight and save.</PageIntro>
+      {toCheck.length > 0 && (
+        <div className="mb-4" data-testid="weigh-checker-link">
+          <Banner tone="warn" title={toCheck.length === 1 ? "1 weighing waits for your check" : `${toCheck.length} weighings wait for your check`} action={<LinkButton href="/production/checks" variant="cta" size="lg">Open my list</LinkButton>}>
+            Check them on your list &quot;Waiting for you to check&quot;. You come back to your list after each check.
+          </Banner>
+        </div>
+      )}
       {v.blockedReason && (
         <div className="mb-4">
           <Banner tone="warn" title="You can't weigh now" action={blockHref && wb?.button ? <LinkButton href={blockHref} variant="cta" size="lg">{wb.button.label}</LinkButton> : b.status === "materials_staged" || b.status === "planned" ? <LinkButton href={`${orderHref}`} variant="secondary" size="lg">Back to the order</LinkButton> : undefined}>
@@ -72,9 +79,9 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
           <Banner
             tone="warn"
             title="Waiting for the second check of the weighing step"
-            action={<LinkButton href={stepHref(v.step.stepNo)} variant="cta" size="lg">{canCheck ? "Open the check" : "See the check"}</LinkButton>}
+            action={canCheck ? <LinkButton href="/production/checks" variant="cta" size="lg">Open my list</LinkButton> : undefined}
           >
-            All weighings are saved. A second person who did not weigh looks at the step and confirms it{canCheck ? " — you can do it now" : ""}.
+            All weighings are saved. A second person who did not weigh confirms the step on their own phone (their list &quot;Waiting for you to check&quot;).
           </Banner>
         </div>
       )}
@@ -95,11 +102,13 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         scales={v.scales}
         requiresScale={!!v.step?.requiresEquipment}
         checkers={v.checkers}
-        passwordRequired={v.passwordRequired}
+        sameDevice={v.sameDevice}
+        siteId={b.siteId}
+        nextLabel={v.nextStep ? `Done — go to ${v.nextStep.name}` : null}
         totalWeighed={v.totalWeighed}
         totalTarget={v.totalTarget}
         stepBlockers={(v.step?.blockers ?? []).map((x) => x.message)}
-        nextHref={v.step ? stepHref(v.step.stepNo + 1) : null}
+        nextHref={v.nextStep ? stepHref(v.nextStep.stepNo) : null}
         moreHref={`/production/orders/${workOrderId}/weigh/more?batch=${b.id}`}
         viewer={{ userId: ctx.userId, displayName: ctx.displayName, canCheck: ctx.can("production.dispense_record.approve") && ctx.canAt("production.dispense_record.approve", b.siteId) }}
         reasons={v.lotChangeReasons}

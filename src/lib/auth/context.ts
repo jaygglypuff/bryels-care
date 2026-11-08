@@ -42,7 +42,13 @@ export type AccessDetail = {
  * `readOnly`: set when the read-only maintenance mode applies to this user (US-2-30); mutating
  * permission checks and `assertWritable()` then refuse with `read_only` before any write.
  */
-export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride; selfApproval?: SelfApproval; ownerAlone?: OwnerAlone };
+export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride; selfApproval?: SelfApproval; ownerAlone?: OwnerAlone; coSigned?: CoSigned };
+
+/**
+ * ADR-130: a context minted by `coSign` (src/lib/auth/co-sign.ts) for a second person who typed their own password
+ * on the operator's device. Services record `signedOn: "operator_device"` from this, never from the form.
+ */
+export type CoSigned = { operatorUserId: string; operatorSessionId: string | null; via: "password" };
 
 /**
  * ADR-073 owner override (setting `governance.owner_override`): the owner holds every permission and
@@ -327,6 +333,16 @@ export class AuthContext {
 
   get sessionId(): string | null {
     return this.options.session?.id ?? null;
+  }
+
+  /** ADR-130: set when this person signed on someone else's device with their own password (coSign). */
+  get coSigned(): CoSigned | null {
+    return this.options.coSigned ?? null;
+  }
+
+  /** Where a second-person check was signed: the checker's own session, or the operator's device with a password. */
+  get signedOn(): "own_session" | "operator_device" {
+    return this.options.coSigned ? "operator_device" : "own_session";
   }
 
   /** The permission held AT the site: from an organization-wide assignment or an assignment at that site. */

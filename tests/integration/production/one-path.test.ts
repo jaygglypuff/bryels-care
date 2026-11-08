@@ -89,10 +89,10 @@ describe("Start check from the step card, checked from the checker's own session
     expect(mine.viewer).toMatchObject({ isDoer: true });
     const theirs = await getStepCard(checker, batchId, 1);
     expect(theirs.viewer).toMatchObject({ canCheck: true, isDoer: false });
-    // The checker's Home has a Check task that opens the same step.
+    // ADR-130: the checker's Home has a Check task that opens their list "Waiting for you to check" (never the step).
     const t = (await myFloorTasks(checker)).find((x) => x.batchId === batchId)!;
     expect(t.kind).toBe("check");
-    expect(t.href).toContain("/step/1?batch=");
+    expect(t.href).toBe("/production/checks");
     expect(isOldWorkspaceHref(t.href)).toBe(false);
   });
 
@@ -113,7 +113,7 @@ describe("Start check from the step card, checked from the checker's own session
 });
 
 describe("weighings waiting for a check are the checker's Check task", () => {
-  it("after an unchecked weighing the checker has 'Check a weighing' to the Weigh screen; the weigher does not", async () => {
+  it("after an unchecked weighing the checker has 'Check a weighing' to their check list; the weigher does not", async () => {
     const v = await getWeighView(w.operator, batchId);
     const c = v.cards.find((x) => x.needsCheck)!;
     const lot = c.lots[0];
@@ -121,7 +121,7 @@ describe("weighings waiting for a check are the checker's Check task", () => {
     const t = (await myFloorTasks(checker)).find((x) => x.batchId === batchId)!;
     expect(t).toMatchObject({ kind: "check", canDo: true });
     expect(t.title).toMatch(/^Check (a weighing|\d+ weighings)$/);
-    expect(t.href).toMatch(/\/weigh\?batch=/);
+    expect(t.href).toBe("/production/checks");
     const mine = (await myFloorTasks(w.operator)).find((x) => x.batchId === batchId)!;
     expect(mine.kind).not.toBe("check");
   });

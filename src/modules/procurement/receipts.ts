@@ -25,7 +25,8 @@ export type PoReceiptLineInput = {
   /** ADR-076: brand on the delivered containers. */
   brand?: string | null;
   manufacturedOn?: string | null;
-  expiresOn: string;
+  /** Null or empty for packaging when the site does not ask for it (A-RCV-EXP-01). */
+  expiresOn?: string | null;
   retestOn?: string | null;
   containerCount?: number | null;
   storageConditionsConfirmed?: boolean;

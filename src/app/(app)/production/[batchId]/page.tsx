@@ -252,6 +252,12 @@ export default async function BatchRecordPage({ params }: Params) {
           actions={
             <MoreMenu compact className="batch-more-menu">
               <div className="flex flex-col gap-2">
+                {/* Round 5 (B-owner-manager B4): reachable from the batch record for everyone who may report one. */}
+                {ctx.can("quality.deviation.create") && (
+                  <LinkButton href={`/quality/deviations/new?batchId=${batch.id}&back=${encodeURIComponent(`/production/${batch.id}`)}`} variant="secondary" data-testid="report-problem">
+                    Report a problem
+                  </LinkButton>
+                )}
                 <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                   Print batch record
                 </LinkButton>

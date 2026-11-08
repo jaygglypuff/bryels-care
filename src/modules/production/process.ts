@@ -12,6 +12,7 @@ import { notifyRoles } from "@/modules/platform/notifications";
 import { DEVIATION_UNAVAILABLE, type DeviationKind, executionHooks } from "./execution-hooks";
 import { type BatchRow, HOLD_STEP_KINDS, type SnapshotStep, type StepRecord, findStep, openStep, routingStepDetails, stepLabel, stepRecord } from "./execution";
 import { idempotent, lockBatch } from "./shared";
+import { missingReadingSentence, outOfRangeSentence } from "./floor-words";
 
 /* ================================================================== equipment use (W13-03/04) */
 
@@ -233,7 +234,7 @@ export async function recordReadingInTx(
       const current = (await currentReadings(tx, rec.id)).find((r) => r.routingStepParameterId === p.id);
       const correction = input.correctionReason?.trim() || null;
       if (current && (!correction || correction.length < 5)) {
-        throw new DomainError("validation", `${p.name} already has a reading. Give a correction reason (at least 5 characters) to replace it.`, { field: "correctionReason" });
+        throw new DomainError("validation", `${p.name} already has a value. Tap why you change it (the first value stays on record).`, { field: "correctionReason", fieldErrors: { [`correction-${p.id}`]: "Tap why you change it." } });
       }
       let equipmentId: string | null = null;
       if (input.equipmentRef) equipmentId = (await useEquipment(tx, ctx, batch, step, rec, input.equipmentRef)).equipment.id;
@@ -276,7 +277,7 @@ export async function recordReadingInTx(
       if (!ev.within) {
         await tx
           .update(processStepRecords)
-          .set({ blockedReason: `${p.name} ${shown}${p.uom ? ` ${p.uom}` : ""} is outside ${limitText}.` })
+          .set({ blockedReason: outOfRangeSentence(p, ev.valueNumeric ?? ev.valueText ?? (ev.valueBoolean === null ? null : ev.valueBoolean ? "yes" : "no")) })
           .where(eq(processStepRecords.id, rec.id));
       }
       return { readingId: row.id, isWithinLimits: ev.within, parameter: p.name, value: shown, limits: limitText };
@@ -294,7 +295,8 @@ export function limitsLabel(p: { minValue: string | null; maxValue: string | nul
 
 /* ================================================================== blockers and exception */
 
-export type Blocker = { message: string; exceptionable: boolean };
+/** `kind`/`parameterId` (round 5): the step card puts a missing or out-of-range sentence under its own field. */
+export type Blocker = { message: string; exceptionable: boolean; kind?: "missing" | "out_of_range"; parameterId?: string };
 
 /**
  * What keeps a process-type step from completing (W05-11..13): required readings missing,
@@ -308,10 +310,11 @@ export async function processBlockers(q: DbOrTx, ctx: AuthContext, batch: BatchR
   for (const p of params) {
     const r = readings.find((x) => x.routingStepParameterId === p.id);
     if (!r) {
-      if (p.isRequired) out.push({ message: `Record ${p.name}${p.uom ? ` (${p.uom})` : ""}.`, exceptionable: false });
+      // Round 5 B4: one plain sentence, never "Record …" behind "Saved.".
+      if (p.isRequired) out.push({ message: missingReadingSentence(p), exceptionable: false, kind: "missing", parameterId: p.id });
     } else if (!r.isWithinLimits && !rec?.deviationId) {
-      const shown = r.valueNumeric ?? r.valueText ?? (r.valueBoolean ? "yes" : "no");
-      out.push({ message: `${p.name} ${shown}${p.uom ? ` ${p.uom}` : ""} is outside ${limitsLabel(p)}: needs a controlled exception with a deviation (CX-TOL).`, exceptionable: true });
+      // Round 5 B3: "90 °C is above the 75 °C limit. Check again. If it is right, say why." (no CX-TOL, no 90.000000).
+      out.push({ message: outOfRangeSentence(p, r.valueNumeric ?? r.valueText ?? (r.valueBoolean === null ? null : r.valueBoolean ? "yes" : "no")), exceptionable: true, kind: "out_of_range", parameterId: p.id });
     }
   }
   if (step.requiresEquipment) {

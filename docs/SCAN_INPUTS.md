@@ -70,6 +70,9 @@ Pure rules: `codeKey`, `cleanTyped`, `matchTypedCode` in `src/lib/scan/pick.ts`.
    permission again (`resolveLotRef` / `resolveLocationRef` in `src/modules/inventory/holds.ts`, `findLotForCount`,
    `findContainerByNumber`, `resolvePickRef` in `src/modules/scan/pick.ts`). Since this change those resolvers
    also refuse the placeholder text and labels of another kind in plain words.
+6. Round 5 B8 (2026-11-08): the grey example text in the typing box is never a real record number (people typed
+   the example and got another order's box). It says what to type: "e.g. the last 4 numbers on the label", "e.g. the
+   last 4 numbers on the box label", "e.g. the code on the shelf" (`PICK_WORDS[kind].example` in `src/lib/scan/pick.ts`).
 
 Legend for "How it works now": **tap** = expected candidates listed; **scan** = camera button + handheld
 scanner; **words** = find by name (server search, current site) or **words (list)** = filter of the listed
@@ -112,7 +115,7 @@ code**: ✓ = the number printed on the label can be typed (2026-11-08 audit; ev
 
 | Route | Field | Identifies | How it worked | How it works now | ✓ | Type the code |
 |---|---|---|---|---|---|---|
-| `/sales/picking/[pickId]` | Scan the box label, or type the number printed on it | box or lot (loose) | Scanner (camera, scanner, type) placeholder `BC:BOX:BX-00000012 · BC:LOT:…`; typed = manual with reason | scan or type (saved `typed`, no reason needed) · the boxes still to take are listed; a **tap** is saved as entered by hand (reason defaulted "Label would not scan: tapped in the list", audited); a lot label then asks "How many loose pieces of this lot?" | ✓ | ✓ |
+| `/sales/picking/[pickId]` | Scan the box label, or type the number printed on it | box or lot (loose) | Scanner (camera, scanner, type) placeholder `BC:BOX:BX-00000012 · BC:LOT:…`; typed = manual with reason | scan or type (saved `typed`, no reason needed) · the boxes still to take are listed; a **tap** is saved as entered by hand and needs a tapped reason first (**Label torn**, **Scanner broken** or a few words; round 5 B9: no default reason, refused without one), audited; a lot label then asks "How many loose pieces of this lot?" | ✓ | ✓ |
 | `/sales/packing/[shipmentId]` (second check) | Scan each box label, or type the number printed on it | box or lot | Scanner with typing | the box list comes first ("Boxes · 0 of 1 checked", next box marked), then scan or type; a lot label then asks "How many loose pieces of this lot?". Not tappable: the independent check must read the label | ✓ | ✓ |
 | `/sales/shipments/[shipmentId]` (dispatch) | driver, plate | — | Text | unchanged: no lot/box identified here | n/a | n/a |
 | `/sales/returns/[returnId]` | Which box or lot came back? | box or lot on that delivery | Text box "Scan the box or lot label… or type the number" + "I typed it" tick box | tap (what left on this delivery) · scan · words (list); a tap is recorded as entered by hand | ✓ | ✓ |
@@ -153,7 +156,7 @@ transfer and step fields of that page no longer exist. Production fields now:
 | `/production/orders/[id]/step/[n]` packaging box (no packaging lines) | `lotRef` + `locationRef` | packaging lot, shelf | `kind="lot"` candidates = released packaging lots at the site (tap · scan · words); then `kind="location"` = places of the chosen lot, `hideWhenSingle`, `onlyCandidates` | ✓ | ✓ |
 | `/production/orders/[id]/step/[n]` packaging box (packaging lines) | — | — | the taken lot is shown; nothing to identify | ✓ | n/a |
 | `/production/orders/[id]/weigh` (More details) | scale (`equipmentRef`) | equipment | `kind="equipment"`, `submit="code"`, candidates = the site's scales (the ones that cannot be used greyed with the reason), first usable preselected (ADR-125) | ✓ | ✓ |
-| `/production/orders/[id]/weigh` | `lotConfirm` + `lotConfirmVia` | lot | `kind="lot"`, `mode="emit"`, `allowTap={false}`, `onlyCandidates` (a tap is not a check, A-SCAN-11; ADR-080 §3); "Type the lot number" (all of it or the last 4) is a normal option, recorded `typed` (replaces "Label damaged? Type the last 4") | ✓ | ✓ |
+| `/production/orders/[id]/weigh` | `lotConfirm` + `lotConfirmVia` | lot | `kind="lot"`, `mode="emit"`, `allowTap={false}`, `onlyCandidates` (a tap is not a check, A-SCAN-11; ADR-080 §3); "Type the lot number" (all of it or the last 4) is a normal option, recorded `typed` (replaces "Label damaged? Type the last 4"). Round 5: `showCandidates` only under "Use another lot" (the lot to take is shown once, "Take lot …0010 · shelf"); a wrong label says which lot to take. With no signal the weighing is queued with the same `lotRef`/`lotVia` (offline outbox, A-OFF-WGH-01) | ✓ | ✓ |
 | `/production/orders/[id]/weigh/more` ("Other ways to weigh", exec-forms `WeighForm`) | `lotRef` + `locationRef` | lot, shelf | `kind="lot"` candidates = usable lots (FEFO) with `places`; `kind="location"` `hideWhenSingle` | ✓ | ✓ |
 | `/production/orders/[id]/weigh/more` | 2. Scale (`equipmentRef`) | equipment | `kind="equipment"`, `submit="code"`, blocked scales greyed with the reason (ADR-125) | ✓ | ✓ |
 | `/production/orders/[id]/materials` (setting scan_lots) | `lotCode` + `lotVia` | lot | `kind="lot"`, `allowTap={false}`, `onlyCandidates`, candidates = the lot to take; typed lot number recorded `typed` | ✓ | ✓ |

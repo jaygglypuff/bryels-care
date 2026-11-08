@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import Link from "next/link";
-import { batchBoxInfoFor, batchRecordHref, finishHref, floorCheckNext, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
+import { batchBoxInfoFor, batchRecordHref, finishHref, floorCheckNext, getFinishView, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
+import { FinishPanel } from "../../../../[batchId]/finish/finish-panel";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
@@ -31,7 +32,7 @@ function plainStep(kind: string, isCheck: boolean, isWait: boolean, perPiece = f
       ? "Wrap or fill the pieces, stick a label on each piece, pack them in boxes and stick one label on each box."
       : "Wrap or fill the pieces, pack them in boxes and stick one label on each box.";
   if (kind === "dispensing" || kind === "weighing") return "Weigh out each ingredient on the Weigh screen.";
-  if (kind === "transfer") return "Count the pieces and put the batch in the hold area on the Finish screen.";
+  if (kind === "transfer") return "Answer the questions about what was made and the packing left over, then tap Finish and send to QA. The batch goes to the QA waiting area.";
   return "Do this step, write the numbers it asks for, then tap Step done.";
 }
 
@@ -63,7 +64,10 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   const next = nextBatchScreen(facts);
   // Who checks this step next, by name and role (never the person who did it; docs/NEXT_APPROVER.md).
   const checkNext = v.step.status === "awaiting_check" ? await floorCheckNext(ctx, v.step.kind === "line_clearance" ? "start_check" : "step_check", b.id, v.step.record?.conductedById ?? null) : null;
-  const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : v.next.kind === "transfer" ? finishHref(b.id) : href(v.next.stepNo)) : null;
+  // Round 5 B19: the step after packing is "Move to the QA waiting area" (step 7 of 7), which holds the Finish form;
+  // "Done — go to …" opens that step, it is never skipped.
+  const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : href(v.next.stepNo)) : null;
+  const finishView = v.step.isTransfer ? await getFinishView(ctx, b.id) : null;
   return (
     <div className="mx-auto max-w-5xl pb-24 text-[16px]">
       <FlowHeader
@@ -93,9 +97,12 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         checkers={v.checkers}
         checkNext={checkNext}
         approvers={v.approvers}
-        passwordRequired={v.passwordRequired}
+        sameDevice={v.sameDevice}
         nextHref={nextHref}
-        nextLabel={v.next ? (v.next.kind === "transfer" ? "Go to Finish" : v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : plainWords(v.next.name)) : null}
+        // Round 5 problem 10: the button says what it does, not only the next step's name.
+        nextLabel={v.next ? `Done — go to ${v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : plainWords(v.next.name)}` : null}
+        finishPanel={finishView ? <FinishPanel v={finishView} /> : undefined}
+        quietDone={!!boxes && !boxes.plan?.printed && boxes.canPrint}
         weighHref={`/production/orders/${workOrderId}/weigh?batch=${b.id}`}
         finishHref={finishHref(b.id)}
         fullRecordHref={batchRecordHref(b.id)}
@@ -104,7 +111,15 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         labelsPanel={
           boxes ? (
             <div className="grid gap-3">
+              {/* Round 5 problem 3: the work in order, one green button, one print trip. */}
+              <ol className="grid gap-1 rounded-[16px] border border-line bg-surface p-4 text-[16px]" data-testid="pack-order">
+                {boxes.labelling === "per_piece" ? <li>1. Stick a label on each {boxes.pieceWord.replace(/s$/, "")}.</li> : null}
+                <li>{boxes.labelling === "per_piece" ? "2" : "1"}. Pack {boxes.unitsPerBox} in a box.</li>
+                <li>{boxes.labelling === "per_piece" ? "3" : "2"}. Stick one label on each box.</li>
+                {boxes.samples ? <li className="text-[14px] text-fg-2">QA keeps {boxes.samples} {boxes.pieceWord} as samples: they go in no box and get no label (QA to confirm).</li> : null}
+              </ol>
               <BoxLabels
+                withPieceLabels={boxes.labelling === "per_piece" && !!v.packaging?.labels.allowed && !!v.packaging.labels.values}
                 batchId={b.id}
                 unitsPerBox={boxes.unitsPerBox}
                 defaultPieces={boxes.defaultPieces}
@@ -119,6 +134,8 @@ export default async function StepPage({ params, searchParams }: { params: Promi
               />
               {/* per_piece products also label each piece (ADR-099 panel); piece labels are not counted one by one. */}
               {boxes.labelling === "per_piece" && v.packaging?.labels.allowed && v.packaging.labels.values ? (
+                <details className="text-[15px]">
+                  <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">Print only the piece labels (again)</summary>
                 <PrintLabelsPanel
                   ctx={ctx}
                   entityType="batch"
@@ -130,6 +147,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
                   action={printBatchLabelsPanelAction}
                   batchValues={v.packaging.labels.values}
                 />
+                </details>
               ) : null}
             </div>
           ) : undefined
@@ -144,10 +162,16 @@ export default async function StepPage({ params, searchParams }: { params: Promi
           {v.pause.last.words}
         </p>
       ) : null}
-      <p className="mt-6 text-[15px]">
+      <p className="mt-6 flex flex-wrap gap-x-6 text-[15px]">
         <Link href={batchRecordHref(b.id)} className="inline-flex min-h-[44px] items-center text-primary-text underline">
           See the full batch record
         </Link>
+        {/* Round 5 (B-owner-manager B4): report a problem from the step; the reporter comes back to this step. */}
+        {ctx.can("quality.deviation.create") && (
+          <Link href={`/quality/deviations/new?batchId=${b.id}&back=${encodeURIComponent(href(v.step.stepNo))}`} className="inline-flex min-h-[44px] items-center text-primary-text underline" data-testid="report-problem">
+            Report a problem
+          </Link>
+        )}
       </p>
     </div>
   );

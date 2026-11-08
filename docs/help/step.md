@@ -1,57 +1,62 @@
 ---
 key: production.step
 title: Do a step (Start check, Mix, Curing, Cut, Wrap)
-version: 5
-updated_at: 2026-11-06
+version: 6
+updated_at: 2026-11-08
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
-Each step has its own screen: what to do, up to 3 things to write down, and one button.
+Each step has its own screen: what to do, up to 3 things to write down, and one green button.
 
 ## Start check
 
-1. Answer every check with **Yes** or **No**.
-2. If everything is fine, tap **All OK**. Every check is recorded as OK.
+1. Everything is fine? Tap **All OK**. Every check is recorded as OK.
+2. Or answer each line with **Yes** or **No**, then tap **Save**.
 3. A **No** turns the row red. Write what you found and what you did. The step stops until it is fixed and answered again.
-4. If a second person must check, they pick their name on your tablet, **or** they open the step on their own phone: their Home shows **Check start check**. They tap **Yes, I checked it**, or **Something is wrong: send it back** with what to correct. You can never check your own step.
-5. The batch starts when the Start check is done and checked.
+4. If a second person must check, they do it **on their own phone**: the check is on their list **Waiting for you to check**. They tap **Looks right**, or **Not right** and tap why. You can never check your own step.
+5. If your company allows it, a checker standing next to you may sign now on your phone: they choose their name and type **their own password**.
+6. The batch starts when the Start check is done and checked.
 
-## Normal step (for example Mix and pour)
+## Normal step (for example Heat and mix)
 
-1. Read the instruction. Tap **See how** for the work instruction.
-2. Fill in each field: tap the field, type on the keypad. Yes / No fields are two big buttons.
-3. Tap **Step done**.
-4. A value outside its OK range is kept and shown in red. The step stays open. Ask for approval with a reason, or do the step again and correct the value.
-5. Changing a value you already saved asks why. The first value stays on record.
-6. A step that needs equipment (mixer, mould) shows **Equipment for this step**: tap the one you use, then **Use this equipment**. A machine that cannot be used is greyed out with the reason.
-7. Extra fields of the step are under **More details**.
-8. A step that needs a second person's check waits after **Step done**. The checker confirms on your tablet or on their own phone (Home shows **Check <step>**).
-9. A yellow **Not yet** box means an earlier step is still open: tap its button. Nothing can be filled in until then.
+1. Read the instruction. Tap **See how to do it** when the step has a how-to sheet.
+2. Fill in each field: tap the field, type on the keypad. Yes / No fields are two big buttons. Under the field you see the OK range, for example **OK 65–75 °C**.
+3. A number outside the range shows at once in amber: "90 °C is above the 75 °C limit. Check again. If it is right, say why."
+4. Tap **Step done**. A green **Saved** shows, and the button **Done — go to …** opens the next step.
+5. A field left empty is refused: "Type the Mix temperature (°C) first. Nothing was saved."
+6. A value outside its range is kept on record. Measure again and type the new value, or, if it is right, tap **It is right: ask QA to accept it** (QA or the site manager types their own password and writes why).
+7. Changing a value you already saved asks why: tap **I typed it wrong**, **I measured again** or **Other reason** (then a few words). The first value stays on record.
+8. A step that needs equipment (mixer, mould) shows **Equipment for this step**: tap the one you use, then **Use this equipment**.
+9. A step that needs a second person's check waits after **Step done**: "Saved. Waiting for the second check." The checker checks it on their own phone.
+10. A yellow **Not yet** box means an earlier step is still open: tap its button.
 
 ## Curing, resting, in the mould
 
 1. When the step before is done, the wait starts by itself.
 2. The screen shows "Curing until Fri 28 Nov" and the days left.
-3. On the ready date the team gets a reminder. Open the batch and tap **Curing finished**.
-4. Before the ready date the button is off. To end early, tap **Ask to end early**. QA or the site manager picks their name and writes the reason.
+3. On the ready date open the batch and tap **Curing finished**.
+4. Before the ready date the button is off. To end early, tap **Ask to end early**: QA or the site manager types their own password and writes the reason.
 
-## Wrap and label
+## Label and pack
 
-1. The screen shows the wrappers you took at **Get materials**: for example "Soap wrapper 135 g from lot L-2610-00019, taken", the shelf and how many. You do not scan them.
-2. Wrap the bars and put them in boxes.
-3. **Box labels.** Type **How many bars did you pack?** The screen says how many boxes that makes, for example "That makes 2 boxes of 48 and 1 box of 4". The last box may be a part box. That is fine.
-4. Tap **Print 3 box labels**. Then tap **Open the box labels and print**. Pick the label printer and **Actual size**, print, and tap **Yes, they printed**.
-5. Stick one label on each box. Each label shows the product, batch, lot, how many pieces are in that box, made date, expiry, "box 1 of 3" and a square code. The code opens that box when someone scans it.
+1. The screen shows the wrappers, bottles and boxes you took at **Get materials**. You do not scan them.
+2. The work is listed in order: **1. Stick a label on each piece** (only for products labelled piece by piece), **2. Pack 24 in a box**, **3. Stick one label on each box**.
+3. Type **How many go in boxes?** The screen says how many boxes that makes, for example "That makes 3 boxes of 24 and 1 box of 22".
+4. Tap the one green button, for example **Print 94 piece labels and 4 box labels**. The print page opens with all labels in one go. Pick the label printer and **Actual size**, print, and tap **Yes, they printed**.
+5. QA samples get no label and go in no box (QA to confirm this rule).
 6. Wrong number? Type the right number and print again. The old box labels stop working: throw them away.
-7. Some products also need a **label on each piece** (bottles, for example). Only then the screen shows **Label for each piece** too. How many? starts at the pieces you packed. See [Labels](labels.md).
-8. Labels can only be printed from this step on, because printing fixes the lot number and the expiry.
-9. Type **How many did you use?** and **How many were spoiled?** on the keypad.
-10. Tap **Step done**. The system records the wrapper lot for this batch. Left-over wrappers are counted at Finish.
-11. If no wrappers were on the list (older products), the screen shows the wrappers and labels that are ready to use at your site as big cards: name, lot, shelf and how many. **Tap the one you took** (check the lot number on its box or roll), or tap **Scan** and point the camera (or the handheld scanner) at its label, or **Find by name**. Say how many you took and tap **I took these**. You never type a code.
+7. Labels can only be printed from this step on, because printing fixes the lot number and the expiry.
+8. Tap **Step done**, then **Done — go to Move to the QA waiting area**.
+9. If no wrappers were on the list (older products), tap the wrapper or label lot you took, or scan its label. You never type a code.
 
-## After the last step
+## The last step: Finish
 
-1. Tap **Go to Finish** to count the bars and send the batch for the quality check.
+1. The last step, **Move to the QA waiting area**, is where you finish the batch (step 7 of 7). See [Finish a batch](finish.md).
+
+## Report a problem
+
+1. Something went wrong? Tap **Report a problem** at the bottom of the step. Write what happened and tap **Send to QA**.
+2. You see **Sent to QA** and go back to your step.
 
 ## See what happened
 

@@ -13,6 +13,7 @@ import { transitionBatch } from "./state";
 import { syncWorkOrderProgress } from "./work-orders";
 import { notifyNextActors } from "@/modules/governance";
 import { flowHref } from "./flow-paths";
+import { CHECKS_HREF } from "./checks-href";
 
 /**
  * Process step records (W05-06..17, US-3-09..13): the step state machine, prerequisites, start and
@@ -264,7 +265,7 @@ export async function finishStep(
       entityId: rec.id,
       entityNumber: batch.batchNumber,
       siteId: batch.siteId,
-      after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, conductedBy: ctx.displayName, signedOn: "operator_device" },
+      after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, conductedBy: ctx.displayName, signedOn: checker.signedOn },
     });
   }
   if (to === "completed") await afterStepCompleted(tx, ctx, batch, step);
@@ -274,7 +275,7 @@ export async function finishStep(
     await notifyNextActors(tx, ctx, kind, { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
       title: `Check ${step.name.toLowerCase()} of batch ${batch.batchNumber}`,
       body: `${ctx.displayName} did step ${step.stepNo} (${step.name}). Check it on the step screen, or send it back with what to correct.`,
-      link: flowHref({ batchId: batch.id, workOrderId: batch.workOrderId }, `step/${step.stepNo}`),
+      link: CHECKS_HREF, // ADR-130: the checker's list "Waiting for you to check"
       entityType: "batch",
       entityId: batch.id,
       dedupeKey: `handoff.${kind}:${rec.id}:${now.toISOString()}`,
@@ -327,7 +328,7 @@ export async function checkStep(checker: AuthContext, input: { batchId: string; 
         entityNumber: batch.batchNumber,
         siteId: batch.siteId,
         before: { status: rec.status },
-        after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, status: "completed", signedOn: "own_session" },
+        after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, status: "completed", signedOn: checker.signedOn },
       });
       await afterStepCompleted(tx, checker, batch, step);
       return { stepNo: step.stepNo, name: step.name, status: "completed" as const };

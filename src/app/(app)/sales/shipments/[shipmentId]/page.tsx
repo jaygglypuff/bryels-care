@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
-import { getShipment, shipmentReconciliation } from "@/modules/sales";
+import { getShipment, lastDriverAtSite, shipmentReconciliation } from "@/modules/sales";
 import { billingStepOfShipment } from "@/modules/finance";
 import { billingStepWords } from "@/lib/billing-step-words";
 import { LineName } from "@/ui/line-name";
@@ -60,6 +60,8 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
   const canCancel = ["draft", "picked", "packed"].includes(s.status) && ctx.can("sales.shipment.edit");
   const canReverse = s.status === "dispatched" && ctx.can("sales.shipment.void");
   const canDraftDr = s.status === "packed" && ctx.can("sales.delivery_receipt.create") && ctx.can("documents.generated_document.create");
+  const anyDr = v.documents.some((d) => d.documentKind === "delivery_receipt" && d.status === "ready");
+  const lastDriver = canSend ? await lastDriverAtSite(ctx, s.siteId) : null;
   const billing = s.status === "delivered" ? billingStepWords((await billingStepOfShipment(ctx, s.id).catch(() => null)) ?? { stage: "not_billed", invoice: null, next: null }) : null;
 
   const next =
@@ -74,13 +76,25 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
     ) : s.status === "packed" ? (
       canSend ? (
         // UX audit round 2 part 2: the send-out form is inside the one "What to do next" box (no second green button).
-        <NextStepBox text="Next: send it out. Type the driver and the plate number.">
-          <Cmd action={dispatchShipmentAction} fields={{ shipmentId: s.id }} label="Send out now" pending="Sending out…" variant="cta" size="lg" confirm="Stock leaves the shelf now. It can only be undone if the truck never left. Send out?">
-            <Field label="Driver" htmlFor="driverName">
-              <Input id="driverName" name="driverName" required maxLength={80} autoComplete="off" />
+        // Round 5 problem 14: the paper first (a draft receipt the driver takes), then driver and plate (remembered), then go.
+        <NextStepBox text="Next: 1. print the delivery receipt for the driver, 2. driver and plate, 3. the truck leaves.">
+          <div className="mb-3 grid gap-2" data-testid="dr-before-sending">
+            {anyDr ? (
+              <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant="secondary" size="lg">
+                1. Print the delivery receipt
+              </LinkButton>
+            ) : canDraftDr ? (
+              <Cmd action={draftDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="1. Make the delivery receipt for the driver" variant="secondary">
+                <p className="text-[13px] text-fg-2">A draft to print now. It gets its number when the truck leaves; no stock moves yet.</p>
+              </Cmd>
+            ) : null}
+          </div>
+          <Cmd action={dispatchShipmentAction} fields={{ shipmentId: s.id }} label="The truck is leaving: send out now" pending="Sending out…" variant="cta" size="lg" confirm="Stock leaves the shelf now. It can only be undone if the truck never left. Send out?">
+            <Field label="Driver" htmlFor="driverName" hint={lastDriver ? "Same as last time? Change it if another driver goes." : undefined}>
+              <Input id="driverName" name="driverName" required maxLength={80} autoComplete="off" defaultValue={lastDriver?.driverName ?? ""} />
             </Field>
             <Field label="Plate number" htmlFor="vehiclePlate">
-              <Input id="vehiclePlate" name="vehiclePlate" required maxLength={20} autoCapitalize="characters" autoComplete="off" />
+              <Input id="vehiclePlate" name="vehiclePlate" required maxLength={20} autoCapitalize="characters" autoComplete="off" defaultValue={lastDriver?.vehiclePlate ?? ""} />
             </Field>
             <Field label="Who delivers" htmlFor="carrierName">
               <Input id="carrierName" name="carrierName" defaultValue={s.carrier ?? "Own truck"} maxLength={80} />

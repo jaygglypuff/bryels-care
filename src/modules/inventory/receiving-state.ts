@@ -66,3 +66,12 @@ export const SUPPLIER_LOT_REQUIRED_KINDS: readonly string[] = ["raw_material", "
 export function supplierLotRequired(materialKind: string | null | undefined): boolean {
   return SUPPLIER_LOT_REQUIRED_KINDS.includes(materialKind ?? "raw_material");
 }
+
+/**
+ * Round 5 (C-office B3, A-RCV-EXP-01, QA to confirm): an expiry date is asked for every delivery line except
+ * packaging (wrappers, bottles, caps, boxes, labels), unless the setting `inventory.receiving.packaging_expiry_required`
+ * is on. People invented dates for cartons ("expires 2031") when it was always required.
+ */
+export function expiryRequired(materialKind: string | null | undefined, packagingExpiryRequired: boolean): boolean {
+  return (materialKind ?? "raw_material") !== "packaging" || packagingExpiryRequired;
+}
