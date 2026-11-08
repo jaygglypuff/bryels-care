@@ -55,7 +55,7 @@ export default async function LinePage({ params, searchParams }: { params: Promi
       <Card id="machines">
         <CardTitle>Machines here ({line.equipment.length})</CardTitle>
         {line.equipment.length === 0 ? (
-          <p className="text-[13px] text-muted">No machines yet. Pick one below, or register it under Management › Production setup › Equipment.</p>
+          <p className="text-[13px] text-muted">No machines yet. Pick one below, or register it under Set-up › Equipment.</p>
         ) : (
           <ul className="space-y-3">
             {line.equipment.map((e) => (

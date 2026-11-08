@@ -2,7 +2,7 @@
 import { requireContext } from "@/lib/auth/context";
 import { limitScanLookup } from "@/lib/rate-limit";
 import { masterSearch, MAX_QUERY_LENGTH, SEARCH_NEEDS_STOCK_ACCESS, searchAllowed, type MasterGroup } from "@/modules/scan";
-import { commonScreens, searchScreens, type ScreenHit } from "./search-screens";
+import { commonScreens, searchActions, searchScreens, type ScreenHit } from "./search-screens";
 
 export type MasterSearchResponse = {
   query: string;
@@ -32,7 +32,8 @@ export async function masterSearchAction(input: string): Promise<MasterSearchRes
   if (!(await searchAllowed(ctx))) return { query, screens: [], groups: [], exactHref: null, common: [], error: SEARCH_NEEDS_STOCK_ACCESS };
   const can = (p: Parameters<typeof ctx.can>[0]) => ctx.can(p);
   if (!query) return { query, screens: [], groups: [], exactHref: null, common: commonScreens(can, ctx.roleCodes) };
-  const screens = searchScreens(query, can, ctx.roleCodes);
+  // Round 5: things to do ("new customer") first, then screens (questions such as "who owes us" included).
+  const screens = [...searchActions(query, can), ...searchScreens(query, can, ctx.roleCodes)];
   if (!(await limitScanLookup(ctx.organizationId, ctx.userId)).allowed) return { query, screens, groups: [], exactHref: null, common: [], error: SEARCH_RATE_LIMITED };
   try {
     const r = await masterSearch(ctx, query);

@@ -64,7 +64,7 @@ export function SupplierForm({ initial, categories, plain = false }: { initial?:
         open={errIn(["category", "addressLine1", "city", "country", "paymentTermsDays", "defaultLeadTimeDays"])}
         more={
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Category (optional)" htmlFor="category" error={fe.category} hint="To add a category, go to Management › Master data › Choice lists.">
+            <Field label="Category (optional)" htmlFor="category" error={fe.category} hint="To add a category, go to Set-up › Choice lists.">
               <Select id="category" name="category" defaultValue={initial?.category ?? ""}>
                 <option value="">No category</option>
                 {categories.map((c) => (

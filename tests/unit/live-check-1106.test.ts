@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { activitySentence } from "@/app/(app)/dashboard/activity-sentence";
 import { firstActionable, floorQuickKeys, putAwaySentence, salesItems, type AttentionItem } from "@/app/(app)/dashboard/home-next";
 import { doingPermission } from "@/app/(app)/forbidden-words";
-import { DESKTOP_ROW_MAX, buildNav, desktopRow, groupSections } from "@/app/(app)/nav";
+import { MAX_TABS, MORE, buildNav, groupSections } from "@/app/(app)/nav";
 import { type NextActors, othersSentence } from "@/lib/next-actors-words";
 import { PERMISSIONS, ROLE_BUNDLES, type Permission } from "@/lib/permissions";
 import { fmtDayMonth } from "@/lib/qty";
@@ -36,32 +36,15 @@ describe("finding 1: refusals name the people who can DO it", () => {
 });
 
 describe("finding 2: desktop tab row never wraps", () => {
-  it("no role sees more than DESKTOP_ROW_MAX entries plus More, and nothing is lost", () => {
+  // Round 5 (ADR-129) replaced the DESKTOP_ROW_MAX row: at most MAX_TABS tabs per area and one flat "More" list.
+  it("no role sees more than MAX_TABS tabs plus one More list in an area", () => {
     for (const role of Object.keys(ROLE_BUNDLES)) {
       for (const g of buildNav(canFor(role) as (p: Permission) => boolean, [role])) {
-        const { main: all, sections } = groupSections(g);
-        const main = all.filter((i) => i.topBar !== "always" && i.topBar !== "wide");
-        const row = desktopRow(main, sections);
-        expect(row.pills.length + row.sections.length, `${role} ${g.label}`).toBeLessThanOrEqual(DESKTOP_ROW_MAX);
-        const shown = [...row.pills, ...(row.more?.items ?? [])].map((i) => i.href).sort();
-        expect(shown, `${role} ${g.label}`).toEqual(main.map((i) => i.href).sort());
-        expect([...row.sections, ...(row.more?.sections ?? [])].map((s) => s.name)).toEqual(sections.map((s) => s.name));
+        const { main, sections } = groupSections(g);
+        expect(main.length, `${role} ${g.label}`).toBeLessThanOrEqual(MAX_TABS);
+        expect(sections.every((s) => s.name === MORE), `${role} ${g.label}`).toBe(true);
       }
     }
-  });
-
-  it("the owner's Operations keeps the daily tabs and puts the TV screen and rejects under More", () => {
-    const g = buildNav(canFor("owner_director") as (p: Permission) => boolean, ["owner_director"]).find((x) => x.label === "Operations")!;
-    const { main, sections } = groupSections(g);
-    const row = desktopRow(main, sections);
-    expect(row.pills.map((i) => i.label)).toContain("Check a batch or delivery");
-    expect(row.more?.items.map((i) => i.label)).toEqual(expect.arrayContaining(["Floor screen (TV)", "Rejects"]));
-    expect(row.sections.map((s) => s.name)[0]).toBe("Receiving");
-  });
-
-  it("a short row is unchanged", () => {
-    const row = desktopRow([{ label: "A", href: "/a" }], [{ name: "S", items: [{ label: "B", href: "/b", section: "S" }] }]);
-    expect(row.more).toBeNull();
   });
 
   it("the customer order stepper has short words for its long steps", () => {

@@ -79,7 +79,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
           <Card>
             <CardTitle action={ctx.can("masterdata.warehouse.view") ? <LinkButton size="sm" variant="secondary" href={`/masterdata/warehouses?site=${site.id}`}>Warehouses</LinkButton> : undefined}>Warehouses</CardTitle>
             {whs.length === 0 ? (
-              <p className="text-[13px] text-muted">None yet. Add one under Management › Master data › Warehouses.</p>
+              <p className="text-[13px] text-muted">None yet. Add one under Set-up › Warehouses.</p>
             ) : (
               <ul className="space-y-2 text-[14px]">
                 {whs.map((w) => (
@@ -94,7 +94,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
           <Card>
             <CardTitle>Making areas / lines</CardTitle>
             {lines.length === 0 ? (
-              <p className="text-[13px] text-muted">None yet. Add one under Management › Master data › Making areas / lines.</p>
+              <p className="text-[13px] text-muted">None yet. Add one under Set-up › Making areas / lines.</p>
             ) : (
               <ul className="space-y-2 text-[14px]">
                 {lines.map((l) => (

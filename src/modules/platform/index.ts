@@ -6,12 +6,15 @@ export {
   notifyUsers,
   notifyRoles,
   usersWithRoles,
+  usersForJob,
   listMyNotifications,
   unreadNotificationCount,
   markNotificationRead,
   markAllNotificationsRead,
   acknowledgeNotification,
 } from "./notifications";
+// Round 5 (ADR-129): messages clear when the work is done.
+export { resolveDoneNotifications, DONE_RULES, RESOLVABLE_KINDS } from "./notification-done";
 export { workerStatus } from "./diagnostics";
 // Wave 3 W3B (US-5-13): Phase 5 diagnostics cards
 export { databaseCard, importsCard, alertsCard, errorsCard, integrationsCard, registerImportStatsProvider, type DatabaseCard, type ImportsCard, type AlertsCard, type ErrorsCard, type IntegrationsCard } from "./diagnostics-phase5";

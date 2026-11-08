@@ -40,11 +40,16 @@ const TONE: Record<string, string> = {
   bad: "text-[var(--bad-fg)] bg-[var(--bad-bg)]",
 };
 
-/** Top-bar chip: Synced / Syncing / Offline · n pending / Failed n / Conflicts n; opens the sync page. */
+/**
+ * Top-bar chip: Syncing / Offline · n pending / Failed n / Conflicts n; opens the sync page. Round 5 (ADR-129, B report
+ * #1): shown only when something waits or there is no signal; "all saved" (and a browser that cannot work offline) shows
+ * nothing, so an unlabelled cloud never sits in the top bar. The drawer still shows the line in words.
+ */
 export function SyncChip({ userId }: { userId: string }) {
   const s = useSync(userId);
   const l = syncLabel(s);
   const quiet = l.tone === "ok";
+  if (quiet || !s.supported) return null;
   // Phones show the icon and a number only, so the top bar never scrolls sideways at 360 px.
   const n = s.stats.conflict || s.stats.failed || s.stats.pending + s.stats.syncing;
   return (

@@ -23,9 +23,9 @@ function files(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const AREAS = ["account", "action-centre", "approvals", "dashboard", "notifications", "sync", "admin", "documents", "management", "analytics", "reports", "help", "operations"];
+const AREAS = ["account", "action-centre", "approvals", "dashboard", "notifications", "sync", "admin", "documents", "setup", "analytics", "reports", "help", "operations"];
 const all = AREAS.flatMap((a) => files(join(ROOT, a)));
-// /admin only redirects to /admin/users.
+// /admin only redirects to /admin/users. Round 5: /management only redirects to /setup (the Set-up page is checked).
 const pages = all.filter((p) => p.endsWith("page.tsx") && !p.endsWith(join("admin", "page.tsx")));
 
 describe("grade-5 home, settings, reports, help and operations screens", () => {

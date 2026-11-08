@@ -26,7 +26,7 @@ export default async function WarehouseHomePage() {
       <Card>
         <CardTitle action={<LinkButton href="/inventory" variant="ghost">All stock</LinkButton>}>Parts of the warehouse</CardTitle>
         {shown.length === 0 ? (
-          <EmptyState title="No places set up yet">Ask the site manager to add the shelves and say which part of the warehouse each is in: Management › Master data › Shelves and areas (set up).</EmptyState>
+          <EmptyState title="No places set up yet">Ask the site manager to add the shelves and say which part of the warehouse each is in: Set-up › Shelves and areas (set up).</EmptyState>
         ) : (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Warehouse sections">
             {shown.map((t) => (

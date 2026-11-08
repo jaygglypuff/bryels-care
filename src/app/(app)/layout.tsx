@@ -8,7 +8,7 @@ import { screenPreferences } from "@/modules/governance";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
-import { buildNav, isApprover, tabsFor } from "./nav";
+import { AREAS_BY_PERSONA, buildNav, homeHref, isApprover, isFloor, navPersona, setupSections, tabsFor } from "./nav";
 import { Shell } from "./shell";
 import { helpForScreen, signOut, switchSite } from "./actions";
 import { masterSearchAction } from "./search-actions";
@@ -17,12 +17,15 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireContext();
-  // ADR-080 §11, ADR-081: five destinations; the menu and the phone/iPad-portrait tab bar follow the role.
+  const can = (p: Parameters<typeof ctx.can>[0]) => ctx.can(p);
+  // Round 5 (ADR-129): one menu per job (nav.ts); the bottom bar follows the role.
   const approvalCount = await myApprovalCount(ctx).catch(() => 0); // ADR-075 "To approve" badge
-  const approver = isApprover((p) => ctx.can(p), ctx.roleCodes, ctx.permissions, approvalCount); // ADR-082: hidden from people who never approve
-  const nav = buildNav((p) => ctx.can(p), ctx.roleCodes, { approver });
-  const tabs = tabsFor((p) => ctx.can(p), ctx.roleCodes);
+  const approver = isApprover(can, ctx.roleCodes, ctx.permissions, approvalCount); // ADR-082: hidden from people who never approve
+  const persona = navPersona(can, ctx.roleCodes);
+  const nav = buildNav(can, ctx.roleCodes, { approver });
+  const tabs = tabsFor(can, ctx.roleCodes);
   const qaCount = ctx.can("quality.disposition.view") ? (await qaQueueCount(ctx.organizationId, ctx.currentSiteId)).total : null; // same rule as the QA list (UX audit)
+  // Messages that are done are cleared first (round 5: "messages clear when the work is done").
   const unreadCount = await unreadNotificationCount(ctx);
   const maintenance = await getMaintenanceState(db, ctx.organizationId);
   // ADR-126: the screen settings (top bar: search or Scan; search open to everyone or stock people only).
@@ -31,6 +34,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <Shell
       nav={nav}
       tabs={tabs}
+      homeHref={homeHref(ctx.roleCodes)}
+      floor={isFloor(persona)}
+      needsMeArea={AREAS_BY_PERSONA[persona].some((a) => a.label === "Needs me") && nav.some((g) => g.label === "Needs me")}
+      hasSetup={setupSections(can, ctx.roleCodes).length > 0}
       user={{ id: ctx.userId, name: ctx.displayName, roles: ctx.roleCodes.map((r) => ROLE_BUNDLES[r]?.name ?? r).join(", ") }}
       sites={ctx.allowedSites}
       currentSiteId={ctx.currentSiteId}

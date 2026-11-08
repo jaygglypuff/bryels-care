@@ -108,7 +108,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       </Card>
       {rows.length === 0 ? (
         <EmptyState title={filtered ? "No locations match" : "No locations at this site"} action={filtered ? <LinkButton href="/masterdata/locations" variant="secondary">Clear filters</LinkButton> : undefined}>
-          {filtered ? "Try another filter." : canCreate ? (opts.warehouses.length ? "Add the first place below: type its name and press Add location." : "First add a warehouse under Management › Master data › Warehouses.") : "Ask the site manager or the system administrator to add locations."}
+          {filtered ? "Try another filter." : canCreate ? (opts.warehouses.length ? "Add the first place below: type its name and press Add location." : "First add a warehouse under Set-up › Warehouses.") : "Ask the site manager or the system administrator to add locations."}
         </EmptyState>
       ) : (
         [...groups.entries()].map(([wid, g]) => (

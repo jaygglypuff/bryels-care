@@ -10,7 +10,7 @@ Goods that a customer sends back are scanned against the delivery they left on. 
 
 ## Start the return
 
-1. Open **Sales & Customers → Quotes, prices & returns → Customer returns** and press **New customer return**.
+1. Open **Sell → Customer returns** and press **New customer return**.
 2. Choose **Which delivery did it come from?**, **Why did it come back?** and **Where to keep it** (the usual returns place). Some reasons need a few words under **Explain**.
 3. Press **Start the customer return**.
 

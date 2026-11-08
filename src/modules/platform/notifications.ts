@@ -6,6 +6,7 @@ import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
+import { resolveDoneNotifications } from "./notification-done";
 
 export const SEVERITIES = ["info", "warning", "critical"] as const;
 export type Severity = (typeof SEVERITIES)[number];
@@ -102,6 +103,19 @@ export async function usersHoldingPermissionAt(q: DbOrTx, organizationId: string
   return rows.map((r) => r.id);
 }
 
+/**
+ * Round 5 (ADR-129): the people whose JOB this is. Holders of `permission` at the site; when some of them hold one of
+ * `jobRoles` (role codes, e.g. warehouse_operator for put-away), only those. When nobody holds the job's roles there,
+ * every holder of the permission, so the work is never orphaned.
+ */
+export async function usersForJob(q: DbOrTx, organizationId: string, permission: Permission, siteId: string, jobRoles: readonly string[]): Promise<string[]> {
+  const holders = await usersHoldingPermissionAt(q, organizationId, permission, siteId);
+  if (!holders.length || !jobRoles.length) return holders;
+  const job = new Set(await usersWithRoles(q, organizationId, [...jobRoles], siteId));
+  const mine = holders.filter((u) => job.has(u));
+  return mine.length ? mine : holders;
+}
+
 /** Notifies every holder of the roles (see usersWithRoles); returns the recipients. */
 export async function notifyRoles(q: DbOrTx, target: { roleCodes: string[]; siteId?: string | null }, n: NotificationInput) {
   const ids = await usersWithRoles(q, n.organizationId, target.roleCodes, target.siteId);
@@ -109,10 +123,19 @@ export async function notifyRoles(q: DbOrTx, target: { roleCodes: string[]; site
   return ids;
 }
 
-/** Self-service: the signed-in user's notifications, newest first (open ones first). */
+/**
+ * Round 5 (ADR-129): before the bell is counted or the list is shown, messages whose work is done are cleared
+ * (notification-done.ts). A failure there never hides the messages.
+ */
+async function clearDone(ctx: AuthContext) {
+  await resolveDoneNotifications(db, { organizationId: ctx.organizationId, recipientUserId: ctx.userId }).catch((e) => console.error("clearDone", e));
+}
+
+/** Self-service: the signed-in user's notifications, newest first. "open": not done and not taken on ("I'm on it"). */
 export async function listMyNotifications(ctx: AuthContext, f: { show?: "open" | "all" } = {}) {
+  await clearDone(ctx);
   const conds = [eq(notifications.recipientUserId, ctx.userId), eq(notifications.organizationId, ctx.organizationId)];
-  if (f.show !== "all") conds.push(isNull(notifications.acknowledgedAt));
+  if (f.show !== "all") conds.push(isNull(notifications.acknowledgedAt), isNull(notifications.resolvedAt));
   return db
     .select()
     .from(notifications)
@@ -121,12 +144,13 @@ export async function listMyNotifications(ctx: AuthContext, f: { show?: "open" |
     .limit(200);
 }
 
-/** Count for the bell: open (not acknowledged) and unread. */
+/** Count for the bell: open (not acknowledged, not done) and unread. */
 export async function unreadNotificationCount(ctx: AuthContext): Promise<number> {
+  await clearDone(ctx);
   const [r] = await db
     .select({ n: count() })
     .from(notifications)
-    .where(and(eq(notifications.recipientUserId, ctx.userId), isNull(notifications.readAt), isNull(notifications.acknowledgedAt)));
+    .where(and(eq(notifications.recipientUserId, ctx.userId), isNull(notifications.readAt), isNull(notifications.acknowledgedAt), isNull(notifications.resolvedAt)));
   return Number(r?.n ?? 0);
 }
 

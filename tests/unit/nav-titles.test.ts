@@ -12,16 +12,15 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ROLE_BUNDLES, type Permission } from "@/lib/permissions";
-import { NAV, QUICK_ACTIONS, buildNav, productionItems, tabsFor } from "@/app/(app)/nav";
+import { NAV, QUICK_ACTIONS, buildNav, tabsFor } from "@/app/(app)/nav";
 
 const ROOT = join(__dirname, "../..");
 
 /** Screens whose H1 is not a fixed word, and what it shows instead. Keep this list short. */
 const DYNAMIC_TITLES: Record<string, string> = {
-  "/dashboard": "a greeting with the person's name (\"Good evening, Ana\"); the menu word is Overview",
+  "/dashboard": "a greeting with the person's name (\"Good evening, Ana\"); the menu word is Home",
   "/floor": "the company and site name on the production TV; the menu word says what the screen is",
   "/inventory": "the open stock tab (Raw materials, Work in progress, Finished goods, All stock); the menu word is Stock",
-  "/production/orders": "My work for operators, Production orders for everyone else (same screen, filtered per role)",
 };
 
 function routeFiles(href: string): string[] {
@@ -52,8 +51,8 @@ const canFor = (role: string) => {
 /** Every entry anyone can see: the full menu, the per-role production tabs and the quick links. */
 const entries: { label: string; href: string; where: string }[] = [
   ...NAV.flatMap((g) => g.items.filter((i) => !i.planned).map((i) => ({ label: i.label, href: i.href, where: `menu ${g.label}` }))),
-  ...(["operator", "planner"] as const).flatMap((p) => productionItems(p).map((i) => ({ label: i.label, href: i.href, where: `production tabs (${p})` }))),
-  ...Object.keys(ROLE_BUNDLES).flatMap((r) => buildNav(canFor(r), [r]).flatMap((g) => g.items.map((i) => ({ label: i.label, href: i.href, where: `menu of ${r}` })))),
+  // The "Home" entry of each menu opens the person's own Home (finance: the Money page), so it is not a screen title.
+  ...Object.keys(ROLE_BUNDLES).flatMap((r) => buildNav(canFor(r), [r]).flatMap((g) => g.items.filter((i) => i.label !== "Home").map((i) => ({ label: i.label, href: i.href, where: `menu of ${r}` })))),
   ...QUICK_ACTIONS.map((q) => ({ label: q.label, href: q.href, where: "quick links" })),
 ];
 
@@ -81,7 +80,6 @@ describe("menu word = screen title (UX audit R2)", () => {
     const words = new Map<string, Set<string>>();
     for (const e of entries) {
       const h = e.href.split("?")[0];
-      if (h === "/production/orders") continue; // "My work" for operators by design (DYNAMIC_TITLES)
       words.set(h, (words.get(h) ?? new Set()).add(e.label));
     }
     const clashes = [...words].filter(([, w]) => w.size > 1).map(([h, w]) => `${h}: ${[...w].join(" / ")}`);

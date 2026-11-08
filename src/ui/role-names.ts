@@ -12,6 +12,6 @@ export function homeIntro(roleCodes: readonly string[]): string {
   if (has("production_planner")) return "This screen is for the planner: production orders to make or approve, orders approved but not started, and what QA is checking.";
   if (has("production_operator")) return "This screen is for the machine operator: the batches you can work on now. Press the green button on the top card to start.";
   if (has("warehouse_operator")) return "This screen is for the warehouse: deliveries to receive, stock to put away, and orders to pack and send.";
-  if (has("system_admin")) return "This screen is for the IT person: what needs attention today. Settings, users and imports are under Management.";
+  if (has("system_admin")) return "This screen is for the IT person: what needs attention today. Settings, users and imports are in Set-up (tap your initials).";
   return "This screen is your start page: what needs you today. Tap a line to open it.";
 }

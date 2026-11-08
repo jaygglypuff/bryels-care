@@ -10,7 +10,7 @@ An order goes: draft → confirmed (or waits for an OK) → stock set aside → 
 
 ## Enter the order (3 steps)
 
-1. Open **Sales & Customers → Customer orders** and press **New customer order** (or **New customer order** on a customer).
+1. Open **Sell → Customer orders** and press **New customer order** (or **New customer order** on a customer).
 2. Step 1: type part of the customer's name and tap the customer. Choose **Deliver by**. **Deliver to**, **Bill to** and **Customer's order no.** are under **More details** (the usual addresses are used).
 3. Step 2: tap each product and type **How many (pcs)**. The usual price is used; **Price each (₱)** is only for a special price.
 4. Step 3: **Check the order**, then press **Save the order** (or **Save the draft** to finish later). A draft can be changed until it is confirmed.

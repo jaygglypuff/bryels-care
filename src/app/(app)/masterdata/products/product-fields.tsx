@@ -37,7 +37,7 @@ export function ProductFields({ families, d = {}, months, locked = false }: { fa
       <FormSection title="What it is">
         <TextField name="name" label="What is it called?" defaultValue={d.name} placeholder="e.g. Calamansi Cream Soap 100 g" />
         <Grid>
-          <SelectField name="family" label="What kind of product?" defaultValue={d.family ?? families[0]?.value} options={families} hint="To add a kind, go to Management › Master data › Choice lists." />
+          <SelectField name="family" label="What kind of product?" defaultValue={d.family ?? families[0]?.value} options={families} hint="To add a kind, go to Set-up › Choice lists." />
           <TextField name="unitNetMassG" label="Size of one piece (grams)" defaultValue={plain(d.unitNetMassG)} inputMode="decimal" placeholder="e.g. 135" hint="What one bar or bottle holds." />
         </Grid>
       </FormSection>
