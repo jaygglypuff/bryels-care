@@ -6,7 +6,7 @@ import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import type { Permission } from "@/lib/permissions";
 import { fmtDate } from "@/lib/qty";
-import { likeFragment, parseNumberQuery, wantsPartial, type NumberQuery } from "./number-query";
+import { endsWithNumberRegex, likeFragment, parseNumberQuery, parseShortNumber, wantsPartial, type NumberQuery, type ShortNumber } from "./number-query";
 import { searchTerms } from "./search";
 
 /**
@@ -29,7 +29,7 @@ import { searchTerms } from "./search";
 
 export type HitIcon =
   | "money" | "buying" | "sales" | "delivery" | "production" | "lot" | "box" | "stock" | "quality" | "repair" | "document"
-  | "material" | "product" | "customer" | "supplier" | "shelf" | "equipment" | "recipe";
+  | "material" | "product" | "customer" | "supplier" | "shelf" | "equipment" | "recipe" | "person";
 
 export type MasterHit = {
   /** Record type key (RECORD_TYPES). */
@@ -46,7 +46,7 @@ export type MasterHit = {
   exact: boolean;
 };
 
-export type MasterGroupKey = "numbers" | "items" | "parties" | "stock" | "orders" | "money" | "quality" | "setup";
+export type MasterGroupKey = "numbers" | "items" | "parties" | "stock" | "orders" | "money" | "quality" | "setup" | "people";
 export type MasterGroup = { key: MasterGroupKey; label: string; hits: MasterHit[] };
 
 export const MASTER_GROUP_LABEL: Record<MasterGroupKey, string> = {
@@ -58,6 +58,7 @@ export const MASTER_GROUP_LABEL: Record<MasterGroupKey, string> = {
   money: "Money",
   quality: "Quality",
   setup: "Set-up and machines",
+  people: "People",
 };
 
 /** Rows per record type and query (each type query has its own LIMIT). */
@@ -166,7 +167,24 @@ export const RECORD_TYPES: readonly RecordType[] = [
   { key: "recipe", noun: "Recipe", icon: "recipe", prefixes: ["F"], from: "formulas t", num: "t.code", name: "t.name", scope: "org", view: ["masterdata.formula.view"], href: (r, ctx) => (ctx.can("masterdata.routing.view") ? `/masterdata/recipes/${r.id}` : `/masterdata/formulas/${r.id}`), master: true, words: { cols: ["t.name", "t.code"], group: "setup", order: "name" } },
   { key: "steps", noun: "Steps", icon: "recipe", prefixes: ["R"], from: "routings t", num: "t.code", name: "t.name", scope: "org", view: ["masterdata.routing.view"], href: id("/masterdata/routings"), master: true },
   { key: "how_to", noun: "How-to sheet", icon: "recipe", prefixes: ["WI"], from: "work_instructions t", num: "t.code", name: "t.name", scope: "org", view: ["masterdata.work_instruction.view"], href: id("/masterdata/work-instructions"), master: true },
+  // ---------------------------------------------------------------- people (round 5, B report: "Dino" found nothing)
+  // People who hold a job at a site where the caller may view people, or organisation-wide (scopeFor "person").
+  { key: "person", noun: "Person who uses the app", icon: "person", prefixes: [], from: "users t", num: "t.email", name: "t.display_name", status: "t.status", scope: "org", view: ["identity.user.view"], href: id("/admin/users"), master: true, words: { cols: ["t.display_name"], group: "people", order: "name" } },
 ];
+
+/**
+ * Record types that are only noise in a partial or short-number search (round 5, A report #15, C report #15: "Set
+ * aside · RSV-…", "Stock change · MOV-…", "Document · label DOC-…" under "0003"). They still open when their whole
+ * number is typed.
+ */
+export const EXACT_ONLY_TYPES: readonly string[] = ["reservation", "movement", "document", "import_job", "delivery_receipt"];
+
+/** Order of record types in "Records by number" for the same match quality: the records people ask for by number first. */
+const NUMBER_TYPE_ORDER: readonly string[] = ["batch", "sales_order", "lot", "work_order", "purchase_order", "invoice", "shipment", "box", "supplier_bill", "goods_receipt", "quote", "purchase_request", "payment", "customer", "supplier", "product", "material"];
+const typeRank = (k: string) => {
+  const i = NUMBER_TYPE_ORDER.indexOf(k);
+  return i < 0 ? NUMBER_TYPE_ORDER.length : i;
+};
 
 /** Grade-5 words for stored states (fallback: the code with spaces). */
 const STATUS_WORDS: Record<string, string> = {
@@ -192,6 +210,14 @@ function scopeFor(ctx: AuthContext, t: RecordType): SQL | null {
     const others = sites.length ? sql`t.site_id in (${inList(sites)})` : null;
     if (!own && !others) return null;
     return own && others ? sql`(${others} or ${own})` : (others ?? own);
+  }
+  if (t.key === "person") {
+    // Round 5: people with a current job at a site where the caller may view people, or with an organisation-wide job.
+    // A site manager never finds the people of another site (tests/integration/scan/search-round5.test.ts).
+    const sites = ctx.allowedSiteIds.filter((s) => t.view.some((p) => ctx.canAt(p, s)));
+    if (!sites.length) return null;
+    return sql`t.status = 'active' and exists (select 1 from user_site_assignments a where a.user_id = t.id
+      and (a.site_id in (${inList(sites)}) or a.is_organization_wide) and a.revoked_at is null and a.valid_from <= now() and (a.valid_to is null or a.valid_to > now()))`;
   }
   if (t.scope === "org") return t.view.some((p) => ctx.can(p)) ? sql`true` : null;
   const sites = ctx.allowedSiteIds.filter((s) => t.view.some((p) => ctx.canAt(p, s)));
@@ -239,6 +265,14 @@ function partialBranch(ctx: AuthContext, t: RecordType, scope: SQL, q: NumberQue
     order by 9 asc, ${orderBy(t)} limit ${TYPE_LIMIT})`;
 }
 
+/** Short number (round 5): the number ends with the typed number, any zeros before it ("4" → SO-26-00004). */
+function shortBranch(ctx: AuthContext, t: RecordType, scope: SQL, s: ShortNumber): SQL {
+  return sql`(select ${selectList(t, sql`1`)} from ${sql.raw(t.from)}
+    where ${sql.raw(t.org ?? "t.organization_id")} = ${ctx.organizationId}::uuid and ${scope} ${t.where ? sql`and ${sql.raw(t.where)}` : sql``}
+      and ${sql.raw(t.num)} ~ ${endsWithNumberRegex(s.n)}
+    order by ${orderBy(t)} limit ${TYPE_LIMIT})`;
+}
+
 /** Words: every typed word matches one of the type's name columns (any capitals). */
 function wordsBranch(ctx: AuthContext, t: RecordType, scope: SQL, words: string[]): SQL {
   const cols = t.words!.cols;
@@ -262,7 +296,7 @@ function toHit(ctx: AuthContext, t: RecordType, r: Row): MasterHit {
   const when = r.at ? fmtDate(r.at) : null;
   const status = statusWords(r.status);
   const name = t.master ? (r.name ?? r.number) : r.name ? `${t.noun} · ${r.name}` : t.noun;
-  const detail = (t.master ? [t.noun, status, site] : [status, when, site]).filter(Boolean).join(" · ");
+  const detail = t.key === "person" ? t.noun : (t.master ? [t.noun, status, site] : [status, when, site]).filter(Boolean).join(" · ");
   return { type: t.key, icon: t.icon, name, number: r.number, detail, href: t.href(r, ctx), exact: Number(r.rank) === 0 };
 }
 
@@ -293,27 +327,35 @@ export async function masterSearch(ctx: AuthContext, input: string): Promise<Mas
   await requireSearchAccess(ctx);
   const raw = String(input ?? "").slice(0, MAX_QUERY_LENGTH).trim();
   const q = parseNumberQuery(raw);
-  if (q.compact.length < 2) return { groups: [], exactHref: null };
+  // Round 5: a short number ("4", "SO 4", "order 4", "0003") finds the records whose number ends with it.
+  const short = parseShortNumber(raw);
+  if (q.compact.length < 2 && !short) return { groups: [], exactHref: null };
   const types = viewableTypes(ctx);
   const byKey = new Map(types.map((x) => [x.type.key, x.type]));
+  const notNoise = (x: { type: RecordType }) => !EXACT_ONLY_TYPES.includes(x.type.key);
 
   // Numbers: a known prefix narrows the look-up to the types that issue it ("BILL" → supplier bills only).
   const numberTypes = q.prefix ? types.filter((x) => x.type.prefixes.includes(q.prefix!)) : types;
+  const shortTypes = short ? types.filter((x) => x.type.prefixes.length > 0 && notNoise(x) && (!short.prefixes || x.type.prefixes.some((p) => short.prefixes!.includes(p)))) : [];
   // Exact codes also without digits ("SHP", "WI-SOAP-MIX"): one word, index look-ups only.
   const oneWord = !/\s/.test(raw);
   const numberSearch = q.numberLike || q.prefix !== null || oneWord;
-  // Words: names, unless the text is a prefixed number ("BILL-26-00001", "MAT-0001").
-  const words = q.prefix && q.numberLike ? [] : searchTerms(raw).filter((w) => /[a-z]/.test(w));
+  // Words: names, unless the text is a prefixed number ("BILL-26-00001", "MAT-0001") or a short number ("order 4").
+  const words = (q.prefix && q.numberLike) || short ? [] : searchTerms(raw).filter((w) => /[a-z]/.test(w));
+  // Contains-search for longer partial numbers ("26-00001"); a short number uses "ends with" instead.
+  const partialOn = !short && (q.numberLike || q.prefix !== null) && wantsPartial(q);
 
-  const [exact, partial, named] = await Promise.all([
-    numberSearch && q.exact.length ? run(numberTypes.map((x) => exactBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
-    (q.numberLike || q.prefix !== null) && wantsPartial(q) ? run(numberTypes.map((x) => partialBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
+  const [exact, partial, ending, named] = await Promise.all([
+    numberSearch && q.exact.length && q.compact.length >= 2 ? run(numberTypes.map((x) => exactBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
+    partialOn ? run(numberTypes.filter(notNoise).map((x) => partialBranch(ctx, x.type, x.scope, q))) : Promise.resolve([] as Row[]),
+    short && shortTypes.length ? run(shortTypes.map((x) => shortBranch(ctx, x.type, x.scope, short))) : Promise.resolve([] as Row[]),
     words.length ? run(types.filter((x) => x.type.words).map((x) => wordsBranch(ctx, x.type, x.scope, words))) : Promise.resolve([] as Row[]),
   ]);
 
   const seen = new Set<string>();
-  const numberRows = [...exact, ...partial]
-    .sort((a, b) => Number(a.rank) - Number(b.rank) || String(b.at ?? "").localeCompare(String(a.at ?? "")))
+  const numberRows = [...exact, ...partial, ...ending]
+    // Same match quality: the records people ask for by number first (batch before a QA test, round 5 A-B14), then newest.
+    .sort((a, b) => Number(a.rank) - Number(b.rank) || typeRank(a.k) - typeRank(b.k) || String(b.at ?? "").localeCompare(String(a.at ?? "")))
     .filter((r) => {
       const k = `${r.k}:${r.id}`;
       if (seen.has(k)) return false;
@@ -325,7 +367,7 @@ export async function masterSearch(ctx: AuthContext, input: string): Promise<Mas
 
   const groups: MasterGroup[] = [];
   if (numberHits.length) groups.push({ key: "numbers", label: MASTER_GROUP_LABEL.numbers, hits: numberHits });
-  const order: Exclude<MasterGroupKey, "numbers">[] = ["items", "parties", "stock", "orders", "money", "quality", "setup"];
+  const order: Exclude<MasterGroupKey, "numbers">[] = ["people", "items", "parties", "stock", "orders", "money", "quality", "setup"];
   for (const key of order) {
     const hits = named
       .filter((r) => byKey.get(r.k)?.words?.group === key && !seen.has(`${r.k}:${r.id}`))

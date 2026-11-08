@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Recipes" };
 /**
  * Recipes, the plain way (round 4, UX re-audit C #5): one row per product with its version status and one button
  * ("Edit recipe" for a draft, "Make a new version" for a recipe in use). "New recipe" opens the five-screen wizard.
- * The engineers' lists (Recipes (advanced), Steps (advanced)) stay under Management › Production setup › Advanced.
+ * The engineers' lists (Recipes (advanced), Steps (advanced)) stay on the Set-up page under Products and recipes (Less used).
  * Access: masterdata.formula.view (the list); the buttons need the edit/create permissions the recipe page checks again.
  */
 export default async function RecipesPage() {
@@ -65,7 +65,7 @@ export default async function RecipesPage() {
         </ul>
       )}
       <p className="text-[13px] text-muted">
-        Engineers change recipes line by line under Management › Production setup › Advanced.
+        Engineers change recipes line by line in Recipes (advanced), on the Set-up page under Products and recipes.
       </p>
     </div>
   );

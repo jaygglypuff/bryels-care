@@ -73,7 +73,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   }
 
   // ADR-083: Home answers "what needs me, how are we doing, what is happening" — nothing else (mockup
-  // panel 1; owner-home.tsx). The detailed overview is under Management → Reports & analytics.
+  // panel 1; owner-home.tsx). The detailed overview is under Money › Reports.
   return <OwnerHomePage ctx={ctx} scope={sp.scope} />;
 }
 

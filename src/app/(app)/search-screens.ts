@@ -1,35 +1,106 @@
 import type { Permission } from "@/lib/permissions";
-import { ADVANCED, NAV, canSee, productionItems, type NavItem } from "./nav";
+import { NAV, canSee, type NavItem } from "./nav";
 
 /**
  * Screens in the master search (owner request 2026-11-08: "search for a category, say Bills, or Lot, or Master Data").
- * Typing a screen word, or a word people use for it, lists the menu entries the person may open. Built from NAV, so
- * the words are the menu words (= the screen titles, ADR-101). Pure: used by the server action and unit tests
+ * Typing a screen word, or a word people use for it, lists the screens the person may open. Built from the catalogue
+ * (NAV), so the words are the menu words (= the screen titles, ADR-101), and screens that are in no menu of the role
+ * (round 5: Set-up, rare screens) are still found. Pure: used by the server action and unit tests
  * (tests/unit/search-screens.test.ts).
  *
+ * Round 5 (ADR-129): plain questions ("who owes us", "this month's sales") and actions ("new customer", "record a
+ * payment") open the screen that answers or does it; actions are listed first, then the screens.
+ *
  * Permission: an entry shows only when the person holds its permission (`canSee`, like the menu) and, for the
- * "IT and system" entries, one of its roles. Floor menus are shorter (ADR-083), but a floor person may still find a
- * screen they are allowed to open; the page checks again on the server (menus never grant access).
+ * "IT and system" entries, one of its roles. The page checks again on the server (menus never grant access).
  */
 
-export type ScreenHit = { label: string; href: string; /** Where it is in the menu: "Management › Finance". */ where: string };
+export type ScreenHit = { label: string; href: string; /** Where it is in the menu: "Money". */ where: string; /** Round 5: a thing to do ("New customer"), not a list. */ action?: boolean; /** Round 5: the typed words are exactly this action ("new customer"): Enter opens it. */ exact?: boolean };
 
 /** One menu entry with where it sits. */
 type Screen = NavItem & { group: string };
 
-/** Every menu entry once (first place wins), production tabs included. */
+/** Every screen once, with its area ("Money", "Set-up"). */
 export function allScreens(): Screen[] {
   const seen = new Set<string>();
   const out: Screen[] = [];
-  const add = (i: NavItem, group: string) => {
-    if (i.planned || seen.has(i.href)) return;
-    seen.add(i.href);
-    out.push({ ...i, group });
-  };
-  for (const g of NAV) {
-    if (g.label === "Operations") for (const i of productionItems("planner")) add(i, g.label);
-    for (const i of g.items) add(i, g.label);
-  }
+  for (const g of NAV)
+    for (const i of g.items) {
+      if (i.planned || seen.has(i.href)) continue;
+      seen.add(i.href);
+      out.push({ ...i, group: g.label });
+    }
+  return out;
+}
+
+/**
+ * Things to do (round 5, C report #15: "new customer", "make order" found nothing). Each opens the screen that starts
+ * it; `words` are what people type. The page checks the permission again.
+ */
+export type SearchAction = { label: string; href: string; permission: Permission | readonly Permission[]; words: readonly string[]; where: string };
+
+export const SEARCH_ACTIONS: readonly SearchAction[] = [
+  { label: "New customer order", href: "/sales/new", permission: "sales.sales_order.create", words: ["new order", "new customer order", "new sales order", "make order", "make an order", "take an order", "add order", "create order", "sell"], where: "Sell" },
+  { label: "New customer", href: "/sales/customers/new", permission: "masterdata.customer.create", words: ["new customer", "add customer", "add a customer", "create customer", "new client"], where: "Sell" },
+  { label: "New price offer", href: "/sales/quotations/new", permission: "sales.quote.create", words: ["new price offer", "new quote", "make a quote", "new quotation", "price offer"], where: "Sell" },
+  { label: "Ask to buy something", href: "/procurement/requests/new", permission: "procurement.purchase_request.create", words: ["ask to buy", "buy something", "new request", "request to buy", "buy"], where: "Buy & stock" },
+  { label: "New purchase order", href: "/procurement/orders/new", permission: "procurement.purchase_order.create", words: ["new purchase order", "new po", "order from supplier", "make a purchase order"], where: "Buy & stock" },
+  { label: "New supplier", href: "/masterdata/suppliers/new", permission: "masterdata.supplier.create", words: ["new supplier", "add supplier", "add a supplier", "new vendor"], where: "Buy & stock" },
+  { label: "Record a payment", href: "/finance/payments/new", permission: "finance.payment_record.create", words: ["record a payment", "new payment", "customer paid", "got paid", "payment received"], where: "Money" },
+  { label: "Enter a supplier bill", href: "/finance/bills/new", permission: "finance.supplier_bill.create", words: ["enter a supplier bill", "new bill", "enter bill", "add bill", "supplier bill"], where: "Money" },
+  { label: "New expense claim", href: "/finance/expenses/new", permission: "finance.expense_claim.create", words: ["new expense", "expense claim", "claim money back", "reimburse"], where: "Money" },
+  { label: "New production order", href: "/production/orders/new", permission: "production.work_order.create", words: ["new production order", "make product", "make soap", "make more", "produce"], where: "Make" },
+  { label: "Report a problem", href: "/quality/deviations/new", permission: "quality.deviation.create", words: ["report a problem", "new problem", "something is wrong", "problem report", "report problem"], where: "Make" },
+  { label: "New material", href: "/masterdata/materials/new", permission: "masterdata.material.create", words: ["new material", "add material", "new ingredient", "add ingredient"], where: "Set-up" },
+  { label: "New recipe", href: "/masterdata/recipes/new", permission: "masterdata.formula.create", words: ["new recipe", "new product", "add product", "make a recipe"], where: "Set-up" },
+  { label: "Add a person", href: "/admin/users/invite", permission: "identity.user.create", words: ["add a person", "new user", "add user", "add worker", "new worker", "new employee", "invite"], where: "Set-up" },
+];
+
+/**
+ * Plain questions → the screen that answers them (round 5, B report task 6: "who owes" found nothing). Matched when
+ * the typed text contains the phrase (so "who owes us money?" works). Targets are catalogue screens.
+ */
+export const SEARCH_QUESTIONS: readonly { phrases: readonly string[]; hrefs: readonly string[] }[] = [
+  { phrases: ["who owes", "owe us", "owes us", "money owed", "not paid", "unpaid", "late payers", "who has not paid"], hrefs: ["/finance/statements", "/finance"] },
+  { phrases: ["we owe", "what we owe", "to pay suppliers", "bills to pay", "pay suppliers"], hrefs: ["/finance/bills", "/finance"] },
+  { phrases: ["this month s sales", "this months sales", "sales this month", "month sales", "monthly sales", "how much did we sell", "how much we sold", "how are sales", "sales today", "todays sales"], hrefs: ["/analytics/overview", "/analytics", "/sales"] },
+  { phrases: ["what to buy", "running low", "low stock", "need to buy", "almost out"], hrefs: ["/procurement/reorder"] },
+  { phrases: ["what needs me", "needs me", "to approve", "waiting for me", "my approvals"], hrefs: ["/approvals", "/action-centre"] },
+  { phrases: ["where is my order", "where is the order", "late orders", "orders late"], hrefs: ["/sales"] },
+  { phrases: ["what is being made", "what are we making", "production today", "plan for today", "todays plan"], hrefs: ["/operations", "/production/plan"] },
+  { phrases: ["expiring", "expires soon", "about to expire"], hrefs: ["/inventory/lots/expiry"] },
+  { phrases: ["where did it go", "who received", "where it came from"], hrefs: ["/quality/trace"] },
+];
+
+/** Actions for typed words, best first (only those the person may start). */
+export function searchActions(q: string, can: Can, limit = 3): ScreenHit[] {
+  const text = normaliseWords(q);
+  if (text.replace(/[^a-z]/g, "").length < 3) return [];
+  const scored: { a: SearchAction; score: number; k: number }[] = [];
+  SEARCH_ACTIONS.forEach((a, k) => {
+    if (!canSee(can, a.permission)) return;
+    const label = normaliseWords(a.label);
+    let score = 0;
+    for (const w of a.words) {
+      if (w === text) score = Math.max(score, 100);
+      else if (w.startsWith(text) && text.length >= 4) score = Math.max(score, 80);
+      else if (text.includes(w) && w.includes(" ")) score = Math.max(score, 70);
+    }
+    if (label === text) score = Math.max(score, 100);
+    else if (label.startsWith(text) && text.length >= 4) score = Math.max(score, 75);
+    if (score) scored.push({ a, score, k });
+  });
+  return scored
+    .sort((x, y) => y.score - x.score || x.k - y.k)
+    .slice(0, limit)
+    .map(({ a, score }) => ({ label: a.label, href: a.href, where: a.where, action: true, exact: score >= 100 }));
+}
+
+/** The screens that answer a plain question in the typed text (hrefs, best first). */
+export function questionTargets(q: string): string[] {
+  const text = ` ${normaliseWords(q.replace(/['’]/g, " "))} `;
+  const out: string[] = [];
+  for (const x of SEARCH_QUESTIONS) if (x.phrases.some((p) => text.includes(` ${p} `) || text.includes(` ${p}`))) for (const h of x.hrefs) if (!out.includes(h)) out.push(h);
   return out;
 }
 
@@ -174,10 +245,10 @@ export const SCREEN_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   test: ["/quality/inspections"],
   coa: ["/quality/inspections"],
   // set-up and master data
-  "master data": [SECTION("Master data"), SECTION("Production setup")],
-  masterdata: [SECTION("Master data"), SECTION("Production setup")],
-  setup: [SECTION("Master data"), SECTION("Production setup")],
-  "set up": [SECTION("Master data"), SECTION("Production setup")],
+  "master data": [SECTION("Products and recipes"), SECTION("Places and machines")],
+  masterdata: [SECTION("Products and recipes"), SECTION("Places and machines")],
+  setup: [SECTION("Products and recipes"), SECTION("Places and machines")],
+  "set up": [SECTION("Products and recipes"), SECTION("Places and machines")],
   material: ["/masterdata/materials"],
   "raw material": ["/masterdata/materials"],
   ingredient: ["/masterdata/materials"],
@@ -210,6 +281,8 @@ export const SCREEN_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   permission: ["/admin/roles"],
   access: ["/admin/roles"],
   setting: ["/admin/settings"],
+  "set-up": ["/setup"],
+  "set up page": ["/setup"],
   approval: ["/approvals", "/admin/approval-rules"],
   approve: ["/approvals"],
   audit: ["/admin/audit"],
@@ -282,6 +355,12 @@ export function searchScreens(q: string, can: Can, roles: readonly string[], lim
     }
   });
 
+  // Round 5: plain questions ("who owes us money?") open the screen that answers them, first.
+  questionTargets(q).forEach((target, n) => {
+    const s = screens.find((x) => x.href === target);
+    if (s) put(s, 110 - n, 0);
+  });
+
   const words = text.split(" ");
   screens.forEach((s, k) => {
     const label = normaliseWords(s.label);
@@ -322,7 +401,7 @@ export function commonScreens(can: Can, roles: readonly string[], limit = 5): Sc
   const screens = allScreens();
   return wanted
     .map((h) => screens.find((s) => s.href === h))
-    .filter((s): s is Screen => !!s && mayOpen(can, roles, s) && (s.section !== ADVANCED || roles.includes("owner_director")))
+    .filter((s): s is Screen => !!s && mayOpen(can, roles, s) && (!s.advanced || roles.includes("owner_director")))
     .slice(0, limit)
     .map(toHit);
 }

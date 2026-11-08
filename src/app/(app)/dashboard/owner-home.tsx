@@ -33,7 +33,7 @@ const NEXT_LABEL: Record<string, string> = {
  * greeting; four cards (Sales today, Production progress, Stock alerts, Waiting for your approval);
  * Needs your attention (5 rows + See all); Sales this week; Production by stage; Recent activity.
  * Every number is computed on the server for the caller's sites (`getOwnerHome`) and opens the list it
- * was counted from. The detailed overview stays under Management → Reports & analytics.
+ * was counted from. The detailed overview stays under Money › Reports.
  */
 export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: string }) {
   const all = scope === "all" && ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view");

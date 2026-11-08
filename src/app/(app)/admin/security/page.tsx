@@ -51,7 +51,7 @@ export default async function SecurityPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="min-w-0">
           <CardTitle>Sign-in rules</CardTitle>
-          <p className="mb-3 text-[13px] text-muted">Starting values the owner must check. Change them under Management › IT and system › Sign-in safety; every change is kept in the history of changes.</p>
+          <p className="mb-3 text-[13px] text-muted">Starting values the owner must check. Change them under Set-up › IT and system › Sign-in safety; every change is kept in the history of changes.</p>
           <ul className="divide-y divide-line">
             {o.policy.map((p) => (
               <li key={p.key} className="flex flex-wrap items-center justify-between gap-2 py-2">

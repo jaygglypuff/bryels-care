@@ -13,7 +13,7 @@ export type FrameHelpResult = { guide: Guide | null };
  * so closing it returns to the same place with typed values intact. The guide is fetched when the button is
  * pressed (`load`, a server action), so pages carry no help text they do not show.
  */
-export function FrameHelp({ load, withLabel = false }: { load: (pathname: string) => Promise<FrameHelpResult>; withLabel?: boolean }) {
+export function FrameHelp({ load, withLabel = false, labelClass = "hidden 2xl:inline" }: { load: (pathname: string) => Promise<FrameHelpResult>; withLabel?: boolean; /** Round 5: where the word "Help" shows (Tailwind classes). */ labelClass?: string }) {
   const pathname = usePathname();
   const ref = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<{ path: string; guide: Guide | null } | null>(null);
@@ -47,7 +47,7 @@ export function FrameHelp({ load, withLabel = false }: { load: (pathname: string
         className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg"
       >
         <HelpCircle size={18} aria-hidden />
-        {withLabel && <span className="hidden 2xl:inline">Help</span>}
+        {withLabel && <span className={labelClass}>Help</span>}
       </button>
       <dialog
         ref={ref}
