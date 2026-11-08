@@ -54,7 +54,7 @@ describe("KPI-SAL-01 on W3D transitions", () => {
   });
 });
 
-describe("money KPIs need sales.price_list.view (W3D) and analytics.financial_kpi.view", () => {
+describe("money KPIs need sales.price_list.view (W3D); financial ones also analytics.financial_kpi.view", () => {
   it("refuses the order value to a financial viewer without price-list access; finance sees it", async () => {
     const noPrices = new AuthContext(w.owner.userId, w.owner.organizationId, w.owner.displayName, w.owner.email, w.owner.roleCodes, new Set([...w.owner.permissions].filter((p) => p !== "sales.price_list.view")), w.owner.allowedSites, w.owner.currentSiteId);
     await expectCode(getKpiRecords(noPrices, "KPI-SAL-01V", { from: day(-1), to: day(1) }), "forbidden");

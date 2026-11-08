@@ -103,7 +103,9 @@ describe("US-5-02 owner overview", () => {
 
   it("financial tiles appear only with analytics.financial_kpi.view and are masked in the DTO otherwise", async () => {
     const o = await getOwnerOverview(sm2, { now: NOW, period: "last_month" });
-    for (const code of ["KPI-FIN-02", "KPI-SAL-01V"]) {
+    // ADR-131 (bug C-B20): the order value follows order-price access (as on the order list), not the financial KPI permission.
+    expect(o.tiles["KPI-SAL-01V"].masked).toBe(!sm2.can("sales.price_list.view"));
+    for (const code of ["KPI-FIN-02"]) {
       expect(o.tiles[code]).toMatchObject({ masked: true, current: null, previous: null, sparkline: null });
     }
     expect(o.unavailable.find((u) => u.code === "KPI-OWN-12")!.masked).toBe(true);

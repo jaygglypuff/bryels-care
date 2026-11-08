@@ -13,7 +13,7 @@ export function SubmitOrderForm({ orderId }: { orderId: string }) {
 
 export function ApproveOrderForm({ orderId }: { orderId: string }) {
   return (
-    <ActionForm action={approveOrderAction} hidden={{ orderId }} submit="Approve and confirm" pending="Approving…" variant="cta">
+    <ActionForm action={approveOrderAction} hidden={{ orderId }} submit="Approve and confirm" pending="Approving…" variant="cta" confirm="Approve and confirm this customer order? Next, the stock is set aside for it.">
       {(fe) => (
         <Field label="Approval note (optional)" htmlFor="approve-note" error={fe.note}>
           <Textarea id="approve-note" name="note" maxLength={500} className="min-h-[56px]" placeholder="e.g. Customer paid the overdue invoice" />

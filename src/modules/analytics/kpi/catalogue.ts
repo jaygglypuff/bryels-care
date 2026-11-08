@@ -394,7 +394,9 @@ export const KPIS: KpiDefinition[] = [
     definition: "Value at order price of the orders counted by KPI-SAL-01.",
     formula: "Σ sales_order_lines.qty_units × unit_price over the orders of KPI-SAL-01",
     timeBasis: "as KPI-SAL-01 (confirmation time)", sources: ["sales_order_state_transitions", "sales_orders", "sales_order_lines.qty_units", "sales_order_lines.unit_price"],
-    permissions: [...SALES_VIEW, "analytics.financial_kpi.view", "sales.price_list.view"],
+    // ADR-131 (bug C-B20): the same people who see order prices on the order list (sales.price_list.view) see this value
+    // on Home; it is the order book at order prices, not a financial result (no analytics.financial_kpi.view needed).
+    permissions: [...SALES_VIEW, "sales.price_list.view"],
     rows: (p) => confirmedOrders(p, true),
   },
   {

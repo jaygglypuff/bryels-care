@@ -69,7 +69,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       ) : v.can.decide ? (
         <NextStepBox text="Next: approve this request, send it back, or say no.">
           <div className="grid gap-4 sm:grid-cols-3">
-            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "approve" }} submit="Approve" variant="cta">
+            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "approve" }} submit="Approve" variant="cta" confirm="Approve this request to buy? Next, purchasing makes the purchase order.">
               <Input name="note" placeholder="Note (you can skip this)" aria-label="Note" />
             </ActionForm>
             <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "return" }} submit="Send back to change" variant="secondary">

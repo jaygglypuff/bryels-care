@@ -131,7 +131,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       ) : can.decide ? (
         <NextStepBox text="Next: approve this order, or send it back with what to change.">
           <div className="grid gap-4 sm:grid-cols-2">
-            <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "approve" }} submit={v.progress.steps.length > 1 ? `Approve (step ${v.progress.next?.step ?? 1})` : "Approve"} variant="cta">
+            <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "approve" }} submit={v.progress.steps.length > 1 ? `Approve (step ${v.progress.next?.step ?? 1})` : "Approve"} variant="cta" confirm={`Approve this order to ${v.supplier?.name ?? "the supplier"}${po.totalAmount ? ` for ₱${Number(po.totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : ""}? Next, purchasing sends it to the supplier.`}>
               <Input name="note" placeholder="Note (you can skip this)" aria-label="Approval note" />
             </ActionForm>
             <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "return" }} submit="Send back to change" variant="secondary">
