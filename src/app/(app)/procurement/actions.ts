@@ -43,6 +43,7 @@ import { registerAppHooks } from "@/modules/wiring";
 import { procurementNextActors } from "@/modules/procurement";
 import type { NextActors } from "@/lib/next-actors-words";
 import { normalizeUnit, parseQtyText, toBaseQty } from "@/lib/units";
+import { poSentWords } from "@/lib/send-words";
 import { DomainError } from "@/lib/errors";
 
 /*
@@ -268,15 +269,8 @@ export async function sendOrderAction(_p: ActionState, fd: FormData): Promise<Ac
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await sendPurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId"), email: fd.get("email") === "yes", idempotencyKey: opt(fd, "idempotencyKey") });
-    const mail =
-      r.sendResult === "captured" || r.sendResult === "sent"
-        ? `Emailed to ${r.emailedTo}.`
-        : r.sendResult === "not_configured"
-          ? "Email is not set up: print the PO and send it by hand."
-          : r.sendResult === "failed"
-            ? "The email failed: print the PO and send it by hand."
-            : "Print the PO and send it to the supplier.";
-    return `Sent. Document ${r.documentNumber} recorded. ${mail}`;
+    // ADR-131 (bug B1): the order is sent once the service returns; email trouble is a note, never "not saved".
+    return { message: poSentWords(r.sendResult, r.emailedTo), next: await procurementNextActors(ctx, "purchase_order", r.purchaseOrderId) };
   });
 }
 

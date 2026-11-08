@@ -499,3 +499,33 @@ export const forecastOverrides = pgTable(
     check("ck_forecast_overrides_period", sql`${t.periodEnd} > ${t.periodStart}`),
   ],
 );
+
+/* ------------------------------------------------------------------ delivery problems (ADR-131, round 5 C problem 11) */
+
+export const DELIVERY_PROBLEM_DECISIONS = ["send_more", "money_back", "close_rest"] as const;
+
+/**
+ * Purchasing's decision on a delivery problem (a posted goods receipt line with a discrepancy: short, damaged or wrong
+ * item): the supplier sends the rest, we ask the supplier for money back (or send it back), or the rest is not needed
+ * (the PO line is short-closed). One decision per receipt line; the receipt itself stays immutable.
+ */
+export const deliveryProblemDecisions = pgTable(
+  "delivery_problem_decisions",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    siteId: uuid("site_id").notNull().references(() => sites.id),
+    goodsReceiptLineId: uuid("goods_receipt_line_id").notNull().references(() => goodsReceiptLines.id),
+    purchaseOrderLineId: uuid("purchase_order_line_id").references(() => purchaseOrderLines.id),
+    decision: text("decision").notNull(),
+    note: text("note").notNull(),
+    decidedBy: uuid("decided_by").notNull().references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+    idempotencyKey: text("idempotency_key"),
+  },
+  (t) => [
+    uniqueIndex("uq_delivery_problem_decisions_line").on(t.goodsReceiptLineId),
+    uniqueIndex("uq_delivery_problem_decisions_idem").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
+    check("ck_delivery_problem_decisions_decision", sql`${t.decision} in (${inList(DELIVERY_PROBLEM_DECISIONS)})`),
+  ],
+);

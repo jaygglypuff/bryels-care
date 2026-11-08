@@ -516,12 +516,21 @@ export async function sendPurchaseOrder(ctx: AuthContext, input: { purchaseOrder
   });
   let sendResult: string = out.to ? "pending" : "download";
   if (out.to && !out.replayed) {
-    const res = await sendEmail({ to: out.to, subject: `Purchase order ${out.poNumber}`, text: out.text, template: "procurement.purchase_order", organizationId: out.organizationId });
-    sendResult = res.status;
-    await db.update(purchaseOrders).set({ sendResult }).where(eq(purchaseOrders.id, out.purchaseOrderId));
-    await audit(db, ctx, { action: "procurement.purchase_order.emailed", entityType: "purchase_order", entityId: out.purchaseOrderId, entityNumber: out.poNumber, after: { to: out.to, status: res.status, provider: res.provider } });
+    // ADR-131 (bug B1): the order is already sent (committed above). Nothing after this point may report the send as
+    // failed: email trouble is a result ("failed" / "not set up"), never an error, and the screen offers Print.
+    try {
+      const res = await sendEmail({ to: out.to, subject: `Purchase order ${out.poNumber}`, text: out.text, template: "procurement.purchase_order", organizationId: out.organizationId });
+      sendResult = res.status;
+      await db.transaction(async (tx) => {
+        await tx.update(purchaseOrders).set({ sendResult }).where(eq(purchaseOrders.id, out.purchaseOrderId));
+        await audit(tx, ctx, { action: "procurement.purchase_order.emailed", entityType: "purchase_order", entityId: out.purchaseOrderId, entityNumber: out.poNumber, after: { to: out.to, status: res.status, provider: res.provider } });
+      });
+    } catch (e) {
+      console.error(`[procurement] ${out.poNumber} was sent but recording the email outcome failed: ${(e as Error).message}`);
+      if (sendResult === "pending") sendResult = "failed";
+    }
   }
-  return { purchaseOrderId: out.purchaseOrderId, documentId: out.documentId, documentNumber: out.documentNumber, emailedTo: out.to, sendResult, replayed: out.replayed };
+  return { purchaseOrderId: out.purchaseOrderId, poNumber: out.poNumber, documentId: out.documentId, documentNumber: out.documentNumber, emailedTo: out.to, sendResult, replayed: out.replayed };
 }
 
 /** Supplier confirmation reference and promised date (W04-06). */

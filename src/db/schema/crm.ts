@@ -275,6 +275,14 @@ export const quotes = pgTable(
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     approvalNote: text("approval_note"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    /**
+     * ADR-131 (round 5 "Send really sends"): when the offer really reached the customer, and how (`email` | `print`).
+     * `sent_at` only means "ready to give the customer" (the status `sent` is reached at submission); screens say
+     * "Sent" only once this is set by an email that went out or a print.
+     */
+    givenToCustomerAt: timestamp("given_to_customer_at", { withTimezone: true }),
+    givenVia: text("given_via"),
+    givenBy: uuid("given_by").references(() => users.id),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     decisionReason: text("decision_reason"),
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
@@ -290,6 +298,7 @@ export const quotes = pgTable(
     index("quotes_customer_idx").on(t.customerId),
     check("quotes_status_ck", sql`${t.status} in (${inList(QUOTE_STATUSES)})`),
     check("quotes_converted_ck", sql`(${t.status} = 'converted') = (${t.convertedSalesOrderId} is not null)`),
+    check("quotes_given_ck", sql`(${t.givenToCustomerAt} is null) = (${t.givenVia} is null) and (${t.givenVia} is null or ${t.givenVia} in ('email','print'))`),
   ],
 );
 

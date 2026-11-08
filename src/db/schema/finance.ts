@@ -266,10 +266,18 @@ export const invoices = pgTable(
     voidedByCreditNoteId: uuid("voided_by_credit_note_id"),
     cancelReason: text("cancel_reason"),
     idempotencyKey: text("idempotency_key"),
+    /**
+     * ADR-131 (round 5 "Send really sends"): when the booked invoice really reached the customer, and how
+     * (`email` | `print`). Until then screens say "In the books – not given to the customer yet".
+     */
+    givenToCustomerAt: timestamp("given_to_customer_at", { withTimezone: true }),
+    givenVia: text("given_via"),
+    givenBy: uuid("given_by").references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
+    check("ck_invoices_given", sql`(${t.givenToCustomerAt} is null) = (${t.givenVia} is null) and (${t.givenVia} is null or ${t.givenVia} in ('email','print'))`),
     uniqueIndex("uq_invoices_org_number").on(t.organizationId, t.invoiceNumber).where(sql`${t.invoiceNumber} is not null`),
     uniqueIndex("uq_invoices_org_idem").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
     // V-FIN-DUP: one live invoice per shipment.
