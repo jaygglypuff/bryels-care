@@ -46,6 +46,15 @@ export default async function BatchBoxLabelsPage({ params, searchParams }: { par
   );
   const shown = loaded.filter((x) => x.r?.face && !x.r.job.voidedAt && ["ready", "printed"].includes(x.r.job.status));
   const toPrint = ctx.can("inventory.label_job.create") ? shown.filter((x) => x.r!.job.status === "ready") : [];
+  // Round 5 problem 3: one print trip. Piece labels waiting to print come first, in the same print job, when they
+  // are the same size as the box labels (one page size per print job); otherwise a link to print them next.
+  const pieces = ctx.can("inventory.label_job.create")
+    ? (await Promise.all(data.pieceJobs.filter((j) => j.status === "ready").map((j) => labelJobForPrint(ctx, j.id).catch(() => null)))).filter((x) => !!x?.face && !x.job.voidedAt)
+    : [];
+  const boxSize = toPrint[0]?.r?.face ? `${toPrint[0].r.face.widthMm}x${toPrint[0].r.face.heightMm}` : null;
+  const sameSize = pieces.filter((x) => !boxSize || `${x!.face!.widthMm}x${x!.face!.heightMm}` === boxSize);
+  const otherSize = pieces.filter((x) => !sameSize.includes(x));
+  const pieceCount = sameSize.reduce((t, x) => t + (x!.job.copies ?? 1), 0);
   const printed = shown.filter((x) => x.r!.job.status === "printed");
   const back = continueHref({ batchId, workOrderId: data.workOrderId });
   const caption = (x: (typeof shown)[number]) => (
@@ -64,18 +73,31 @@ export default async function BatchBoxLabelsPage({ params, searchParams }: { par
           <p className="mt-1 text-[16px] text-fg-2">Stick one label on each box. Each label shows its own box number and how many pieces are inside. Scan a box label to open the box.</p>
         </div>
         {boxes.length === 0 && <Banner tone="info" title="No box labels yet">Go back to the packaging step, say how many pieces you packed and press Print box labels.</Banner>}
-        {toPrint.length > 0 && (
+        {toPrint.length + sameSize.length > 0 && (
           <div className="grid gap-2">
-            <PrintNow label={`Print ${labelCountWords(toPrint.length)}`} />
+            <PrintNow label={`Print ${labelCountWords(toPrint.length + pieceCount)}`} />
+            {pieceCount > 0 && <p className="text-[15px] text-fg" data-testid="one-print-trip">First {pieceCount} piece {pieceCount === 1 ? "label" : "labels"}, then {toPrint.length} box {toPrint.length === 1 ? "label" : "labels"}, in one go.</p>}
             <p className="text-[14px] text-fg-2">
               In the print window pick the label printer and <strong>Actual size / 100 %</strong>. <strong>Save as PDF</strong> looks exactly like this.
             </p>
           </div>
         )}
+        {otherSize.length > 0 && (
+          <Banner tone="info" title="Piece labels print on another size">
+            {otherSize.map((x) => (
+              <a key={x!.job.id} href={`/print/labels/${x!.job.id}?back=${encodeURIComponent(back)}`} className="mr-3 inline-flex min-h-[44px] items-center font-semibold text-primary-text underline">
+                Print {x!.job.copies} piece labels
+              </a>
+            ))}
+          </Banner>
+        )}
       </div>
-      {toPrint.length > 0 && (
+      {toPrint.length + sameSize.length > 0 && (
         <div className="mx-auto mt-4 max-w-2xl px-4">
-          <LabelSheet faces={toPrint.map((x) => x.r!.face!)} captions={toPrint.map(caption)} />
+          <LabelSheet
+            faces={[...sameSize.map((x) => x!.face!), ...toPrint.map((x) => x.r!.face!)]}
+            captions={[...sameSize.map((x) => <p key={x!.job.id}><strong className="text-fg">{x!.job.copies} piece labels</strong> (all look like this)</p>), ...toPrint.map(caption)]}
+          />
         </div>
       )}
       {printed.length > 0 && (
@@ -90,12 +112,12 @@ export default async function BatchBoxLabelsPage({ params, searchParams }: { par
           <LinkButton href={back} variant="secondary" size="lg">Back to the batch</LinkButton>
         </div>
       )}
-      {toPrint.length > 0 && (
+      {toPrint.length + sameSize.length > 0 && (
         <div className="no-print mx-auto mt-4 grid max-w-2xl gap-4 px-4">
-          <PrintedCheck jobIds={toPrint.map((x) => x.r!.job.id)} count={toPrint.length} stick="Stick one label on each box." back={back} jobsAction={markBatchBoxJobsPrintedAction} />
+          <PrintedCheck jobIds={[...sameSize.map((x) => x!.job.id), ...toPrint.map((x) => x.r!.job.id)]} count={toPrint.length + pieceCount} stick={pieceCount > 0 ? "Stick one label on each piece, then one label on each box." : "Stick one label on each box."} back={back} jobsAction={markBatchBoxJobsPrintedAction} />
         </div>
       )}
-      <AutoPrint enabled={toPrint.length > 0 && sp.auto === "1"} />
+      <AutoPrint enabled={toPrint.length + sameSize.length > 0 && sp.auto === "1"} />
     </main>
   );
 }

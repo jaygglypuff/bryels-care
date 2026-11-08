@@ -102,6 +102,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         // Round 5 problem 10: the button says what it does, not only the next step's name.
         nextLabel={v.next ? `Done — go to ${v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : plainWords(v.next.name)}` : null}
         finishPanel={finishView ? <FinishPanel v={finishView} /> : undefined}
+        quietDone={!!boxes && !boxes.plan?.printed && boxes.canPrint}
         weighHref={`/production/orders/${workOrderId}/weigh?batch=${b.id}`}
         finishHref={finishHref(b.id)}
         fullRecordHref={batchRecordHref(b.id)}
@@ -110,7 +111,15 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         labelsPanel={
           boxes ? (
             <div className="grid gap-3">
+              {/* Round 5 problem 3: the work in order, one green button, one print trip. */}
+              <ol className="grid gap-1 rounded-[16px] border border-line bg-surface p-4 text-[16px]" data-testid="pack-order">
+                {boxes.labelling === "per_piece" ? <li>1. Stick a label on each {boxes.pieceWord.replace(/s$/, "")}.</li> : null}
+                <li>{boxes.labelling === "per_piece" ? "2" : "1"}. Pack {boxes.unitsPerBox} in a box.</li>
+                <li>{boxes.labelling === "per_piece" ? "3" : "2"}. Stick one label on each box.</li>
+                {boxes.samples ? <li className="text-[14px] text-fg-2">QA keeps {boxes.samples} {boxes.pieceWord} as samples: they go in no box and get no label (QA to confirm).</li> : null}
+              </ol>
               <BoxLabels
+                withPieceLabels={boxes.labelling === "per_piece" && !!v.packaging?.labels.allowed && !!v.packaging.labels.values}
                 batchId={b.id}
                 unitsPerBox={boxes.unitsPerBox}
                 defaultPieces={boxes.defaultPieces}
@@ -125,6 +134,8 @@ export default async function StepPage({ params, searchParams }: { params: Promi
               />
               {/* per_piece products also label each piece (ADR-099 panel); piece labels are not counted one by one. */}
               {boxes.labelling === "per_piece" && v.packaging?.labels.allowed && v.packaging.labels.values ? (
+                <details className="text-[15px]">
+                  <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">Print only the piece labels (again)</summary>
                 <PrintLabelsPanel
                   ctx={ctx}
                   entityType="batch"
@@ -136,6 +147,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
                   action={printBatchLabelsPanelAction}
                   batchValues={v.packaging.labels.values}
                 />
+                </details>
               ) : null}
             </div>
           ) : undefined

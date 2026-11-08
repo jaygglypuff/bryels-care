@@ -1,7 +1,10 @@
 "use client";
-import { AlertOctagon, Check, Circle } from "lucide-react";
+import { AlertOctagon, Check, Circle, MapPin } from "lucide-react";
+import Link from "next/link";
+import { plainNumber } from "@/modules/production/floor-words";
 import { useState } from "react";
-import { fmtDate, fmtMass, fmtQty } from "@/lib/qty";
+import Decimal from "decimal.js";
+import { fmtDate } from "@/lib/qty";
 import { Button, cx, Input } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { ScanOrPick } from "@/ui/scan-or-pick";
@@ -25,11 +28,18 @@ type Line = {
     problem: string | null;
   }[];
   /** ADR-106 §1–2: what to bring, lot by lot, in use-first order ("take all 1 kg of lot … + bring lot … (50 kg in it) …"). */
-  plan?: { sentence: string; steps: { lotNumber: string; text: string }[] };
+  plan?: { sentence: string; steps: { lotNumber: string; text: string; place?: string; take?: string; onHand?: string; all?: boolean }[] };
+  /** Round 5 problem 9: "Not enough in this container? Take a second lot" (weighed from two lots at Weigh). */
+  moreHref?: string;
 };
 
-const amount = (qty: string, uom: string) =>
-  uom === "g" ? fmtMass(qty) : fmtQty(qty, uom, 0);
+/** Round 5 B7: the same number everywhere (17.919 kg here and on Weigh), never 17.92 here and 17.919 there. */
+const amount = (qty: string, uom: string) => {
+  const d = new Decimal(qty || 0);
+  if (uom === "g" && d.abs().gte(1000)) return `${plainNumber(d.div(1000).toDecimalPlaces(3))} kg`;
+  if (uom === "mL" && d.abs().gte(1000)) return `${plainNumber(d.div(1000).toDecimalPlaces(3))} L`;
+  return `${plainNumber(d.toDecimalPlaces(3))} ${uom}`;
+};
 
 /**
  * The Materials list rows, grouped by warehouse section (ADR-077), with a Taken toggle per line and
@@ -140,19 +150,27 @@ function PickRow({
     >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[17px] font-semibold text-fg">{line.name}</p>
-          <p className="text-[16px] tabular text-fg">
-            {amount(line.qty, line.uom)}
-            {line.packaging ? <span className="text-[14px] text-muted"> · for wrapping (not weighed)</span> : null}
+          {/* Round 5 problem 9: a scannable list, not a paragraph: name and amount, then per lot the shelf and the lot. */}
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-[17px] font-semibold text-fg">
+            <span>{line.name}</span>
+            <span className="tabular">{amount(line.qty, line.uom)}</span>
           </p>
+          {line.packaging ? <p className="text-[14px] text-muted">For packing (not weighed)</p> : null}
           {line.plan && line.plan.steps.length > 0 ? (
-            <ol className="mt-0.5 grid gap-0.5 text-[15px] text-fg" data-testid="pick-plan">
+            <ul className="mt-1 grid gap-1.5 text-[16px] text-fg" data-testid="pick-plan">
               {line.plan.steps.map((st, i) => (
-                <li key={`${st.lotNumber}-${i}`}>
-                  <span className="text-muted">{i + 1}.</span> {st.text.charAt(0).toUpperCase() + st.text.slice(1)}.
+                <li key={`${st.lotNumber}-${i}`} className="grid">
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <MapPin size={16} aria-hidden /> {st.place ?? "Shelf not set"}
+                  </span>
+                  <span>
+                    Lot <span className="font-mono font-semibold">…{st.lotNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4)}</span>
+                    {st.onHand ? <span className="text-fg-2"> ({amount(st.onHand, line.uom)} in it)</span> : null}
+                    {st.all === false && st.take ? <span className="text-fg-2"> · use {amount(st.take, line.uom)}</span> : null}
+                  </span>
                 </li>
               ))}
-            </ol>
+            </ul>
           ) : lot ? (
             <p className="text-[14px] text-muted">
               Lot{" "}
@@ -239,7 +257,8 @@ function PickRow({
           </span>
         )}
       </div>
-      <FormMessage state={state} />
+      {/* Round 5 B7: a row keeps no stale "1 of 7 taken." — the tick shows it; only a refusal stays here. */}
+      {state && !state.ok && <FormMessage state={state} />}
       {canTick && !taken && (
         <div className="mt-1">
           <button
@@ -283,6 +302,17 @@ function MoreDetails({
   const fe = state?.fieldErrors ?? {};
   return (
     <div className="mt-2 grid gap-3 rounded-[12px] bg-surface-2 p-3">
+      {!line.packaging && line.moreHref && (
+        <div className="grid gap-1" data-testid="second-lot">
+          <p className="text-[15px] font-semibold">Container almost empty?</p>
+          <p className="text-[14px] text-fg-2">
+            Take this container and the next lot to use{line.lots[1] ? ` (lot …${line.lots[1].lotNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4)}, ${line.lots[1].place})` : ""}. Tap Taken, then weigh from both lots.
+          </p>
+          <Link href={line.moreHref} className="inline-flex min-h-[44px] items-center text-[15px] text-primary-text underline">
+            Use a second lot for {line.name}
+          </Link>
+        </div>
+      )}
       {scanLots && (
         <form action={action} className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="batchId" value={batchId} />

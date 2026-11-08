@@ -1,3 +1,4 @@
+import { plainWords } from "@/modules/production/plain-words";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -37,7 +38,9 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
     if (e instanceof DomainError && e.code === "not_found") notFound();
     throw e;
   }
-  const next = nextBatchScreen(picked.batch);
+  const next0 = nextBatchScreen(picked.batch);
+  // Round 5 problems 9 and 10: "Next: Check the area is clean" — never a bare "Start" ("Start what?").
+  const next = next0.action === "start" && picked.batch.currentStep ? { ...next0, label: `Next: ${plainWords(picked.batch.currentStep.name)}` } : next0;
   const done = v.progress.taken + v.progress.notNeeded;
   // Re-audit N1: "Every line is taken" only when it is true; a batch past this list without ticks says so.
   const summary = materialsSummary(v.batch.status, v.progress);
@@ -57,7 +60,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
       {summary.kind !== "open" && (
         <div className="mb-4" data-testid="materials-summary">
           <Banner tone={summary.kind === "all_taken" ? "ok" : "info"} title={summary.title} action={next.href ? <LinkButton href={next.href} variant="cta" size="lg">{next.label}</LinkButton> : undefined}>
-            {summary.text} Next: {next.label}.
+            {summary.text} {next.label.startsWith("Next: ") ? `${next.label}.` : `Next: ${next.label}.`}
           </Banner>
         </div>
       )}
@@ -97,7 +100,8 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
             reason: l.reason,
             packaging: l.materialKind === "packaging",
             lots: l.lots.map((x) => ({ lotNumber: x.lotNumber, place: x.locationName || x.locationCode, section: x.sectionLabel, expiresOn: x.expiresOn, problem: x.problem })),
-            plan: { sentence: l.plan.sentence, steps: l.plan.steps.map((st) => ({ lotNumber: st.lotNumber, text: st.text })) },
+            plan: { sentence: l.plan.sentence, steps: l.plan.steps.map((st) => ({ lotNumber: st.lotNumber, text: st.text, place: st.place, take: st.take, onHand: st.onHand, all: st.all })) },
+            moreHref: `/production/orders/${workOrderId}/weigh/more?batch=${v.batch.id}&line=${l.batchMaterialId}`,
           }))}
         />
       )}

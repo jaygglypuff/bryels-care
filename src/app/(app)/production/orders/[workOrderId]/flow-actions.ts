@@ -333,7 +333,13 @@ export type BoxLabelsState = (NonNullable<ActionState> & { href?: string; boxes?
 export async function planBatchBoxesAction(_: BoxLabelsState, fd: FormData): Promise<BoxLabelsState> {
   try {
     const ctx = await requireContext();
-    const r = await planBatchBoxes(ctx, { batchId: uuid.parse(str(fd, "batchId")), pieces: str(fd, "pieces") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    const batchId = uuid.parse(str(fd, "batchId"));
+    const r = await planBatchBoxes(ctx, { batchId, pieces: str(fd, "pieces") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    // Round 5 problem 3 (one print trip): a product labelled piece by piece gets its piece labels in the same job
+    // list, one per boxed piece (QA samples get none: A-LBL-SAMPLES-01). Same service and rules as the label panel.
+    if (str(fd, "withPieceLabels") === "1" && r.pieces <= 999) {
+      await printBatchLabels(ctx, { batchId, copies: String(r.pieces), idempotencyKey: `${opt(fd, "idempotencyKey") ?? batchId}-pieces` });
+    }
     refreshCurrentPage();
     return { ok: true, href: r.printHref, boxes: r.boxes, message: `${r.boxes} box ${r.boxes === 1 ? "label is" : "labels are"} ready for ${r.pieces} pieces.${r.replacedPlan ? " The old box labels are cancelled: destroy any you printed." : ""}` };
   } catch (e) {

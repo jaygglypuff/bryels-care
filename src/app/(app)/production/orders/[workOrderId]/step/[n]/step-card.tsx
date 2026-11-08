@@ -117,6 +117,8 @@ type Props = {
   sameDevice: boolean;
   /** Round 5 problem 2 / B19: the last step (move to the QA waiting area) IS Finish: its form, in this template. */
   finishPanel?: ReactNode;
+  /** Round 5 problem 3: while the labels are not printed, the label button is the one green button. */
+  quietDone?: boolean;
   nextHref: string | null;
   nextLabel: string | null;
   weighHref: string;
@@ -758,7 +760,7 @@ function FieldsCard(p: Props) {
           <div className="rounded-[20px] bg-surface/95 p-2 lg:static">
             <SubmitButton
               id={`done-${step.stepNo}`}
-              variant="cta"
+              variant={p.quietDone ? "secondary" : "cta"}
               size="lg"
               pendingText="Saving…"
               className="w-full"
