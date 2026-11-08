@@ -695,6 +695,23 @@ export const purchaseOrderReceivingHooks: ReceivingPoHooks = {
     const allDone = live.every((l) => l.lineStatus === "received" || l.lineStatus === "short_closed");
     await transitionPo(tx, ctx, po, allDone ? "received" : "partially_received");
     await audit(tx, ctx, { action: "procurement.purchase_order.receipt_posted", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { receipt: args.receiptLabel, receiptId: args.receiptId, status: po.status, lines: progress } });
+    // ADR-131 (C-office problem 11): a short, damaged or wrong delivery reaches purchasing as a "Delivery problem" to decide.
+    const problems = args.lines.filter((l) => l.discrepancyKind && ["short", "damaged", "wrong_item"].includes(l.discrepancyKind));
+    if (problems.length) {
+      const [s] = await tx.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, po.supplierId));
+      const words = { short: "less than ordered", damaged: "damaged", wrong_item: "a wrong item" } as Record<string, string>;
+      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, {
+        organizationId: ctx.organizationId,
+        siteId: po.siteId,
+        kind: "procurement.delivery_problem",
+        severity: "warning",
+        title: `Delivery problem: ${s?.name ?? "supplier"} (${po.poNumber})`,
+        body: `The delivery ${args.receiptLabel} came ${[...new Set(problems.map((p) => words[p.discrepancyKind!]))].join(" and ")}. Decide: the supplier sends the rest, ask them for money back, or the rest is not needed.`,
+        entityType: "purchase_order",
+        entityId: po.id,
+        link: `/procurement/orders/${po.id}#delivery-problems`,
+      });
+    }
   },
 
   async onReverse(tx, ctx, args) {
