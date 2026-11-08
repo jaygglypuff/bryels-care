@@ -1,8 +1,8 @@
 ---
 key: production.materials_list
 title: Get the materials for a batch (Materials list)
-version: 3
-updated_at: 2026-11-06
+version: 4
+updated_at: 2026-11-08
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -12,7 +12,7 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 
 1. Open the order and tap **Get materials**.
 2. The list is grouped by place in the warehouse (Raw materials, Packaging, and so on). Wrappers, labels and boxes are on the list too ("for wrapping, not weighed"): take them now; they are used at the wrap step. If the wrappers come from two shelves, take both: the wrap step records all of them.
-3. Take the lot that is shown. It is the one to use first.
+3. Each line shows the name and how much (the same number as on Weigh), the shelf, and the lot's last 4 numbers with how much is in it. Take that lot: it is the one to use first.
 4. Tap **Taken** on the line. The line turns green and shows your name.
 5. If you brought everything, tap **All taken** at the bottom.
 6. Tapped by mistake? Tap **Taken** again to undo it. You can undo until the list is complete.
@@ -22,7 +22,12 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 ## When the list is complete
 
 1. When every line is taken, the screen says **Materials ready**.
-2. Tap the green button (**Start**) to do the Start check.
+2. Tap the green button, for example **Next: Check the area is clean**, to do the Start check.
+
+## Container almost empty
+
+1. Open **More details** on the line and tap **Use a second lot for …**. Take this container and the next lot to use (the line says which one and where).
+2. Tap **Taken**. At Weigh you weigh from both lots.
 
 ## A line shows a red warning
 

@@ -13,7 +13,8 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 1. Open **Operations → Packing & dispatch → To get from shelf** and press **Get from shelf** on the first order.
 2. Go to the shelf the screen shows. Under **Scan the box label, or type the number printed on it**, scan each box. The scan will not work? Type the box number from the label, for example BX-00000005 (or just its last digits, 0005). Boxes made at Finish have their own box label: scan it. You do not need a lot label for them. A box that is not on the list is refused. Scanning the same box twice counts once.
 3. Scanned the wrong box? Press **Undo this scan**.
-4. Press **Finish getting from shelf**. If something is missing, use **Finish with items missing** and say why.
+4. Press **Finish getting from shelf**. If a box is missing, tap **A box is missing** and say why.
+5. A label will not scan? Tap why (**Label torn**, **Scanner broken** or write another reason), then tap the box in the list. Without a reason the tap is refused.
 
 ## Check the boxes (a different person)
 
@@ -26,8 +27,8 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 
 ## Send out
 
-1. Open **Operations → Packing & dispatch → Send out**. You may **Print a draft delivery receipt** for loading; it does not take stock out.
-2. Fill in **Who delivers**, **Driver** and **Plate number**, then press **Send out now**. This takes the stock out and numbers the delivery receipt.
+1. Open the delivery. First tap **1. Make the delivery receipt for the driver**, then **1. Print the delivery receipt**: the driver needs this paper before the truck leaves. It does not take stock out.
+2. **Driver** and **Plate number** are filled in from the last truck that left. Change them if another driver goes. Then press **The truck is leaving: send out now**. This takes the stock out and numbers the delivery receipt.
 3. Print the delivery receipt for the driver's copies.
 
 ## Proof of delivery

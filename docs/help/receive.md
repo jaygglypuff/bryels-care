@@ -1,8 +1,8 @@
 ---
 key: inventory.receive
 title: Receive a delivery
-version: 6
-updated_at: 2026-11-06
+version: 7
+updated_at: 2026-11-08
 sop: SOP to be mapped by the warehouse lead (US-9-08)
 ---
 
@@ -22,7 +22,7 @@ Use this screen when a supplier delivery arrives. New lots wait for the QA check
 
 1. Type **How much came?** and check the unit next to it. It starts at the unit the item is usually bought in (for example **kg** for oils). For an order it is filled in with what is still to come: change it if less came.
 2. If the amount looks strange (for example 50 g of an oil that comes in 25 kg sacks), the page asks before saving: tap **Yes** if it is right, or **Change to 50 kg**. Then tap the save button again.
-3. Copy the **Supplier's code on the sack** and the **Expiry date** from the label on the sack, drum or box. Do not guess dates.
+3. Copy the **Supplier's code on the sack** and the **Expiry date** from the label on the sack, drum or box. Do not guess dates. Wrappers, bottles, caps and boxes often have no expiry date: leave it empty (unless your company asks for it).
 4. If the item has storage rules, tick **I checked the storage**.
 5. An ordered item did not come? Tick **Not in this delivery**.
 6. Two supplier lots of the same item are two items: tap **Add another item**.
