@@ -9,7 +9,7 @@ import { auditEvents, customers, inventoryLots, products, salesOrderLines, sales
 import { AuthContext } from "@/lib/auth/context";
 import { postMovement } from "@/modules/inventory";
 import { orderCanShipFrom } from "@/modules/production";
-import { allocateOrder, cancelOrderLine, changeOrderLine, confirmOrder, createCustomer, createOrder, manilaToday, submitOrder } from "@/modules/sales";
+import { allocateOrder, cancelOrderLine, changeOrderLine, confirmOrder, createCustomer, createOrder, findSimilarCustomers, manilaToday, submitOrder } from "@/modules/sales";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, loadKit, loc, type Kit } from "../../support/kit";
 import { key, shipOrder } from "../../support/w3e";
@@ -124,6 +124,27 @@ describe("Can ship from (C-office problem 3)", () => {
     const r = await orderCanShipFrom(sales, big.id);
     expect(r).toMatchObject({ date: null, why: "not_known" });
     await expectCode(orderCanShipFrom(salesRvs, big.id), "not_found");
+  });
+});
+
+describe("customers: one number shape and a duplicate warning (C-office problem 10, bugs C-B1/C-B2, B-B8)", () => {
+  it("a new customer continues the CUS-nnn shape of the seeded customers", async () => {
+    const c = await createCustomer(sales, { name: "Fictional Numbering Shop", minShelfLifeDays: 0, shipToAddress: "3 Rizal St., Laguna" });
+    expect(c.code).toMatch(/^CUS-\d{3}$/);
+  });
+
+  it("the same phone or nearly the same name is caught before saving; a tick lets a different customer through", async () => {
+    const [luntian] = await db.select().from(customers).where(eq(customers.code, "CUS-001"));
+    const near = { name: `${luntian.name.replace(/s$/i, "")}.`, minShelfLifeDays: 0, shipToAddress: "4 Mabini St., Quezon City", duplicateCheck: true };
+    const e = await createCustomer(sales, near).catch((x) => x);
+    expect(e.code).toBe("conflict");
+    expect(e.details?.code).toBe("POSSIBLE_DUPLICATE");
+    expect(e.message).toMatch(/^Already a customer\?/);
+    const byPhone = await findSimilarCustomers(sales, { name: "Totally Other Name", phone: luntian.phone });
+    expect(byPhone.map((s) => s.id)).toContain(luntian.id);
+    const ok = await createCustomer(sales, { ...near, confirmedDifferent: true });
+    expect(ok.code).toMatch(/^CUS-/);
+    await expectCode(createCustomer(wh, { ...near, confirmedDifferent: true }), "forbidden");
   });
 });
 

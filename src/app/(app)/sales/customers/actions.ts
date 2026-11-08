@@ -19,6 +19,7 @@ import {
   approveRequirement,
   createArtworkVersion,
   createCustomer,
+  findSimilarCustomers,
   draftRequirement,
   issuesToFieldErrors,
   makePrimaryContact,
@@ -51,6 +52,17 @@ const done = (message: string): ActionState => {
   return { ok: true, message };
 };
 
+/** ADR-131: "Already a customer?" while typing on New customer (read only; the service checks again on save). */
+export async function similarCustomersAction(input: { name: string; phone: string; email: string }): Promise<{ id: string; code: string; name: string; phone: string | null }[]> {
+  try {
+    const ctx = await requireContext();
+    if (!ctx.can("masterdata.customer.view")) return [];
+    return (await findSimilarCustomers(ctx, { name: String(input.name ?? "").slice(0, 120), phone: String(input.phone ?? "").slice(0, 40), email: String(input.email ?? "").slice(0, 120) })).map((s) => ({ id: s.id, code: s.code, name: s.name, phone: s.phone }));
+  } catch {
+    return [];
+  }
+}
+
 export async function createCustomerW3dAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let id: string;
   try {
@@ -60,7 +72,7 @@ export async function createCustomerW3dAction(_: ActionState, fd: FormData): Pro
       shipTo: obj(fd, ADDRESS_KEYS, "shipTo."),
     });
     if (!parsed.success) return invalid(parsed.error.issues);
-    id = (await createCustomer(ctx, { ...parsed.data, idempotencyKey: str(fd, "idempotencyKey") || null })).id;
+    id = (await createCustomer(ctx, { ...parsed.data, idempotencyKey: str(fd, "idempotencyKey") || null, duplicateCheck: true, confirmedDifferent: str(fd, "confirmedDifferent") === "yes" })).id;
   } catch (e) {
     return toActionState(e);
   }
