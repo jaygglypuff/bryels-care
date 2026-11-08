@@ -14,7 +14,7 @@ You make the batches. The tablet tells you what to do next; follow the green but
 2. **Get materials**: bring every material on the list to the weighing area and tap **Taken** on each line. Only take the lots on the list.
 3. **Weigh**: scan the label on the container, put it on the scale, type the weight and tap **Save**. If a second person must check, they tap their name on your tablet or check on their own phone.
 4. Do each step on the screen in order (for example the Start check, mixing, filling). Tap **Step done** when it is done. For packaging, type how many were used and thrown away; print the product labels from the button on that step.
-5. After the last step tap **Go to Finish** and count what you made. The batch then waits for QA. At the end of your shift write what happened on the order's **Today** tab. **Today** (bottom bar) shows everything written today.
+5. After the last step tap **Go to Finish** and count what you made. The batch then waits for QA. At the end of your shift write what happened on the order's **Today** tab.
 
 ## Good to know
 

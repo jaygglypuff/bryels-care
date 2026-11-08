@@ -8,7 +8,7 @@ import { LinkButton, cx } from "@/ui/core";
  * progress bar and ONE big green button. A task the user cannot do says who does it (first name or
  * role, never an e-mail address) and offers no button that would only be refused.
  */
-function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean }) {
+export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean }) {
   return (
     <article className="flex min-w-0 flex-col gap-2.5 rounded-[18px] border border-line bg-surface p-4 sm:p-5" data-testid="floor-task" aria-label={`${t.title}: ${t.productName}, batch ${t.batchNumber}`}>
       <div className="min-w-0">

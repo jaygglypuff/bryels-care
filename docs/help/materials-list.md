@@ -36,7 +36,7 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 
 ## Settings your site may use
 
-The administrator sets these under **Management → People, rules and settings → Settings** (group Production).
+The administrator sets these under **Set-up → People, rules and settings → Settings** (group Production).
 
 - **Materials list asks to scan each lot**: the button says **Scan**. Scan the label on the container; a wrong lot is refused. (This replaces the older "Get materials by scanning" screen. Old links to it open the batch record.)
 - **Materials list moves stock to the production area**: each tick also moves the lot in the stock records. Only the storekeeper can tick then.

@@ -19,7 +19,7 @@ export default async function NewCapaPage({ searchParams }: { searchParams: Prom
       <PageIntro>This screen is for QA and managers: name the problem and who looks after the plan. You add the things to do on the next screen.</PageIntro>
       <Card>
         {v.owners.length === 0 ? (
-          <EmptyState title="Nobody here can look after a plan">Give someone the QA or site manager role at this site first (ask the administrator: Management → People & access).</EmptyState>
+          <EmptyState title="Nobody here can look after a plan">Give someone the QA or site manager role at this site first (ask the administrator: Set-up › People, rules and settings › People who use the app).</EmptyState>
         ) : (
           <OpenCapaForm sources={v.sources} owners={v.owners} sites={v.sites} deviation={v.deviation} complaint={v.complaint} defaultSiteId={v.siteId} me={ctx.userId} />
         )}

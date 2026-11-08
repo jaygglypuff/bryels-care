@@ -81,3 +81,66 @@ export function wantsPartial(q: NumberQuery): boolean {
 export function likeFragment(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
+
+/**
+ * Words people put before a short number ("order 4", "batch 3"), and the number prefixes they mean (round 5, C report
+ * #15: "order 4" should find SO-26-00004). Lower case; plurals are folded by the caller.
+ */
+export const WORD_PREFIXES: Readonly<Record<string, readonly string[]>> = {
+  order: ["SO", "PO", "WO"],
+  "customer order": ["SO"],
+  "sales order": ["SO"],
+  "purchase order": ["PO"],
+  "production order": ["WO"],
+  batch: ["B"],
+  lot: ["L"],
+  invoice: ["INV"],
+  bill: ["BILL"],
+  delivery: ["SH", "GR"],
+  payment: ["PAY"],
+  request: ["PR"],
+  quote: ["QT"],
+  offer: ["QT"],
+  "price offer": ["QT"],
+  problem: ["DEV"],
+  box: ["BX"],
+  customer: ["CUS"],
+  supplier: ["SUP"],
+  product: ["PRD"],
+  material: ["MAT"],
+  count: ["CNT"],
+  return: ["RT", "SRT"],
+};
+
+/**
+ * A short record number (round 5, A report B14 and C report #15): "4", "0003", "SO 4", "so-4", "order 4". The records
+ * it finds have numbers that END with this number ("4" → SO-26-00004, WO-26-00004, CUS-0004; "0003" → B-26-0003),
+ * whatever zeros stand in front. `prefixes` narrows the record types (null: every type). Null when the text is not one.
+ * Longer partial numbers ("26-00001") keep the "contains" search (`wantsPartial`).
+ */
+export type ShortNumber = { prefixes: readonly string[] | null; /** The number without leading zeros ("3"; "0" for all zeros). */ n: string };
+
+export function parseShortNumber(input: string): ShortNumber | null {
+  const text = String(input ?? "").trim().replace(LABEL_PREFIX, "").toLowerCase().replace(/\s+/g, " ").slice(0, 64);
+  if (!text) return null;
+  const strip = (d: string) => d.replace(/^0+(?=\d)/, "");
+  // Digits only, at most 6 ("4", "0003", "00012").
+  let m = /^(\d{1,6})$/.exec(text);
+  if (m) return { prefixes: null, n: strip(m[1]) };
+  // A number prefix and a short number ("SO 4", "so-4", "B 3", "inv4").
+  m = /^([a-z]{1,4})[ -]?(\d{1,6})$/.exec(text);
+  if (m && NUMBER_SHAPES[m[1].toUpperCase()]) return { prefixes: [m[1].toUpperCase()], n: strip(m[2]) };
+  // A word and a short number ("order 4", "batches 3", "customer order 12", "order no. 4", "order #4").
+  m = /^([a-z][a-z ]*?)\s*(?:no\.?|number|#)?\s*(\d{1,6})$/.exec(text);
+  if (m) {
+    const word = m[1].trim();
+    const forms = [word, word.replace(/ies$/, "y"), word.replace(/es$/, ""), word.replace(/s$/, "")];
+    for (const f of forms) if (WORD_PREFIXES[f]) return { prefixes: WORD_PREFIXES[f], n: strip(m[2]) };
+  }
+  return null;
+}
+
+/** Postgres regex for "the number ends with this number" (any zeros before it, and a non-digit or the start before). */
+export function endsWithNumberRegex(n: string): string {
+  return `(^|[^0-9])0*${n.replace(/[^0-9]/g, "")}$`;
+}

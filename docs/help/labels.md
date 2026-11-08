@@ -50,13 +50,13 @@ A label will not scan? Type the number printed on it under the Scan button, for 
 
 ## Something is wrong
 
-- "Label printing is not set up": ask the administrator (**Management › People, rules and settings › Labels and printouts**).
+- "Label printing is not set up": ask the administrator (**Set-up › People, rules and settings › Labels and printouts**).
 - "No label is approved for this yet": ask QA. QA must say OK to a label before it can print.
 - The label is cut off or too small: in the print window choose **Actual size** and the label paper size.
 
 ## Old label layout
 
-If the print screen says **Old label layout**, the label still uses the first layout. It prints and scans as before; QA can approve a new version of the label with the new layout (name biggest, everything inside the label) in **Management › People, rules and settings › Labels and printouts**.
+If the print screen says **Old label layout**, the label still uses the first layout. It prints and scans as before; QA can approve a new version of the label with the new layout (name biggest, everything inside the label) in **Set-up › People, rules and settings › Labels and printouts**.
 
 ## Sack labels and box labels
 

@@ -102,37 +102,13 @@ export function money(v: string | null | undefined, currency = "PHP"): string {
   return currency === "PHP" ? `₱${s}` : `${currency} ${s}`;
 }
 
-/** Other purchasing screens: wrapped chips from 640 px; folded under one line on a phone (no sideways scroll). */
-export function SubNav() {
-  const items: [string, string][] = [
-    ["/procurement", "Purchasing home"],
-    ["/procurement/requests", "Requests to buy"],
-    ["/procurement/orders", "Purchase orders"],
-    ["/procurement/expected", "Deliveries coming"],
-    ["/procurement/returns", "Send back to supplier"],
-    ["/procurement/suppliers", "Suppliers we may buy from"],
-    ["/procurement/reorder", "Running low"],
-    ["/procurement/performance", "How suppliers do"],
-    ["/procurement/forecast", "Sales guess"],
-  ];
-  const links = items.map(([href, label]) => (
-    <Link key={href} href={href} className="inline-flex min-h-[44px] items-center whitespace-nowrap rounded-full border border-line px-4 text-[14px] hover:bg-surface-2">
-      {label}
-    </Link>
-  ));
-  return (
-    <>
-      <details className="mb-4 sm:hidden">
-        <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Other purchasing screens</summary>
-        <nav aria-label="Purchasing" className="mt-2 flex flex-wrap gap-2">
-          {links}
-        </nav>
-      </details>
-      <nav aria-label="Purchasing" className="mb-4 hidden flex-wrap gap-2 sm:flex">
-        {links}
-      </nav>
-    </>
-  );
+/**
+ * Round 5 (ADR-129, B report #10): the purchasing chip row is gone. It repeated the menu on every purchasing page (a
+ * third navigation level). The menu ("Buy & stock", or "Buying" for purchasing) and the search reach every screen.
+ * Kept as a no-op so the pages that still render it need no change.
+ */
+export function SubNav(): ReactNode {
+  return null;
 }
 
 /** Approval steps in plain words. */

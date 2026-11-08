@@ -9,6 +9,7 @@ import { Chip } from "@/ui/status";
 import { acknowledgeAction, markAllReadAction, markReadAction } from "./actions";
 
 import { codeLast } from "@/lib/code-last";
+import { isFloor, navPersona } from "../nav";
 
 export const metadata = { title: "Messages" };
 
@@ -20,7 +21,9 @@ export default async function NotificationsPage({ searchParams }: { searchParams
   const { show } = await searchParams;
   const all = show === "all";
   const items = await listMyNotifications(ctx, { show: all ? "all" : "open" });
-  const unread = items.filter((n) => !n.readAt).length;
+  const unread = items.filter((n) => !n.readAt && !n.resolvedAt).length;
+  // Round 5 (A report #6): floor people tap a message to open it (that marks it read); no "Mark read" or "I'm on it".
+  const floor = isFloor(navPersona((p) => ctx.can(p), ctx.roleCodes));
 
   return (
     <div className="space-y-5">
@@ -37,7 +40,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
           </>
         }
       />
-      <PageIntro>This screen is for everyone: messages the system sent you. Tap Open to go to the thing it is about. Press “I&apos;m on it” when you are dealing with it.</PageIntro>
+      <PageIntro>This screen is for everyone: messages the system sent you. Tap Open to go to the thing it is about. A message goes away by itself when the work it asks for is done.</PageIntro>
       {ctx.can("quality.disposition.view") && (
         <p className="text-[13px] text-muted">
           Batches and deliveries waiting for a QA decision are on <Link className="text-primary-text hover:underline" href="/quality">Check a batch or delivery</Link>.
@@ -57,7 +60,11 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Chip tone={sev.tone}>{sev.label}</Chip>
-                      {!n.readAt && <span className="text-[11px] font-semibold uppercase text-primary-text">New</span>}
+                      {n.resolvedAt ? (
+                        <span className="text-[11px] font-semibold uppercase text-[var(--ok-fg)]">Done</span>
+                      ) : (
+                        !n.readAt && <span className="text-[11px] font-semibold uppercase text-primary-text">New</span>
+                      )}
                       <span className="text-[12px] text-muted">{fmtDateTime(n.createdAt)}</span>
                     </div>
                     {/* ADR-075: every notification opens its record (plain <a>: opening marks it read, so no prefetch). */}
@@ -66,13 +73,14 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                       {codeLast(n.title).codes.length > 0 && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{codeLast(n.title).codes.join(" · ")}</span>}
                     </p>
                     <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{plainDatesIn(n.body)}</p>
-                    {n.acknowledgedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}
+                    {n.resolvedAt && <p className="mt-0.5 text-[12px] text-muted">Done · {fmtDateTime(n.resolvedAt)}: the work this message asked for is finished.</p>}
+                    {n.acknowledgedAt && !n.resolvedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <a href={`/notifications/open/${n.id}`} className={buttonClass("primary", "sm")} aria-label={`Open: ${n.title}`}>
                       Open
                     </a>
-                  {!n.acknowledgedAt && (
+                  {!n.acknowledgedAt && !n.resolvedAt && !floor && (
                     <div className="flex shrink-0 gap-2">
                       {!n.readAt && (
                         <form action={markReadAction}>

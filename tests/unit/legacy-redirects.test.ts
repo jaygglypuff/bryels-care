@@ -49,6 +49,10 @@ describe("superseded screens redirect to the current one", () => {
     expect(await landing("@/app/(app)/masterdata/suppliers/page", { searchParams: { deleted: "1" } })).toBe("/procurement/suppliers?deleted=1");
   });
 
+  it("round 5 (ADR-129): the Management hub → the Set-up page", async () => {
+    expect(await landing("@/app/(app)/management/page")).toBe("/setup");
+  });
+
   it("/quality/check (batches only) → the QA queue (batches and deliveries)", async () => {
     expect(await landing("@/app/(app)/quality/check/page")).toBe("/quality");
   });

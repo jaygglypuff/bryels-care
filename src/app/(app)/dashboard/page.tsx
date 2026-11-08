@@ -5,12 +5,13 @@ import { plainDatesIn } from "@/lib/plain-date";
 import { fmtDateTime } from "@/lib/qty";
 import { lotsToPutAway, type PutAwayTask } from "@/modules/inventory";
 import { listMyNotifications } from "@/modules/platform";
-import { getOperatorHome, getPlannerNext, getWorkFlowCounts } from "@/modules/analytics";
-import { customerOrdersShort, floorTaskCounts, myFloorTasks, type ShortCustomerLine } from "@/modules/production";
+import { checksWaitingForMe, getOperatorHome, getPlannerNext, getWorkFlowCounts, type CheckItem } from "@/modules/analytics";
+import { customerOrdersShort, myFloorTasks, type ShortCustomerLine } from "@/modules/production";
+import { listReorderSuggestions } from "@/modules/procurement";
 import { Card, CardTitle, LinkButton, PageHeader } from "@/ui/core";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
-import { homeHref } from "../nav";
+import { homeHref, isFloor, navPersona } from "../nav";
 import { OperatorHome, TasksToday } from "./operator-home";
 import { OwnerHomePage } from "./owner-home";
 import { PROCUREMENT_LINES, WAREHOUSE_LINES, WorkList } from "./work-list";
@@ -35,7 +36,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     const warehouse = ctx.can("inventory.movement.post") && ctx.can("sales.pick.view");
     // Live check 2026-11-06: the warehouse Home names the next lot to put away and its shelf.
     const putAwayFirst = warehouse && ctx.can("inventory.lot.view");
-    const [tiles, tasks, plan, buying, dispatch, short, putAway, messages] = await Promise.all([
+    // Round 5 (ADR-129): floor people read no intro and no number tiles; the checks waiting for them come right after
+    // the next job (A report #11, B13); purchasing's Home starts with what to buy (C report #5).
+    const floorPerson = isFloor(navPersona((p) => ctx.can(p), ctx.roleCodes));
+    const buyWhat = buyer && ctx.can("procurement.reorder_suggestion.view");
+    const [tiles, tasks, plan, buying, dispatch, short, putAway, messages, boxChecks, toBuy] = await Promise.all([
       getOperatorHome(ctx),
       floor ? myFloorTasks(ctx) : Promise.resolve([]),
       planner ? getPlannerNext(ctx) : Promise.resolve(null),
@@ -46,34 +51,38 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       putAwayFirst ? lotsToPutAway(ctx, { limit: 50 }).catch(() => [] as PutAwayTask[]) : Promise.resolve([] as PutAwayTask[]),
       // The operator's desktop side panel: the newest open messages (the person's own; no permission needed).
       floor ? listMyNotifications(ctx).then((r) => r.slice(0, 4)).catch(() => []) : Promise.resolve([]),
+      // Box checks for the warehouse (the batch checks are already floor tasks).
+      warehouse && !floor ? checksWaitingForMe(ctx).catch(() => [] as CheckItem[]) : Promise.resolve([] as CheckItem[]),
+      buyWhat ? listReorderSuggestions(ctx, { status: "open" }).then((r) => r.length).catch(() => 0) : Promise.resolve(0),
     ]);
     return (
       <>
         <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={ctx.currentSite.name} />
-        <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
+        {!floorPerson && <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>}
         {short.length > 0 && <CustomerOrdersShort lines={short} />}
         {plan && <PlannerNext plan={plan} canApprove={ctx.can("production.work_order.approve")} />}
-        {buyer && <BuyerNext counts={buying} />}
-        {putAway.length > 0 && <PutAwayNext tasks={putAway} />}
+        {buyer && <BuyerNext counts={buying} toBuy={toBuy} />}
+        {putAway.length > 0 ? <PutAwayNext tasks={putAway} /> : warehouse && <WarehouseNext counts={dispatch} canCheck={boxChecks.length > 0} />}
+        {boxChecks.length > 0 && <BoxChecks checks={boxChecks} />}
         {buyer && <WorkList title="Your buying work" lines={PROCUREMENT_LINES} counts={buying} testId="procurement-work" />}
         {warehouse && <WorkList title="Orders to send out" lines={WAREHOUSE_LINES} counts={dispatch} testId="warehouse-work" />}
         {floor ? (
           <TasksToday
             tasks={tasks}
-            counts={floorTaskCounts(tasks)}
-            tiles={tiles}
-            canDailyCount={ctx.can("production.daily_log.view")}
             messages={messages.map((m) => ({ id: m.id, title: codeLast(plainDatesIn(m.title)).text, codes: codeLast(m.title).codes.join(" · "), at: m.createdAt }))}
           />
         ) : (
-          <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
+          <>
+            {warehouse && <h2 className="mb-2.5 mt-2 text-[16px] font-semibold text-fg">Other jobs</h2>}
+            <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
+          </>
         )}
       </>
     );
   }
 
   // ADR-083: Home answers "what needs me, how are we doing, what is happening" — nothing else (mockup
-  // panel 1; owner-home.tsx). The detailed overview is under Management → Reports & analytics.
+  // panel 1; owner-home.tsx). The detailed overview is under Money › Reports.
   return <OwnerHomePage ctx={ctx} scope={sp.scope} />;
 }
 
@@ -130,9 +139,43 @@ function PutAwayNext({ tasks }: { tasks: PutAwayTask[] }) {
   );
 }
 
-/** ADR-110 C11: the buyer's one next step — approved requests to order first, then orders to send, else ask to buy. */
-function BuyerNext({ counts }: { counts: { key: string; count: number }[] }) {
+/**
+ * Round 5 (A report task 3): the warehouse's ONE next job when nothing waits to be put away: the first line of "Orders
+ * to send out" with work in it. A box check counts only when someone else took the boxes (the person who took them may
+ * not check them).
+ */
+function WarehouseNext({ counts, canCheck }: { counts: { key: string; count: number }[]; canCheck: boolean }) {
+  const line = WAREHOUSE_LINES.find((l) => (counts.find((c) => c.key === l.key)?.count ?? 0) > 0 && (l.key !== "shipments_to_check" || canCheck));
+  if (!line) return <NextStep text="Nothing waits for you right now. New deliveries and orders show here." />;
+  const n = counts.find((c) => c.key === line.key)!.count;
+  return <NextStep text={`Next: ${line.title.toLowerCase()} (${n}).`} action={{ label: line.button, href: line.href }} />;
+}
+
+/** Round 5: "Waiting for you to check" on the warehouse Home (box checks of deliveries someone else took off the shelf). */
+function BoxChecks({ checks }: { checks: CheckItem[] }) {
+  return (
+    <Card className="mb-4" data-testid="home-checks">
+      <CardTitle>Waiting for you to check</CardTitle>
+      <ul className="flex flex-col divide-y divide-line">
+        {checks.map((c) => (
+          <li key={c.key} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+            <span className="min-w-0 text-[14px]">
+              <span className="block font-medium">{c.text}</span>
+              <span className="block text-fg-2">{c.detail}</span>
+            </span>
+            <LinkButton href={c.href} variant="secondary">{c.button}</LinkButton>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** ADR-110 C11 and round 5 (C report #5): what to buy first, then approved requests to order, then orders to send. */
+function BuyerNext({ counts, toBuy = 0 }: { counts: { key: string; count: number }[]; toBuy?: number }) {
   const n = (k: string) => counts.find((c) => c.key === k)?.count ?? 0;
+  if (toBuy > 0)
+    return <NextStep text={`Next: ${toBuy === 1 ? "1 item is" : `${toBuy} items are`} running low. Ask to buy ${toBuy === 1 ? "it" : "them"}.`} action={{ label: "See what to buy", href: "/procurement/reorder" }} />;
   if (n("pr_to_order") > 0)
     return <NextStep text={`Next: ${n("pr_to_order") === 1 ? "1 approved request waits" : `${n("pr_to_order")} approved requests wait`} to be ordered from the supplier.`} action={{ label: "Make the purchase orders", href: "/procurement/requests?status=approved" }} />;
   if (n("po_to_send") > 0)

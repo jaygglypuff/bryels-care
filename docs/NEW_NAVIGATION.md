@@ -1,141 +1,110 @@
-# New navigation: five destinations (ADR-081)
+# Navigation: one short menu per job (round 5, ADR-129)
 
 | | |
 |---|---|
-| Status | Built in slice R1 (2026-10-30); round 2 of the UX audit fixes (2026-10-31): one door per job, menu words = screen titles, smaller office menu |
-| Code | `src/app/(app)/nav.ts` (model), `src/app/(app)/shell.tsx` (top bar, section menus, phone tab bar, drawer) |
-| Tests | `tests/unit/nav-per-role.test.ts`, `tests/unit/nav-titles.test.ts` |
-| Read with | `docs/archive/UX_AUDIT.md` (why), `docs/archive/WORKFLOW_ARCHITECTURE.md` (what the Operations destination shows) |
+| Status | Round 5 (2026-11-08), owner decision "go ahead with the new navigation". Replaces the five destinations of ADR-081 (slice R1, rounds 2–4). |
+| Code | `src/app/(app)/nav.ts` (catalogue, menus per job, bottom bars, active-area rule), `src/app/(app)/shell.tsx` (top bar, tab rows, bottom bar, drawer, avatar menu), `src/app/(app)/setup/page.tsx` (Set-up), `src/ui/master-search.tsx` (Search) |
+| Tests | `tests/unit/nav-per-role.test.ts`, `tests/unit/nav-titles.test.ts`, `tests/unit/menu-paths.test.ts`, `tests/unit/search-screens.test.ts`, `tests/unit/search-round5.test.ts`, `tests/e2e/top-bar-fit.cjs` |
+| Why | `docs/ux-audit/round5/` (A floor, B owner and manager, C office): "including navigation"; the owner could not find the search |
 
 ## 1. Principles
 
-1. **Five destinations, always in the same order:** Home, Operations, Inventory, Sales & Customers,
-   Management. A user sees only those with at least one screen they may open.
-2. **Every screen keeps its URL.** Only its place in the menu changed. Notification links, bookmarks,
-   printed QR links and tests keep working.
-3. **Each screen is listed once.** (Test: "every screen is listed once".)
-4. **Main tabs + small section menus.** Inside a destination the daily screens are tabs; the rest sit in
-   named menus that open on tap. "Planning tools" and "IT and system" are always last.
-5. **Menus never grant access.** Every page and service still checks permission and site on the server;
-   hiding a menu entry is only about focus.
+1. **Organised by the person's questions, not by department.** The owner asks "what needs me, how are sales, is
+   production on track, do we have stock, how is the money": Home · Needs me · Sell · Make · Buy & stock · Money.
+2. **Each job sees only its menu.** Office roles get the areas of their work (C report); floor roles get four doors
+   in the bottom bar and no tab rows (A report).
+3. **Two levels at most.** Area → at most five tabs (`MAX_TABS`) and one flat **More** list. No menu inside a menu,
+   no section dropdowns, no chip rows inside pages (the purchasing chip row is gone), no hub card grids.
+4. **Menu word = screen title** (ADR-101 stays; `tests/unit/nav-titles.test.ts`).
+5. **Every screen is in the catalogue once** (`NAV` in `nav.ts`). Search, quoted menu paths in messages
+   (`src/lib/menu-paths.ts`), the Set-up page and the "which area is this page in" highlight read it. A screen that left
+   a job's menu still opens by URL, from links and from Search.
+6. **Menus never grant access.** Every page and service checks permission and site on the server, as before.
+7. **Set-up is not daily work.** Products, recipes, materials, people, settings, labels, shelves, machines and record
+   numbers are on the Set-up page (`/setup`), opened from the avatar menu and from Search.
 
-## 2. The map (UX audit round 2, 2026-10-31; round 4, 2026-11-01; generated from `nav.ts`)
+## 2. The catalogue (`NAV`)
 
-Legend: tabs = always visible inside the destination; *Section* = a menu of that name; folded *Advanced* =
-rarely used entries at the end of a section (one more tap). ¹ also the top-bar bell, so the tab rows leave it
-out; ² also the top-bar "To approve" button from 640 px, so the tab row shows it on phones only. The drawer
-(the full menu) lists every entry. ³ round 4: folded under *Advanced* for everyone except the roles that use it daily
-(`foldUnless` in `nav.ts`: QA for the recall and change screens, warehouse for repacking and stock lists, finance for
-statements, credits and month close, purchasing for supplier returns, system admin for the rare settings and IT
-screens, floor roles for Working without signal). Operators see "My work" and "Today" instead of the production tabs;
-floor roles keep only their screens (ADR-083). *IT and system* is for the system admin and the owner only.
-
-### Home — "Your day at a glance"
-- tabs: Overview (`/dashboard`), To approve (`/approvals`) ², Messages (`/notifications`) ¹, Problems & alerts (`/action-centre`)
-- *Help & my account*: Help (`/help`), My account (`/account`), Working without signal (`/sync`) ³, Expense claims (`/finance/expenses`)
-
-### Operations — "Production and the daily work"
-- tabs: Operations Center (`/operations`), Production orders (`/production/orders`), Today (`/production/today`), Rejects (`/production/defects`), Check a batch or delivery (`/quality`), Floor screen (TV) (`/floor`)
-- *Receiving*: Deliveries coming (`/procurement/expected`), Receive a delivery (`/inventory/receive`), Deliveries received (`/inventory/receipts`), Put away (`/inventory/receive/put-away`)
-- *Quality*: Quality tests (`/quality/inspections`), Problem reports (`/quality/deviations`), Stopped by QA (`/quality/holds`), Decide many lots at once (`/quality/bulk`) ³, Where it came from and where it went (`/quality/trace`), Customer complaints (`/quality/complaints`), Who received it (recall check) (`/quality/recall`) ³, Product recalls (`/quality/recalls`) ³, Fix-and-prevent plans (`/quality/capa`), Change requests (`/quality/changes`) ³
-- *Packing & dispatch*: Boxing (`/warehouse/packs`), Repack for a customer (`/warehouse/repack`) ³, Check the labels in an area (`/quality/label-verification`) ³, To get from shelf (`/sales/picking`), Send out (`/sales/dispatch`), Deliveries (`/sales/shipments`)
-- *Maintenance*: Maintenance (`/maintenance`), Regular maintenance (`/maintenance/plans`), Repair jobs (`/maintenance/work-orders`); folded *Advanced*: Spare parts (`/maintenance/spare-parts`)
-
-### Inventory — "Track stock and materials"
-- tabs: Stock (`/inventory`), Scan or search (`/inventory/scan`), Move stock (`/inventory/move`), Warehouse (`/warehouse`)
-- *More stock lists*: Shelves (`/inventory/locations`) ³, Boxes and sacks (`/inventory/containers`) ³, Can we deliver? (`/inventory/availability`), Expiring soon (`/inventory/lots/expiry`), Which one to use first / set aside (`/inventory/lots/reservations`) ³, Stock changes (`/inventory/movements`) ³
-- *Counts & labels*: Stock counts (`/inventory/counts`), Fix stock (`/inventory/adjustments`), Labels printed (`/labels`; not in the operator and warehouse menus, ADR-099)
-
-### Sales & Customers — "Orders, deliveries and payments"
-- tabs: Customer orders (`/sales`), Customers (`/sales/customers`), Orders as a board (`/sales/board`)
-- *Quotes, prices & returns*: Price offers (`/sales/quotations`), Prices (`/sales/price-lists`), Customer returns (`/sales/returns`)
-- *Billing & payments*: Invoices (`/finance/invoices`), Payments (`/finance/payments`), Customer statements (`/finance/statements`) ³, Credits (money back) (`/finance/credit-notes`) ³
-
-### Management — "Buying, money, reports and settings"
-- tabs: Management (`/management`)
-- *Reports & analytics*: Business overview (`/analytics/overview`), Reports (`/analytics`), Lists to download or print (`/reports`); folded *Advanced*: Compare over time (`/analytics/trends`), Lists sent by email (`/reports/schedules`), What each number means (`/analytics/definitions`)
-- *Purchasing*: Purchasing (`/procurement`), Requests to buy (`/procurement/requests`), Purchase orders (`/procurement/orders`), Send back to supplier (`/procurement/returns`) ³, Suppliers we may buy from (`/procurement/suppliers`), Running low (`/procurement/reorder`); folded *Advanced*: How suppliers do (`/procurement/performance`), Sales guess (`/procurement/forecast`)
-- *Finance*: Money (`/finance`), Supplier bills (`/finance/bills`), Close the month (`/finance/periods`) ³; folded *Advanced*: Tax rates (`/finance/tax`)
-- *Production setup*: Recipes (`/masterdata/recipes`, the plain list; "New recipe" opens the wizard from it), How-to sheets (`/masterdata/work-instructions`), Quality checks for each item (`/masterdata/inspection-plans`) ³, Equipment (`/masterdata/equipment`); folded *Advanced*: Recipes (advanced) (`/masterdata/formulas`), Steps (advanced) (`/masterdata/routings`)
-- *Master data*: Materials (`/masterdata/materials`), Products (`/masterdata/products`), Locations (`/masterdata/locations`), Sites (`/masterdata/sites`) ³, Warehouses (`/masterdata/warehouses`) ³, Making areas / lines (`/masterdata/lines`) ³; folded *Advanced*: Units (`/masterdata/uom`), Choice lists (`/masterdata/lists`), Reasons (`/masterdata/reason-codes`)
-- *People, rules and settings* (round 4: one sub-menu instead of "People & access" and "Rules and settings"): People who use the app (`/admin/users`), Roles (what each job may do) (`/admin/roles`), Settings (`/admin/settings`), Who says OK to what (`/admin/approval-rules`), History of changes (`/admin/audit`), Who gets which message (`/admin/notification-rules`) ³, Labels and printouts (`/admin/templates`) ³, How record numbers look (`/admin/numbering`) ³
-- *Planning tools*: Production plan (`/production/plan`), Batch records (`/production`)
-- *IT and system*: Health of the system (`/admin/diagnostics`), Load data from a spreadsheet (`/admin/imports`), Who is signed in (`/admin/sessions`) ³, Sign-in safety (`/admin/security`) ³, Phones and tablets (`/admin/devices`) ³, Phone changes to check (`/sync/conflicts`) ³, Keeping and deleting old records (`/admin/retention`) ³, Old paper documents (`/admin/imports/legacy-documents`) ³
-
-### Round 2 rules (UX audit 2026-10-31)
-
-1. **One door per job.** "To approve" is the top-bar button (from 640 px) or a Home tab (phones); Problems &
-   alerts links to it instead of keeping a "To decide" list. "Messages" is only the top-bar bell. One QA door
-   ("Check a batch or delivery", `/quality`; the batch-only list `/quality/check` opens from it); one
-   supplier list in the menu ("Suppliers we may buy from"; it links to adding and editing a supplier); one
-   "Expense claims" entry for people who file or approve claims.
-2. **Menu word = screen title.** Every entry uses the H1 of the screen it opens (test
-   `tests/unit/nav-titles.test.ts`; screens with a dynamic H1 are listed there with the reason).
-3. **Old production screens are in no menu** (`/production/work-orders`, `/production/board`,
-   `/production/staging`, `/production/new`); they redirect to the new flow (round 1).
-4. **Frame targets are at least 44 px** at 390, 820 and 1440 px (top bar, tab rows, drawer, dropdowns,
-   account menu, demo strip); the phone tab row scrolls with a fade and keeps "More" visible.
-5. **Scan in the top bar for every role** (icon + "Scan" on phones, "Scan or search" on tablets).
-
-### Round 4 rules (live re-audit C, 2026-11-01)
-
-6. **No empty or one-entry sub-menus.** After filtering per role (`tidySections` in `nav.ts`), a sub-menu whose
-   entries are all folded joins the sub-menu before it (still folded), and a sub-menu with one entry joins its
-   neighbour. *Planning tools* and *IT and system* stay as they are (always last). The sales role no longer sees an
-   empty *Purchasing*; the system admin no longer sees a one-entry *Purchasing*.
-7. **A short owner menu without hiding work.** `foldUnless` folds rare entries under *Advanced* for everyone except
-   the roles that use them daily (³ above). Owner: 73 of 112 entries visible without opening a fold (was 103 of 113).
-8. **The Operations sub-row fits one line at 1440 px**: the destination's one-line description shows from 1536 px
-   (it is also the pill's tooltip).
-9. **Frame:** the site selector shows the site's name only, never cut (the code is in its tooltip); a Help "?"
-   (44 px) in the top bar on every screen opens the quick guide for that screen (`src/ui/help/screen-guides.ts`,
-   role guide otherwise); at 1280–1535 px Scan shows the word "Scan", and To approve and Messages show their words
-   when the bar has room (one site); with the site selector they stay icons with tooltips (measured: 110 px short).
-
-### Live check rules (desktop Chrome, 2026-11-06)
-
-10. **The desktop tab row is one line at 1280, 1440 and 1920 px.** At most 7 entries (tabs and sub-menus,
-    `DESKTOP_ROW_MAX`, `desktopRow` in `nav.ts`); the rest go into one **More ▾** menu at the end of the row, which
-    lists the left-over tabs first and then each left-over sub-menu under its name (Advanced still folded). Tabs marked
-    `deskMore` leave the row first: *Floor screen (TV)* and *Rejects*. Owner: Operations shows Operations Center, How
-    work flows, Production orders, Today, Check a batch or delivery, Receiving ▾, Quality ▾, More ▾ (Floor screen,
-    Rejects, Packing & dispatch, Maintenance); Management shows Management and six sub-menus, More ▾ (Planning tools,
-    IT and system). More is highlighted when the open page is inside it. Phones and tablets are unchanged (their row
-    scrolls sideways and "More" opens the drawer). Menu words still equal the screen titles; nothing is removed.
-
-### Where things moved (old group → new place)
-
-| Old group | Now |
+| Area | Screens (tabs first for the owner and manager; the rest in More or Search) |
 |---|---|
-| Home: Dashboards, Trends, KPI definitions | Management → Reports & analytics |
-| Warehouse (15 items) | Receiving steps → Operations → Receiving; Boxing, Repack, Label verification, Picking, Dispatch → Operations → Packing & dispatch; Scan, Move, Counts, Adjustments, Labels, Warehouse sections → Inventory |
-| Production | Operations (tabs); Setup → Management → Production setup; Advanced unchanged |
-| Maintenance | Operations → Maintenance |
-| Quality | QA queue → Operations tab "Quality check"; the rest → Operations → Quality; Inspection plans → Management → Production setup |
-| Sales | Sales & Customers; Shipments → Operations → Packing & dispatch |
-| Procurement | Management → Purchasing (Expected receipts → Operations → Receiving) |
-| Finance | Customer side → Sales & Customers → Billing & payments; the rest → Management → Finance |
-| Reports, Master data, Admin | Management |
-| Quick-action rail | Removed; its actions are the Operations Center "Quick links" |
+| Home | Home (`/dashboard`), Help, My account, Working without signal |
+| Needs me | To approve, Problems & alerts, Messages |
+| Sell | Customer orders, Customers, Price offers, Deliveries, Customer returns, Orders as a board; *Packing and sending*: To get from shelf, Send out, Boxing, Repack for a customer, Check the labels in an area |
+| Make | Operations Center, Production orders, Production plan, Check a batch or delivery, Problem reports, Batch records, Today, Rejects, How work flows, Floor screen (TV); *Quality*: Quality tests, Stopped by QA, Decide many lots at once, Where it came from and where it went, Customer complaints, Who received it (recall check), Product recalls, Fix-and-prevent plans, Change requests; *Machines*: Maintenance, Regular maintenance, Repair jobs, Spare parts |
+| Buy & stock | Stock, What to buy, Purchase orders, Deliveries coming, Suppliers we may buy from; *Buying*: Purchasing, Requests to buy, Send back to supplier, How suppliers do, Sales guess; *Receiving*: Receive a delivery, Deliveries received, Put away; *Stock*: Scan or search, Move stock, Warehouse sections, Shelves, Boxes and sacks, Can we deliver?, Expiring soon, Which one to use first / set aside, Stock changes, Stock counts, Fix stock, Labels printed |
+| Money | Money, Invoices, Supplier bills, Payments, Reports, Customer statements, Credits (money back), Expense claims, Close the month, Tax rates; *Reports*: Business overview (detailed), Lists to download or print, Compare over time, Lists sent by email, What each number means |
+| Set-up (avatar menu) | Set-up; *Products and recipes*: Products, Recipes, Materials, Prices, How-to sheets, Quality checks for each item, Recipes (advanced), Steps (advanced); *Places and machines*: Shelves and areas (set up), Equipment, Sites, Warehouses, Making areas / lines; *People, rules and settings*: People who use the app, Roles (what each job may do), Settings, Who says OK to what, Who gets which message, Labels and printouts, How record numbers look, History of changes; *Lists* (folded): Units, Choice lists, Reasons; *IT and system* (system admin and owner): Health of the system, Load data from a spreadsheet, Who is signed in, Sign-in safety, Phones and tablets, Phone changes to check, Keeping and deleting old records, Old paper documents |
 
-## 3. Visibility per role (shipped role bundles)
+"Running low" was renamed **What to buy** (screen title and menu word; C report #5).
 
-| Persona (from permissions) | Destinations | Phone/iPad-portrait tab bar |
+## 3. Menus per job (`AREAS_BY_PERSONA`)
+
+The job ("persona") is decided by role codes in this order: owner, site manager, planner, QA, finance, purchasing,
+sales, warehouse, operator, system admin; then by permissions for custom roles (`navPersona`). Entries a person may
+not open drop out; an area with nothing left drops out.
+
+| Job | Top menu (from 1280 px) | Tabs (≤ 5) and More |
 |---|---|---|
-| Owner | all five | Home · Operations · Inventory · Sales · Menu |
-| Planner, site manager, viewer roles (auditor, sales, finance, procurement, admin) | those with a permitted screen | Home · Operations · Inventory · Sales · Menu (tabs without permission drop out) |
-| QA | all with a permitted screen | Home · Quality check · Operations · Scan · Menu |
-| Production operator | Home, Operations, Inventory | Home · My work · Today · Scan · Menu |
-| Warehouse operator | Home, Operations, Inventory, Sales & Customers (picking-related) | Home · Receive · Scan · Inventory · Menu |
+| Owner, site manager (also planner, auditor, system admin, filtered by permission) | Home · **Needs me** (badge) · Sell · Make · Buy & stock · Money | Needs me: To approve, Problems & alerts, Messages · Sell: Customer orders, Customers, Price offers, Deliveries, Customer returns; More: Orders as a board, To get from shelf, Send out, Boxing · Make: Operations Center, Production orders, **Production plan**, Check a batch or delivery, Problem reports; More: Batch records, Today, Rejects, How work flows, Quality tests, Stopped by QA, Where it came from and where it went, Customer complaints, Fix-and-prevent plans, Product recalls, Maintenance, Repair jobs, Regular maintenance · Buy & stock: Stock, What to buy, Purchase orders, Deliveries coming, Suppliers we may buy from; More: Requests to buy, Receive a delivery, Deliveries received, Put away, Move stock, Warehouse sections, Stock counts, Fix stock, Expiring soon, Can we deliver?, Shelves · Money: Money, Invoices, Supplier bills, Payments, Reports; More: Customer statements, Credits (money back), Expense claims, Business overview (detailed), Lists to download or print |
+| Sales | Home · Orders · Customers · Price offers · Invoices | Orders: Customer orders, Orders as a board, Deliveries · Customers: Customers, Prices, Customer returns · Price offers · Invoices (to look at) |
+| Purchasing | Home · Buying · Suppliers | Buying: What to buy, Requests to buy, Purchase orders, Deliveries coming, Deliveries received; More: Send back to supplier, Purchasing, Sales guess, Stock · Suppliers: Suppliers we may buy from, How suppliers do |
+| Finance | Home (= the **Money** page) · Money in · Money out · Month end · Reports | Money in: Invoices, Payments, Customer statements, Credits (money back) · Money out: Supplier bills, Expense claims · Month end: Close the month, Tax rates · Reports: Reports, Business overview (detailed), Lists to download or print; More: Compare over time, Lists sent by email, What each number means |
+| QA | Home · Check · Problems · Trace | Check: Check a batch or delivery, Quality tests, Stopped by QA, Decide many lots at once; More: Batch records, Stock, Check the labels in an area · Problems: Problem reports, Fix-and-prevent plans, Customer complaints, Product recalls, Change requests · Trace: Where it came from and where it went, Who received it (recall check) |
+| Machine operator (floor) | My jobs · Scan · Batches · Help | none (the drawer lists My work: Production orders, Today, Stock, Scan or search) |
+| Warehouse (floor) | My jobs · Scan · Receive · Help | none (the drawer lists Receiving, Packing and sending, Stock) |
+| Floor display (TV) | — | Floor screen (TV) is its Home |
 
-Operator and warehouse personas never get Management (A-UX-02). The persona is decided by permissions
-first, role names second, so custom roles behave sensibly (`productionPersona`).
+Not in any owner or manager menu (B report): Floor screen (TV), Decide many lots at once, Change requests, Recall
+check, Repack, Check the labels in an area, Boxes and sacks, Stock changes, Labels printed, Lists sent by email, What
+each number means, Compare over time, Sales guess, How suppliers do, Send back to supplier, Close the month, Tax rates,
+Spare parts. They open from Search, links and (Set-up screens) the Set-up page.
 
-## 4. Shell behaviour
+## 4. Bottom bar (phones and tablets below 1280 px; `tabsFor`)
 
-- **Desktop (≥ 1280 px):** logo, five destination pills (icon + label, description as tooltip), then site
-  switcher (name only), Scan, sync chip, To approve, notifications, Help "?", account. Under it, the active destination's tabs
-  and section menus. The section of the current page is highlighted.
-- **Phone / iPad portrait:** the role's tab bar at the bottom; "Menu" opens the drawer with the five
-  destinations, their tabs, and each section collapsed (the current one opens).
-- **Badges:** To approve (count waiting for the user) and Quality check (lots and batches waiting for QA).
+| Job | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Machine operator | My jobs | Scan | Batches | Help | |
+| Warehouse | My jobs | Scan | Receive | Help | |
+| Site manager | My jobs | Scan | To check/approve (badge) | Help | |
+| Owner (planner, auditor, admin) | Home | Needs me (badge) | Sell | Make | Money |
+| Sales | Home | Orders | Customers | Price offers | |
+| Purchasing | Home | What to buy | Purchase orders | Suppliers | |
+| Finance | Home | Money in | Money out | Reports | |
+| QA | Home | Check | Problems | Trace | |
+
+There is never a second menu button in the bottom bar. Floor people at 1280 px and wider see the same four doors as
+the top-bar menu.
+
+## 5. The frame (`shell.tsx`)
+
+- **Top bar, from 1280 px:** logo (mark; full logo from 1536 px) · the menu row starting next to the logo · the
+  **Search** box right after it · site selector (people with two or more sites) · sync chip (only when something waits
+  to be sent or there is no signal) · To approve and Messages (office roles; owner and manager have them in Needs me)
+  · Help "?" with the word Help from 1024 px (one site) · avatar. Floor roles: logo, their four doors, Search,
+  Messages, avatar.
+- **Below 1280 px:** one ☰ (not for floor roles) · logo · Search (a box with the word "Search" from 768 px, a
+  labelled "Search" button on phones) · Messages (not owner and manager) · Help (from 640 px) · avatar.
+- **Avatar menu:** name, job, site · My account and devices · Help · **Set-up** (people with set-up screens) ·
+  **All screens** (opens the drawer, every width) · Reset demo data (demo owner) · Sign out.
+- **Tab row:** the open area's tabs (≤ 5) and one flat **More** list (desktop); phones scroll the tabs with a fade
+  and **More** opens the drawer at that area. Floor roles have no tab row (the "My work / Today" row that covered page
+  titles is gone).
+- **Drawer:** the job's areas (tabs, then More), Set-up, Help; the sync line in words. **Esc** closes it and any open
+  frame menu (B report bug B12).
+- **Which area lights up** (`activeEntry`): the most specific menu entry wins; a page that has a more specific screen
+  of its own in the catalogue (Scan or search under Stock) lights only its area; a page outside the job's menu lights
+  the catalogue area if the job has it. A batch record lights **Make → Batch records**, never Set-up (B report B13).
+- **ADR-126 `ui.wide_screen_top_bar`:** "search" (default) as above; "scan" puts the **Scan** button where the Search
+  box stands, at every width; Ctrl/⌘+K and "/" still open the search.
+- Targets ≥ 44 px; no sideways scroll at 390, 820, 1366 and 1440 px.
+
+## 6. Old addresses
+
+Every screen keeps its URL. `/management` (the hub card grid) redirects to `/setup`. The old menu paths quoted in
+messages were rewritten to the new ones (`tests/unit/menu-paths.test.ts`).
+
+## 7. History
+
+Round 1 (ADR-081): five destinations (Home, Operations, Inventory, Sales & Customers, Management) replaced fourteen
+module menus. Rounds 2–4 (ADR-101, -107, -123): one door per job, menu words = titles, Advanced folds, the 1280 px fit.
+Round 5 (ADR-129): one short menu per job, Set-up behind the avatar, labelled Search at every width (this page).

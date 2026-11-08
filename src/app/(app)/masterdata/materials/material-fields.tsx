@@ -154,7 +154,7 @@ export function MaterialFields({ options, d = {}, locked = false, creating = fal
               <Explain term="inci" />
             </div>
             <TextField name="commonName" label="Other name people use" defaultValue={d.commonName} />
-            <SelectField name="category" label="Category (optional)" defaultValue={d.category} options={options.categories} emptyLabel="No category" hint="To add a category, go to Management › Master data › Choice lists." />
+            <SelectField name="category" label="Category (optional)" defaultValue={d.category} options={options.categories} emptyLabel="No category" hint="To add a category, go to Set-up › Choice lists." />
             <TextField name="code" label="Your own code (optional)" defaultValue={d.code} placeholder={d.code ? undefined : "The system gives one, e.g. MAT-0001"} mono readOnly={locked} hint={locked ? "In use: the code can no longer change." : "Leave empty and the system numbers it."} />
           </Grid>
         }

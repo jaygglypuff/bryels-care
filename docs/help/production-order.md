@@ -19,7 +19,7 @@ A production order says what to make, how many and by when. You follow it on one
 
 ## Find your work
 
-1. Operators: open **Operations → My work**. Owners and planners: open **Operations → Production orders**.
+1. Operators: tap **Batches** in the bottom bar. Owners and planners: open **Make → Production orders**.
 2. Each card shows the product, how many pieces (for example "247 bars · 2 batches"), the status and one big button.
 3. A red **Late** tag means the needed-by date has passed and the order is not done.
 4. Owners and planners can press **Board** to see the orders in five columns, one per status.
@@ -67,16 +67,16 @@ A production order says what to make, how many and by when. You follow it on one
 2. Press **Save to daily log**. You can add more entries during the day.
 3. Made a mistake? Open the **Daily log** tab, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
 4. The reject types come from the setting **Reject types for the daily log**. The owner can change the list.
-5. **Operations → Today** shows everything written today for all orders of your site.
+5. **Make → More → Today** shows everything written today for all orders of your site.
 
 ## Rejects summary
 
-1. Open **Operations → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
+1. Open **Make → More → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
 2. The **Daily log** and **Batches** tabs of an order show the same numbers for that order.
 
 ## Planning tools
 
-The production plan and the list of all batch records are under **Management → Planning tools** for planners and the owner. You do not need them for daily work.
+The production plan is a tab of **Make** (**Production plan**); the list of all batch records is under **Make → More → Batch records**. You do not need them for daily work.
 
 ## Older batches and paper copies
 

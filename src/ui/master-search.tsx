@@ -2,13 +2,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  Banknote, Box, Boxes, Clock, Cog, FileText, FlaskConical, Factory, LayoutGrid, MapPin, Package, Search, ShieldCheck, ShoppingCart, Truck, UserRound, Wrench, X, ScanLine, Building2, Layers,
+  Banknote, Box, Boxes, Clock, Cog, FileText, FlaskConical, Factory, LayoutGrid, MapPin, Package, Plus, Search, ShieldCheck, ShoppingCart, Truck, UserRound, Wrench, X, ScanLine, Building2, Layers,
 } from "lucide-react";
 import type { MasterSearchResponse } from "@/app/(app)/search-actions";
 import { scanCodeHref } from "@/lib/scan/scan-href";
 import type { HitIcon } from "@/modules/scan";
 import { cx } from "./core";
+import { enterChoice, type EnterRow } from "./search-enter";
 
 /**
  * Master search (owner request 2026-11-08): one box for screens, record numbers and names. Used in the top-bar dialog
@@ -25,8 +27,8 @@ const RECENT_MAX = 6;
 /** A scanned or typed label (ADR-017): opened as a scan card on the Scan or search screen. */
 const LABEL = /^BC:[A-Z]{3}:/i;
 
-type RowIcon = HitIcon | "screen" | "recent";
-type Row = { key: string; icon: RowIcon; name: string; number?: string; detail?: string; href: string; exact?: boolean; query?: string };
+type RowIcon = HitIcon | "screen" | "recent" | "action";
+type Row = { key: string; icon: RowIcon; name: string; number?: string; detail?: string; href: string; exact?: boolean; query?: string; kind?: EnterRow["kind"] };
 type Section = { label: string; rows: Row[] };
 type Recent = { q: string[]; r: { name: string; number?: string; href: string; icon: RowIcon }[] };
 
@@ -35,7 +37,7 @@ const ICON: Record<RowIcon, React.ReactNode> = {
   production: <Factory size={18} />, lot: <Layers size={18} />, box: <Box size={18} />, stock: <Boxes size={18} />, quality: <ShieldCheck size={18} />,
   repair: <Wrench size={18} />, document: <FileText size={18} />, material: <FlaskConical size={18} />, product: <Package size={18} />,
   customer: <UserRound size={18} />, supplier: <Building2 size={18} />, shelf: <MapPin size={18} />, equipment: <Cog size={18} />,
-  recipe: <FlaskConical size={18} />, screen: <LayoutGrid size={18} />, recent: <Clock size={18} />,
+  recipe: <FlaskConical size={18} />, screen: <LayoutGrid size={18} />, recent: <Clock size={18} />, person: <UserRound size={18} />, action: <Plus size={18} />,
 };
 
 const storeKey = (userId: string) => `bc.search.recent.${userId}`;
@@ -76,10 +78,13 @@ function sectionsFrom(res: MasterSearchResponse | null, recent: Recent): Section
   }
   const out: Section[] = [];
   const numbers = res.groups.find((g) => g.key === "numbers");
-  const toRow = (h: MasterSearchResponse["groups"][number]["hits"][number], g: string): Row => ({ key: `${g}:${h.type}:${h.href}:${h.number}`, icon: h.icon, name: h.name, number: h.number, detail: h.detail, href: h.href, exact: h.exact });
-  // An exact number comes before everything; screens next; then the rest.
+  const toRow = (h: MasterSearchResponse["groups"][number]["hits"][number], g: string): Row => ({ key: `${g}:${h.type}:${h.href}:${h.number}`, icon: h.icon, name: h.name, number: h.number, detail: h.detail, href: h.href, exact: h.exact, kind: "record" });
+  // An exact number comes before everything; things to do and screens next; then the rest.
   if (numbers?.hits.some((h) => h.exact)) out.push({ label: numbers.label, rows: numbers.hits.map((h) => toRow(h, "n")) });
-  if (res.screens.length) out.push({ label: "Screens", rows: res.screens.map((s) => ({ key: `s${s.href}`, icon: "screen", name: s.label, detail: s.where, href: s.href })) });
+  const actions = res.screens.filter((s) => s.action);
+  const screens = res.screens.filter((s) => !s.action);
+  if (actions.length) out.push({ label: "Things to do", rows: actions.map((s) => ({ key: `a${s.href}`, icon: "action", name: s.label, detail: s.where, href: s.href, exact: s.exact, kind: "action" })) });
+  if (screens.length) out.push({ label: "Screens", rows: screens.map((s) => ({ key: `s${s.href}`, icon: "screen", name: s.label, detail: s.where, href: s.href, kind: "screen" })) });
   for (const g of res.groups) if (g.key !== "numbers" || !numbers?.hits.some((h) => h.exact)) out.push({ label: g.label, rows: g.hits.map((h) => toRow(h, g.key)) });
   return out;
 }
@@ -109,6 +114,9 @@ export function MasterSearchPanel({
   const [res, setRes] = useState<MasterSearchResponse | null>(null);
   const [pending, setPending] = useState(false);
   const [active, setActive] = useState(0);
+  // Round 5 (A report B14): Enter opens a highlighted row only after the person moved the highlight (keys or mouse).
+  const [moved, setMoved] = useState(false);
+  const [chooseHint, setChooseHint] = useState(false);
   const [recent, setRecent] = useState<Recent>({ q: [], r: [] });
   const [offline, setOffline] = useState(false);
   const seq = useRef(0);
@@ -140,6 +148,8 @@ export function MasterSearchPanel({
         if (n === seq.current) {
           setRes(r);
           setActive(0);
+          setMoved(false);
+          setChooseHint(false);
         }
       } catch {
         if (n === seq.current) setRes({ query: text, screens: [], groups: [], exactHref: null, common: [], error: "The search did not work just now. Check your connection and try again." });
@@ -185,23 +195,36 @@ export function MasterSearchPanel({
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((a) => (rows.length ? (a + 1) % rows.length : 0));
+      // The first press lights the first row; later presses move on.
+      setActive((a) => (rows.length ? (moved ? (a + 1) % rows.length : 0) : 0));
+      setMoved(true);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((a) => (rows.length ? (a - 1 + rows.length) % rows.length : 0));
+      setMoved(true);
     } else if (e.key === "Enter") {
       e.preventDefault();
       const text = q.trim();
       if (LABEL.test(text)) return label(text);
+      // An empty box: the highlighted recent item or common screen.
+      if (!text) {
+        if (rows[active]) choose(rows[active]);
+        return;
+      }
+      // Round 5 (A report B14): the record number typed, else the highlighted row, never the first hit of another kind.
+      const pick = (r: MasterSearchResponse, rs: Row[]) => {
+        const row = enterChoice(rs, { exactHref: r.exactHref, active, moved });
+        if (row) choose(row);
+        else setChooseHint(rs.length > 0);
+      };
       // Results may still be on their way for the last keys: wait for the answer to the text as typed.
-      if (res && res.query === text && rows[active]) choose(rows[active]);
-      else if (text) {
+      if (res && res.query === text) pick(res, rows);
+      else {
         const n = seq.current;
         void search(text).then((r) => {
           if (n !== seq.current) return;
           setRes(r);
-          const first = sectionsFrom(r, recent).flatMap((s) => s.rows)[0];
-          if (first) choose(first);
+          pick(r, sectionsFrom(r, recent).flatMap((s) => s.rows));
         });
       }
     } else if (e.key === "Escape") {
@@ -216,7 +239,7 @@ export function MasterSearchPanel({
   let index = -1;
 
   return (
-    <div className={cx("flex min-h-0 flex-col", variant === "dialog" && "max-h-[min(80dvh,640px)]")} data-testid="master-search">
+    <div className={cx("flex min-h-0 flex-col", variant === "dialog" && "h-full sm:h-auto sm:max-h-[min(80dvh,640px)]")} data-testid="master-search">
       <div className={cx("flex items-center gap-2 border-line px-3", variant === "dialog" ? "border-b" : "rounded-[14px] border bg-surface shadow-[var(--shadow-card)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]")}>
         <Search size={18} aria-hidden className="shrink-0 text-muted" />
         <label htmlFor={`${ids}-input`} className="sr-only">Search anything</label>
@@ -227,7 +250,7 @@ export function MasterSearchPanel({
           role="combobox"
           aria-expanded={rows.length > 0}
           aria-controls={`${ids}-list`}
-          aria-activedescendant={rows.length ? optionId(active) : undefined}
+          aria-activedescendant={rows.length && (moved || !text) ? optionId(active) : undefined}
           aria-autocomplete="list"
           autoComplete="off"
           spellCheck={false}
@@ -235,7 +258,7 @@ export function MasterSearchPanel({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Search anything — a screen, a name or a number"
+          placeholder="A customer, product, person, number or question"
           // The box around the input shows the focus (page) or the open dialog does; the global ring would sit inside it.
           style={{ outline: "none" }}
           className="h-12 min-w-0 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-muted focus-visible:outline-none"
@@ -249,7 +272,20 @@ export function MasterSearchPanel({
         {variant === "dialog" && (
           <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted sm:inline">Esc</kbd>
         )}
+        {variant === "dialog" && (
+          <button type="button" onClick={() => onClose?.()} className="grid min-h-11 shrink-0 place-items-center rounded-full px-3 text-[14px] font-medium text-primary-text sm:hidden">
+            Close
+          </button>
+        )}
       </div>
+      {/* Round 5 (B report #1): the search screen's first line is "Scan a label" (phones and tablets open the camera there). */}
+      {variant === "dialog" && (
+        <Link href="/inventory/scan" onClick={() => onClose?.()} data-testid="search-scan-label" className="mx-2 mt-2 flex min-h-[52px] items-center gap-3 rounded-[12px] border border-line bg-surface-2 px-3 text-[15px] font-semibold text-fg hover:bg-surface">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-cta text-white" aria-hidden><ScanLine size={18} /></span>
+          Scan a label
+          <span className="ml-auto text-[12px] font-normal text-muted">camera or scanner</span>
+        </Link>
+      )}
 
       <div ref={listRef} id={`${ids}-list`} role="listbox" aria-label="Search results" aria-busy={pending} className={cx("min-h-0 overflow-y-auto", variant === "dialog" ? "px-2 py-2" : "mt-3 space-y-3")}>
         {offline && <p role="alert" className="m-2 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">You&apos;re offline. Search needs a connection; try again when you&apos;re back online.</p>}
@@ -258,7 +294,12 @@ export function MasterSearchPanel({
         {!res && !offline && <div className="m-2 h-24 animate-pulse rounded-[14px] bg-surface-2" aria-label="Loading" />}
         {nothing && (
           <p className="m-2 px-1 py-3 text-[14px] text-fg-2" role="status">
-            Nothing found for “{text}”. Try part of a name, or the last digits of the number (for example 00012).
+            Nothing found for “{text}”. Try part of a name, or the last digits of the number (for example 4 or 0012).
+          </p>
+        )}
+        {chooseHint && shown && rows.length > 0 && (
+          <p className="m-2 rounded-[10px] border border-[var(--info-bd)] bg-[var(--info-bg)] px-3 py-2 text-[13px] text-[var(--info-fg)]" role="status" data-testid="search-choose-hint">
+            More than one thing matches. Tap the one you want, or choose it with ↑ ↓ and press Enter.
           </p>
         )}
         {sections.map((s) => (
@@ -267,7 +308,7 @@ export function MasterSearchPanel({
             {s.rows.map((r) => {
               index += 1;
               const i = index;
-              const isActive = i === active;
+              const isActive = i === active && (moved || !text);
               const body = (
                 <>
                   <span className={cx("grid size-9 shrink-0 place-items-center rounded-full", isActive ? "bg-white/15" : "bg-surface-2 text-fg-2")} aria-hidden>{ICON[r.icon]}</span>
@@ -283,7 +324,7 @@ export function MasterSearchPanel({
               );
               const cls = cx("flex min-h-[52px] w-full items-center gap-3 rounded-[10px] px-2 py-1.5 text-left", isActive ? "bg-cta text-white" : "text-fg hover:bg-surface-2");
               return r.query !== undefined ? (
-                <button key={r.key} type="button" id={optionId(i)} role="option" aria-selected={isActive} data-index={i} className={cls} onMouseEnter={() => setActive(i)} onClick={() => choose(r)}>
+                <button key={r.key} type="button" id={optionId(i)} role="option" aria-selected={isActive} data-index={i} className={cls} onMouseEnter={() => { setActive(i); setMoved(true); }} onClick={() => choose(r)}>
                   {body}
                 </button>
               ) : (
@@ -295,7 +336,7 @@ export function MasterSearchPanel({
                   aria-selected={isActive}
                   data-index={i}
                   className={cls}
-                  onMouseEnter={() => setActive(i)}
+                  onMouseEnter={() => { setActive(i); setMoved(true); }}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey) return; // a new tab keeps the search open
                     e.preventDefault();
@@ -310,11 +351,8 @@ export function MasterSearchPanel({
         ))}
       </div>
       {variant === "dialog" && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2 text-[12px] text-muted">
-          <span>↑ ↓ to choose · Enter to open · Esc to close</span>
-          <Link href="/inventory/scan" onClick={() => onClose?.()} className="inline-flex min-h-[34px] items-center gap-1 rounded-full px-2 font-medium text-primary-text hover:underline">
-            <ScanLine size={14} aria-hidden /> Scan a label
-          </Link>
+        <div className="hidden flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2 text-[12px] text-muted sm:flex">
+          <span>↑ ↓ to choose · Enter opens the record number you typed, or the highlighted line · Esc to close</span>
         </div>
       )}
     </div>
@@ -330,14 +368,15 @@ function typingIn(t: EventTarget | null): boolean {
 }
 
 /**
- * The top-bar search box (from 1024 px) and the Ctrl/⌘+K and "/" shortcuts (every width). Opens the search in a
- * dialog over the page. On phones the Scan button in the top bar opens the Scan or search screen instead.
+ * The top-bar search (round 5, ADR-129; B report #1 "where is the search?"): a labelled button at every width.
+ * Phones: a pill "Search" (magnifier + word). From 768 px: a box with the word "Search" and a hint, placed right after
+ * the menu. It opens the search in a dialog over the page (full screen on phones), whose first line is "Scan a label".
+ * Ctrl/⌘+K and "/" open it at every width.
+ *
+ * `keysOnly` (ADR-126, setting `ui.wide_screen_top_bar` = "scan"): the Scan button stands in the box's place, so no
+ * button is drawn here; the keys still open the search.
  */
-/**
- * `compact` (ADR-126, setting `ui.wide_screen_top_bar` = "scan"): a small round button at 1024–1279 px only; from 1280 px
- * the Scan button takes its place and the search opens with Ctrl/⌘K or "/" (still listened to here).
- */
-export function MasterSearchLauncher({ search, userId, compact = false }: { search: SearchFn; userId: string; compact?: boolean }) {
+export function MasterSearchLauncher({ search, userId, keysOnly = false, tight = false }: { search: SearchFn; userId: string; keysOnly?: boolean; /** Less room in the bar (site selector): a narrower box. */ tight?: boolean }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [mac, setMac] = useState(false);
@@ -364,34 +403,35 @@ export function MasterSearchLauncher({ search, userId, compact = false }: { sear
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        data-testid="master-search-open"
-        aria-haspopup="dialog"
-        aria-keyshortcuts="Control+K Meta+K /"
-        aria-label="Search anything — a screen, a name or a number"
-        title="Search anything (Ctrl+K or /)"
-        className={
-          compact
-            ? "hidden size-11 shrink-0 place-items-center rounded-full border border-line bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg lg:grid xl:hidden"
-            : "hidden h-11 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3 text-left text-[13px] text-muted shadow-[var(--shadow-card)] hover:text-fg lg:flex lg:w-[clamp(240px,30vw,360px)] xl:w-auto xl:min-w-11 xl:justify-center xl:px-3 xl:text-fg-2"
-        }
-      >
-        <Search size={16} aria-hidden className="shrink-0" />
-        {/* From 1280 px the five destinations sit in the same bar and were measured full (live check 2026-11-06): the
-            box becomes a round search button, narrower than the Scan button it replaces there; the words are in the dialog. */}
-        {!compact && <span className="min-w-0 flex-1 truncate xl:hidden">Search anything — a screen, a name or a number</span>}
-        {!compact && <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] lg:inline xl:hidden">{mac ? "⌘K" : "Ctrl K"}</kbd>}
-      </button>
-      {open && (
+      {!keysOnly && (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          data-testid="master-search-open"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Control+K Meta+K /"
+          aria-label="Search: a customer, product, person or number"
+          title="Search (Ctrl+K or /)"
+          className={cx(
+            "flex h-11 min-w-0 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3 text-left text-[13px] text-fg-2 shadow-[var(--shadow-card)] hover:border-line-strong hover:text-fg",
+            tight ? "md:w-[clamp(150px,15vw,240px)]" : "md:w-[clamp(180px,19vw,300px)]",
+          )}
+        >
+          <Search size={16} aria-hidden className="shrink-0" />
+          <span className="shrink-0 font-semibold text-fg">Search</span>
+          <span className="hidden min-w-0 flex-1 truncate text-muted md:inline">a customer, product or number</span>
+          <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted 2xl:inline">{mac ? "⌘K" : "Ctrl K"}</kbd>
+        </button>
+      )}
+      {/* A portal: the sticky, blurred top bar would otherwise hold the overlay (it covered only the bar, round 5). */}
+      {open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-0 sm:p-4 sm:pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <div role="dialog" aria-modal="true" aria-label="Search anything" className="w-full max-w-2xl overflow-hidden bg-surface shadow-2xl sm:rounded-[18px]">
+          <div role="dialog" aria-modal="true" aria-label="Search" className="flex h-dvh w-full max-w-2xl flex-col overflow-hidden bg-surface shadow-2xl sm:h-auto sm:rounded-[18px]">
             <MasterSearchPanel search={search} userId={userId} variant="dialog" autoFocus onClose={close} />
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }

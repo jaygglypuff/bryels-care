@@ -305,10 +305,48 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 
 ## 3. Navigation model
 
-> **Superseded in part by ADR-081 (2026-10-30).** The menu is now five destinations — Home, Operations,
-> Inventory, Sales & Customers, Management — with section menus, per-role tab bars and no quick-action
-> rail. `docs/NEW_NAVIGATION.md` is the current map; the breakpoints, top bar and accessibility rules
-> below still apply.
+> **Round 5 (ADR-129, 2026-11-08) supersedes ADR-081's five destinations.** One short menu per job, organised by
+> the person's questions: owner and site manager **Home · Needs me · Sell · Make · Buy & stock · Money**; sales,
+> purchasing, finance and QA their own areas; floor roles four bottom doors (**My jobs · Scan · Batches/Receive ·
+> Help**; the site manager's phone **My jobs · Scan · To check/approve · Help**) and no tab rows. At most five tabs per
+> area plus one flat **More**; no menu inside a menu, no chip rows or hub card grids. Set-up (products, recipes,
+> materials, people, settings, labels, shelves, machines, numbering) is the **Set-up** page behind the avatar menu.
+> `docs/NEW_NAVIGATION.md` is the current map; the accessibility rules below still apply.
+>
+> **Round 5 frame rules (`src/app/(app)/shell.tsx`):**
+> 1. **Search you can see.** A labelled **Search** at every width: a box with the word "Search" and the hint "a
+>    customer, product or number" from 768 px, placed right after the menu row; a "Search" pill on phones. It opens
+>    the search (full screen on phones, with **Close**); its first line is **Scan a label**. Ctrl/⌘+K and "/" open it
+>    anywhere. The lone magnifier is gone. With `ui.wide_screen_top_bar = scan` the **Scan** button stands in the
+>    box's place at every width.
+> 2. **Enter opens the best match only:** the record whose whole number was typed; else the row the person chose
+>    with the arrows or the mouse; else the one action whose words were typed ("new customer"); else the only row.
+>    With several matches and no choice nothing opens and a line says "More than one thing matches. Tap the one you
+>    want" (`src/ui/search-enter.ts`). Never the first hit of another type.
+> 3. **Words on the buttons where they fit:** To approve, Messages, Help show their words from 768/1024 px with one
+>    site; with the site selector from 1536 px. Owner and manager have no To approve or Messages button: both are in
+>    **Needs me** (badge = approvals + unread messages).
+> 4. **The sync chip shows only when something waits to be sent or there is no signal**, with words ("3 pending",
+>    "Offline"); "all saved" shows nothing. The drawer keeps the line in words.
+> 5. **One menu button.** Phones: one ☰ in the top bar (none for floor roles); never a Menu tab. The avatar menu has
+>    **All screens** (the drawer, at every width), **Set-up**, **Help**, **My account**, **Sign out**. Esc closes the
+>    drawer and every frame menu.
+> 6. **The open page's area lights up**, never a wrong one (a batch record lights Make → Batch records).
+> 7. **Fit:** at 1280 px the owner's six areas, the Search box, Help and the avatar fit with the site selector
+>    (`tests/e2e/top-bar-fit.cjs`, measured on the full demo; numbers in `docs/ux-audit/round5/README.md`).
+>
+> **Home (round 5):** owner and manager — "What to do next" is only the viewer's own job (approvals, checks waiting
+> for them), never another person's green button; four neutral cards **Sales this month · Customers owe us · We owe
+> suppliers · Needs you** (a zero is grey with "Nothing to decide"); **Waiting for you to check**; **Waiting on others**
+> with names ("Nina (QA) checks 1 finished batch"); **Watch out**; sales this week; recent activity with business
+> events only (no "break glass", "override", stock moves or documents). Floor — **My jobs**: one big next-job card
+> with its verb button, then **Waiting for you to check**, then **Later**; no number tiles and no quick actions.
+> Sales: next order step, **New customer order** and **New price offer**, sales today and this month. Purchasing: what
+> to buy first. Finance: Home is the Money page. QA: the green button opens the oldest item to check.
+>
+> **Messages (round 5):** a message that asks for work clears itself when the work is done or is no longer the
+> person's (`src/modules/platform/notification-done.ts`); the bell and the open list count only messages that still
+> need the person; history shows them as **Done**. Floor roles have no "Mark read" or "I'm on it" (tap = read).
 
 > **Frame rules after the UX audit, round 2 (2026-10-31).** (1) One door per job: a screen that has a
 > top-bar button is not repeated in the tab rows (Messages = bell at every width; To approve = top-bar

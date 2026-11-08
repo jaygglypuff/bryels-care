@@ -3,4 +3,4 @@ export { keywordMatches, resolveScanCard, type KeywordMatch, type ScanCard, type
 export { searchEverything, searchTerms, GROUP_LIMIT, type SearchGroup, type SearchGroupKey, type SearchHit } from "./search";
 export { findPickCandidates, resolvePickRef } from "./pick";
 export { masterSearch, searchAllowed, requireSearchAccess, SEARCH_NEEDS_STOCK_ACCESS, viewableTypes, statusWords, RECORD_TYPES, MASTER_GROUP_LABEL, MAX_QUERY_LENGTH, NUMBER_GROUP_LIMIT, TYPE_LIMIT, type HitIcon, type MasterGroup, type MasterGroupKey, type MasterHit, type MasterSearchResult } from "./master-search";
-export { parseNumberQuery, wantsPartial, NUMBER_SHAPES, type NumberQuery, type NumberShape } from "./number-query";
+export { parseNumberQuery, parseShortNumber, wantsPartial, NUMBER_SHAPES, WORD_PREFIXES, type NumberQuery, type NumberShape, type ShortNumber } from "./number-query";
