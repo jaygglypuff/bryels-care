@@ -8,7 +8,7 @@ import { periodCommandAction } from "../actions";
 type Cmd = "lock" | "request_unlock" | "approve_unlock" | "reject_unlock" | "cancel_unlock";
 
 /** One period command (restricted ones ask for the password; lock may acknowledge open items). */
-export function PeriodCommand({ command, periodCode, requestId, label, openItems = 0, variant = "secondary" }: { command: Cmd; periodCode: string; requestId?: string; label: string; openItems?: number; variant?: "secondary" | "cta" | "danger" }) {
+export function PeriodCommand({ command, periodCode, requestId, label, openItems = 0, closeEarly = false, variant = "secondary" }: { command: Cmd; periodCode: string; requestId?: string; label: string; openItems?: number; closeEarly?: boolean; variant?: "secondary" | "cta" | "danger" }) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (
@@ -20,7 +20,7 @@ export function PeriodCommand({ command, periodCode, requestId, label, openItems
   const needsPassword = command === "lock" || command === "request_unlock" || command === "approve_unlock";
   const f = `${command}-${periodCode}`;
   return (
-    <ActionForm action={periodCommandAction} hidden={{ command, periodCode, requestId }} submit={label} variant={variant} pending="Saving…">
+    <ActionForm action={periodCommandAction} hidden={{ command, periodCode, requestId, closeEarly: closeEarly ? "yes" : "" }} submit={label} variant={variant} pending="Saving…">
       {(fe) => (
         <>
           {needsReason && (
@@ -33,7 +33,13 @@ export function PeriodCommand({ command, periodCode, requestId, label, openItems
               <Input id={`${f}-n`} name="note" maxLength={500} />
             </Field>
           )}
-          {command === "lock" && openItems > 0 && (
+          {command === "lock" && closeEarly && (
+            <Field label="Why close it before the month is over" htmlFor={`${f}-a`} error={fe.acknowledgementNote}>
+              <Input id={`${f}-a`} name="acknowledgementNote" required minLength={5} maxLength={500} />
+              <input type="hidden" name="acknowledge" value="on" />
+            </Field>
+          )}
+          {command === "lock" && openItems > 0 && !closeEarly && (
             <>
               <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
                 <input type="checkbox" name="acknowledge" className="h-5 w-5" /> Close it anyway: I know {plural(openItems, "paper")} dated this month {isAre(openItems)} not finished

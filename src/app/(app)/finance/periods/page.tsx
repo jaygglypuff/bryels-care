@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { isAre, plural } from "@/lib/plural";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
-import { getPeriodChecklist, listPeriods } from "@/modules/finance";
+import { getPeriodChecklist, listPeriods, monthEndChecklist, type MonthEndItem } from "@/modules/finance";
 import { Card, EmptyState, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
@@ -29,6 +30,8 @@ export default async function PeriodsPage() {
   const canUnlock = ctx.can("finance.period_lock.void");
   const checklists = new Map<string, number>();
   if (canLock) for (const p of periods.filter((x) => x.status === "open").slice(0, 4)) checklists.set(p.periodCode, (await getPeriodChecklist(ctx, p.periodCode)).length);
+  const monthEnd = new Map<string, MonthEndItem[]>();
+  for (const p of periods.filter((x) => x.status === "open").slice(0, 4)) monthEnd.set(p.periodCode, await monthEndChecklist(ctx, p.periodCode));
   const pending = periods.filter((p) => p.pendingUnlock);
   const toDecide = canUnlock ? pending.filter((p) => p.pendingUnlock!.requestedBy !== ctx.userId) : [];
   const toClose = canLock ? periods.find((p) => p.status === "open" && !p.isCurrent) : undefined;
@@ -50,14 +53,36 @@ export default async function PeriodsPage() {
                   {p.lockReason ? ` · ${p.lockReason}` : ""}
                 </p>
               )}
-              {p.status === "open" && checklists.has(p.periodCode) && <p className="text-[14px] text-fg-2">{checklists.get(p.periodCode) ? `${plural(checklists.get(p.periodCode) ?? 0, "paper")} dated this month ${isAre(checklists.get(p.periodCode) ?? 0)} not finished.` : "All papers dated this month are finished."}</p>}
+              {/* ADR-131 (C-office problem 14): the real "before you close" list, with links, instead of "all finished". */}
+              {p.status === "open" && monthEnd.has(p.periodCode) && (
+                <div className="text-[14px]" data-testid="month-end-checklist">
+                  {monthEnd.get(p.periodCode)!.some((i) => i.count > 0) ? (
+                    <>
+                      <p className="font-medium">Before you close {monthName(p.periodCode)}:</p>
+                      <ul className="mt-1 flex flex-col gap-0.5 text-fg-2">
+                        {monthEnd.get(p.periodCode)!.filter((i) => i.count > 0).map((i) => (
+                          <li key={i.key}>
+                            <Link className="text-primary-text hover:underline" href={i.href}>
+                              {i.count} {i.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="text-fg-2">Nothing dated in this month waits: no deliveries to bill, no bills or payments to finish.</p>
+                  )}
+                  {checklists.get(p.periodCode) ? <p className="mt-1 text-fg-2">{`${plural(checklists.get(p.periodCode) ?? 0, "paper")} ${isAre(checklists.get(p.periodCode) ?? 0)} not finished: closing needs a reason for each.`}</p> : null}
+                </div>
+              )}
+              {p.status === "open" && p.isCurrent && <p className="text-[13px] text-muted">This month is not over yet. Close it after its last day.</p>}
               {p.pendingUnlock && (
                 <p className="text-[14px]">
                   {p.pendingUnlock.requestedByName} asks to open it again ({fmtDateTime(p.pendingUnlock.requestedAt)}): {p.pendingUnlock.reason}
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
-                {p.status === "open" && canLock && <PeriodCommand command="lock" periodCode={p.periodCode} label="Close this month" openItems={checklists.get(p.periodCode) ?? 0} variant={toClose?.periodCode === p.periodCode ? "cta" : "secondary"} />}
+                {p.status === "open" && canLock && <PeriodCommand command="lock" periodCode={p.periodCode} label={p.isCurrent ? "Close anyway (with the reason)" : "Close this month"} openItems={checklists.get(p.periodCode) ?? 0} closeEarly={p.isCurrent} variant={toClose?.periodCode === p.periodCode ? "cta" : "secondary"} />}
                 {p.status === "locked" && !p.pendingUnlock && canLock && <PeriodCommand command="request_unlock" periodCode={p.periodCode} label="Ask to open it again" />}
                 {p.pendingUnlock && canUnlock && p.pendingUnlock.requestedBy !== ctx.userId && (
                   <>

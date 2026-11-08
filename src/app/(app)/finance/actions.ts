@@ -270,7 +270,7 @@ export async function periodCommandAction(_: ActionState, fd: FormData): Promise
     let message = "Done.";
     if (command === "lock") {
       const code = z.string().regex(/^\d{4}-\d{2}$/).parse(str(fd, "periodCode"));
-      await lockPeriod(ctx, code, { reason, acknowledge: str(fd, "acknowledge") === "on", acknowledgementNote: str(fd, "acknowledgementNote") || null, password });
+      await lockPeriod(ctx, code, { reason, acknowledge: str(fd, "acknowledge") === "on", acknowledgementNote: str(fd, "acknowledgementNote") || null, password, closeEarly: str(fd, "closeEarly") === "yes" });
       message = `Month ${code} closed. Nothing more can be saved in it.`;
     } else if (command === "request_unlock") {
       const code = z.string().regex(/^\d{4}-\d{2}$/).parse(str(fd, "periodCode"));

@@ -115,10 +115,58 @@ async function ensurePeriodRead(ctx: AuthContext, periodCode: string) {
   return { periodStart: `${periodCode}-01`, periodEnd: `${periodCode}-${String(last).padStart(2, "0")}` };
 }
 
-/** Locks a period (restricted). Refused while checklist items exist unless each is acknowledged with a reason. */
-export async function lockPeriod(ctx: AuthContext, periodCode: string, input: { reason: string; acknowledge?: boolean; acknowledgementNote?: string | null; password?: string | null }) {
+export type MonthEndItem = { key: string; label: string; count: number; href: string };
+
+/**
+ * ADR-131 (C-office problem 14): "Before you close <month>": what is not finished, as counts with links, at the
+ * caller's sites. Besides the papers that block the lock (preLockChecklist), it counts deliveries sent out but not billed
+ * and deliveries received without a supplier bill. Read only (`finance.period_lock.view`).
+ */
+export async function monthEndChecklist(ctx: AuthContext, periodCode: string): Promise<MonthEndItem[]> {
+  ctx.require("finance.period_lock.view");
+  if (!/^\d{4}-\d{2}$/.test(periodCode)) throw new DomainError("not_found", "Period not found.");
+  const p = await ensurePeriodRead(ctx, periodCode);
+  const open = await preLockChecklist(db, ctx.organizationId, p);
+  const sites = ctx.allowedSiteIds.length ? sql.join(ctx.allowedSiteIds.map((s) => sql`${s}::uuid`), sql`, `) : sql`null`;
+  const [notBilled] = (await db.execute(sql`
+    select count(*)::int as n from shipments s
+     where s.organization_id = ${ctx.organizationId}::uuid and s.site_id in (${sites}) and s.status in ('dispatched', 'delivered')
+       and s.dispatched_at >= ${p.periodStart}::date and s.dispatched_at < (${p.periodEnd}::date + 1)
+       and not exists (select 1 from invoices i where i.shipment_id = s.id and i.status not in ('cancelled', 'voided'))`)) as unknown as { n: number }[];
+  const [noBill] = (await db.execute(sql`
+    select count(*)::int as n from goods_receipts g
+     where g.organization_id = ${ctx.organizationId}::uuid and g.site_id in (${sites}) and g.status = 'posted' and g.supplier_id is not null
+       and g.posted_at >= ${p.periodStart}::date and g.posted_at < (${p.periodEnd}::date + 1)
+       and not exists (select 1 from supplier_bills b where b.goods_receipt_id = g.id and b.status not in ('cancelled', 'voided'))`)) as unknown as { n: number }[];
+  const [drafts] = (await db.execute(sql`
+    select count(*)::int as n from invoices i where i.organization_id = ${ctx.organizationId}::uuid and i.status = 'draft'
+       and i.created_at >= ${p.periodStart}::date and i.created_at < (${p.periodEnd}::date + 1)`)) as unknown as { n: number }[];
+  const of = (k: string) => open.filter((i) => i.kind === k).length;
+  return [
+    { key: "not_billed", label: "deliveries not billed", count: notBilled?.n ?? 0, href: "/finance/invoices" },
+    { key: "invoice_drafts", label: "invoices not finished", count: (drafts?.n ?? 0) + of("invoice"), href: "/finance/invoices" },
+    { key: "no_bill", label: "deliveries received without a supplier bill", count: noBill?.n ?? 0, href: "/finance/bills/new" },
+    { key: "bills", label: "supplier bills not finished", count: of("supplier_bill"), href: "/finance/bills" },
+    { key: "payments", label: "payments not saved to the books", count: of("payment_record"), href: "/finance/payments" },
+    { key: "credits", label: "credits (money back) not finished", count: of("credit_note"), href: "/finance/credit-notes" },
+    { key: "expenses", label: "expense claims not finished", count: of("expense_claim"), href: "/finance/expenses" },
+  ];
+}
+
+/**
+ * Locks a period (restricted). Refused while checklist items exist unless each is acknowledged with a reason.
+ * ADR-131 (C-office problem 14): a month that is not over yet is refused; the current month only with `closeEarly`
+ * ("Close anyway") and the acknowledgement note; a future month never.
+ */
+export async function lockPeriod(ctx: AuthContext, periodCode: string, input: { reason: string; acknowledge?: boolean; acknowledgementNote?: string | null; password?: string | null; closeEarly?: boolean }) {
   ctx.require("finance.period_lock.post");
   if (!/^\d{4}-\d{2}$/.test(periodCode)) throw new DomainError("validation", "Choose a period.", { field: "periodCode" });
+  const thisMonth = businessDate().slice(0, 7);
+  if (periodCode > thisMonth) throw new DomainError("state", `${periodCode} has not started yet, so it cannot be closed.`, { code: "PERIOD_NOT_OVER" });
+  if (periodCode === thisMonth) {
+    if (!input.closeEarly) throw new DomainError("state", "This month is not over yet. Close it after its last day, or use “Close anyway” with the reason.", { code: "PERIOD_NOT_OVER" });
+    requireReason(input.acknowledgementNote, "acknowledgementNote");
+  }
   const reason = requireReason(input.reason);
   await requireReauthentication(ctx, input.password, "finance.period_lock.post");
   return db.transaction(async (tx) => {

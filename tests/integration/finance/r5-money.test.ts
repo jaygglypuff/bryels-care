@@ -13,6 +13,8 @@ import {
   createSupplierBill,
   decideSupplierBill,
   fixPostedSupplierBill,
+  lockPeriod,
+  monthEndChecklist,
   postSupplierBill,
   submitSupplierBill,
 } from "@/modules/finance";
@@ -94,5 +96,18 @@ describe("supplier bill per kg, prefilled from the order (C-office problem 7)", 
     expect(copy).toMatchObject({ status: "draft", supplierReference: reference, goodsReceiptId: receiptId });
     await expectCode(fixPostedSupplierBill(u.warehouse, fixed.billId, { reason: "warehouse tries", password: PW }), "forbidden");
     await setOrgSetting(kit.orgId, "finance.match.price_tolerance_pct", 2);
+  });
+});
+
+describe("month end (C-office problem 14)", () => {
+  it("the checklist counts what is not finished, with links; the current month is refused unless closed anyway with a reason", async () => {
+    const month = today().slice(0, 7);
+    const items = await monthEndChecklist(u.finance, month);
+    expect(items.map((i) => i.key)).toEqual(expect.arrayContaining(["not_billed", "no_bill", "payments"]));
+    for (const i of items) expect(i.href).toMatch(/^\/finance\//);
+    await expectCode(lockPeriod(u.finance, month, { reason: "Month end", acknowledge: true, acknowledgementNote: "Open papers carried over", password: PW }), "state");
+    const next = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1)).toISOString().slice(0, 7);
+    await expectCode(lockPeriod(u.finance, next, { reason: "Too early", acknowledge: true, acknowledgementNote: "x", password: PW, closeEarly: true }), "state");
+    await expectCode(monthEndChecklist(u.warehouse, month), "forbidden");
   });
 });

@@ -187,7 +187,7 @@ describe("US-6-10 invoices from dispatched shipments", () => {
   it("period.locked_posting_rejected: issuing into a locked period is 409 PERIOD_LOCKED and allocates no number", async () => {
     const s = await shipNfdOrder(w, "CUS-001", [{ sku: "ACS-135", qty: "24", price: "61" }]);
     const id = await approvedInvoice(s.shipment.id);
-    await lockPeriod(w.finance, thisPeriod(), { reason: "Test lock of the current month", acknowledge: true, acknowledgementNote: "Test", password: PW });
+    await lockPeriod(w.finance, thisPeriod(), { reason: "Test lock of the current month", acknowledge: true, acknowledgementNote: "Test", password: PW, closeEarly: true });
     try {
       const e = await expectCode(issueInvoice(w.finance, id, { password: PW }), "conflict");
       expect(e.details?.code).toBe("PERIOD_LOCKED");
