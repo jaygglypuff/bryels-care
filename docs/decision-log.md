@@ -2811,3 +2811,61 @@ Open:
 - a Finish checker on the checker's own phone when same-device signing is off;
 - a display unit per scale;
 - an intermittent proof-of-delivery submit.
+
+## ADR-131 Round 5 office fixes: sales, purchasing and money a clerk can follow (owner 2026-11-08)
+
+Status: Accepted (round 5 audits C-office and B-owner-manager). Owner decisions are recorded as A-CREDIT-NOLIMIT-01,
+A-FIN-1STEP-01 and A-SETASIDE-ORDER-01. Amends A-PO-1APP-01 (ADR-110 C15).
+
+Decision:
+1. **One approval per purchase.**
+   - A request to buy that names no supplier covers any approved supplier.
+   - A top role's own approved request carries over to the purchase order they make.
+   - Only an amount above what was approved needs a second OK.
+2. **The purchase order wizard asks for what it needs, where it needs it.**
+   - The price is a visible field on step 2, prefilled, and checked on Next using the item's name.
+   - "Arrives on" is the request's date or the next working day, never today or a Sunday.
+3. **The same-person database rule only checks what changes** (fixes "Something went wrong" after a purchase order
+   was sent). The deferred trigger `bc_sod_distinct()` now accepts updates that change none of the columns it checks
+   (migration 0041, `src/db/sql/adr131.sql`). Sending never reports email trouble as a failure.
+4. **A confirmed customer order can be changed line by line** (`changeOrderLine` / `cancelOrderLine`).
+   - Each change takes a reason, is audited and lets go of stock no longer needed.
+   - The order shows "Can ship from" (`sales.can_ship.qa_days`) and "Where is it now", and has a "Make the missing N
+     for this order" button.
+   - Setting aside warns when an order due earlier needs the same stock.
+   - A customer with no credit limit may order up to `sales.credit.no_limit_check_above` (₱50,000) without approval.
+5. **"Sent" means sent.** Price offers and invoices record when and how they reached the customer (email or print).
+   Until then the words say "Ready to give the customer". Order confirmations print and email.
+6. **One person, one step below the owner's amount.** `finance.invoice.one_step_below` and
+   `finance.payment.one_step_below` (₱50,000).
+7. **Supplier bills** are typed in the order's unit and price.
+   - "Change the bill" works on a draft, or on a bill that does not match.
+   - "Fix a mistake" on a bill in the books undoes it and opens a copy, in one transaction.
+8. **Shortages and delivery problems reach purchasing.**
+   - "What to buy" has an "Ask to buy N" button on each row.
+   - Delivery problems (`delivery_problem_decisions`) are decided as: send the rest, money back, or not needed.
+9. **Month end lists what is not finished.** The current month closes only with a reason.
+10. **Customers:** numbers keep the CUS-nnn shape, and "Already a customer?" shows before saving.
+11. **Order value on Home** follows order-price access. KPI-SAL-01V no longer needs `analytics.financial_kpi.view`;
+    this is a visibility change.
+
+Consequences:
+- Migration 0041 adds:
+  - `given_to_customer_at`, `given_via` and `given_by` on `quotes` and `invoices`;
+  - the table `delivery_problem_decisions`;
+  - a bill-number index that ignores voided bills;
+  - the trigger fix.
+- Four settings, and no new permission strings.
+- New screens: `/procurement/delivery-problems`, `/finance/bills/[id]/change`, `/print/order-confirmation/[id]`.
+- Tests: `tests/integration/procurement/r5-purchasing.test.ts`, `tests/integration/sales/r5-order-changes.test.ts`,
+  `tests/integration/finance/r5-money.test.ts`, `tests/integration/finance/r5-one-step.test.ts`,
+  `tests/unit/arrive-date.test.ts`, `tests/unit/can-ship-from.test.ts`.
+
+Open:
+- Owner:
+  - the approver for big orders from customers with no credit limit;
+  - whether setting aside out of due-date order should warn or refuse;
+  - whether Saturday counts as a working day.
+- Owner and accountant: the one-step amounts.
+- Accountant: tax rates.
+- QA: approving a delivery with no test.
