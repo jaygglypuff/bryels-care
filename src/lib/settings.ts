@@ -601,6 +601,29 @@ export const SETTINGS = {
       "On (recommended): on the page of a material, product, supplier, site or shelf, the form to change it is folded under “Change the details”. Press it to open the form. Off: the form is always open.",
     whoChanges: "The owner or the IT person.",
   },
+  /**
+   * ADR-135 (owner 2026-11-13, A-UI-KEYS-01): how numbers are typed on the operator screens (Weigh, Step). `keypad`:
+   * the big keypad on the screen; `keyboard`: the phone's, tablet's or computer's own keyboard (a normal number box);
+   * `auto` (default): the keypad on touch screens, typing on computers. A person may switch on their own device
+   * ("Use my keyboard" / "Use the big keypad"); that choice wins on that device. A physical keyboard, USB scale or
+   * scanner types into the field in every mode. Screen layout only; the same checks apply on the server.
+   */
+  "ui.number_entry": {
+    scopes: ["organization"],
+    schema: z.enum(["keypad", "keyboard", "auto"]),
+    default: "auto" as "keypad" | "keyboard" | "auto",
+    assumption: "A-UI-KEYS-01",
+    group: "Screens",
+    label: "How numbers are typed on Weigh and Step",
+    description:
+      "Automatic (recommended): phones and tablets show the big keypad on the screen, and computers use the keyboard. Each person can still switch on their own phone or tablet. A keyboard or a scale that types can always be used.",
+    whoChanges: "The owner or the IT person.",
+    choices: [
+      { value: "auto", label: "Automatic (keypad on phones, typing on computers)" },
+      { value: "keypad", label: "Big keypad on screen" },
+      { value: "keyboard", label: "Phone or tablet's own keyboard" },
+    ],
+  },
   /** Alert thresholds evaluated by `platform.alerts_evaluate` (docs/deployment-railway.md §8.3, A-DEP-11). */
   "alerts.worker_heartbeat_max_seconds": { scopes: ["organization"], schema: z.number().int().min(60).max(86_400), default: 300, assumption: "A-DEP-11", group: "Alerts", label: "Worker silent after (seconds)" },
   "alerts.backup_max_age_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 26, assumption: "A-DEP-11", group: "Alerts", label: "Backup older than (hours)" },

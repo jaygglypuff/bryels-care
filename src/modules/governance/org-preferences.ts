@@ -19,9 +19,11 @@ export type ScreenPreferences = {
   canSearch: boolean;
   /** `ui.setup_edit_forms_folded`: setup pages fold their edit form under "Change the details". */
   setupFormsFolded: boolean;
+  /** ADR-135 `ui.number_entry`: the big keypad, the device's own keyboard, or automatic (keypad on touch screens). */
+  numberEntry: "keypad" | "keyboard" | "auto";
 };
 
-const KEYS = ["scan.typed_code_counts_as_check", "ui.wide_screen_top_bar", "scan.search_open_to_everyone", "ui.setup_edit_forms_folded"] as const;
+const KEYS = ["scan.typed_code_counts_as_check", "ui.wide_screen_top_bar", "scan.search_open_to_everyone", "ui.setup_edit_forms_folded", "ui.number_entry"] as const;
 type Key = (typeof KEYS)[number];
 
 /** One query for the organisation rows of the screen settings; a missing or invalid row falls back to the default. */
@@ -41,5 +43,6 @@ export async function screenPreferences(ctx: AuthContext): Promise<ScreenPrefere
     wideTopBar: read("ui.wide_screen_top_bar"),
     canSearch: openToAll || ctx.can("inventory.lot.view"),
     setupFormsFolded: read("ui.setup_edit_forms_folded"),
+    numberEntry: read("ui.number_entry"),
   };
 }
