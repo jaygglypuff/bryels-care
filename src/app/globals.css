@@ -30,6 +30,17 @@
   color-scheme: light;
 }
 
+/* ADR-135: the floor TV's dark background option (/floor?theme=dark). Only the floor screen sets this attribute; the
+   values are the dark column of docs/ux-system.md §2.3 and §2.4 (text ≥ 4.5:1 on its surface). */
+[data-tv-theme="dark"] {
+  --bg: #121311; --surface: #1b1d1a; --surface-2: #23261f; --surface-3: #2e312b; --border: #2e312b; --border-strong: #4a4e45;
+  --fg: #edebe4; --fg-2: #c9c6bc; --fg-muted: #9a978c; --brand-600: #5fb27e; --gold-400: #e0a63a;
+  --ok-bg: #1c3a28; --ok-fg: #b6e6c6; --ok-bd: #2f6b45;
+  --warn-bg: #3e2e0c; --warn-fg: #f3d592; --warn-bd: #6b4f12;
+  --bad-bg: #44201f; --bad-fg: #f5b5b5; --bad-bd: #7a3634;
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
