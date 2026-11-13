@@ -6,6 +6,7 @@ import { qaQueueCount } from "@/modules/quality";
 import { screenPreferences } from "@/modules/governance";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
+import { NumberEntryProvider } from "@/ui/keypad";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
 import { AREAS_BY_PERSONA, buildNav, homeHref, isApprover, isFloor, navPersona, setupSections, tabsFor } from "./nav";
 import { Shell } from "./shell";
@@ -57,7 +58,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}
     >
       {maintenance.enabled && <MaintenanceBanner canWrite={!ctx.readOnly} />}
-      {children}
+      {/* ADR-135: how numbers are typed on Weigh and Step (ui.number_entry); a person's own choice on the device wins. */}
+      <NumberEntryProvider value={prefs.numberEntry}>{children}</NumberEntryProvider>
     </Shell>
   );
 }

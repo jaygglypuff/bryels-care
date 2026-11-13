@@ -1,8 +1,8 @@
 ---
 key: production.step
 title: Do a step (Start check, Mix, Curing, Cut, Wrap)
-version: 6
-updated_at: 2026-11-08
+version: 7
+updated_at: 2026-11-13
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -21,6 +21,7 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 
 1. Read the instruction. Tap **See how to do it** when the step has a how-to sheet.
 2. Fill in each field: tap the field, type on the keypad. Yes / No fields are two big buttons. Under the field you see the OK range, for example **OK 65–75 °C**.
+   On a computer or with a keyboard, just type the number. **Enter** goes to the next number, then to **Step done**. Press Enter again to finish the step. On your phone, tap **Use my keyboard** or **Use the big keypad** to choose. Your phone remembers it.
 3. A number outside the range shows at once in amber: "90 °C is above the 75 °C limit. Check again. If it is right, say why."
 4. Tap **Step done**. A green **Saved** shows, and the button **Done — go to …** opens the next step.
 5. A field left empty is refused: "Type the Mix temperature (°C) first. Nothing was saved."

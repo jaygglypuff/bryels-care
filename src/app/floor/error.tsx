@@ -1,8 +1,9 @@
 "use client";
 import { useEffect } from "react";
+import "./floor.css";
 
 /**
- * Floor screen error state (ADR-084): plain words, nothing to press, and a new try every 30 seconds so a
+ * Floor screen error state (ADR-084, ADR-135 look): plain words, nothing to press, and a new try every 30 seconds so a
  * TV recovers on its own after a short outage.
  */
 export default function FloorError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
@@ -11,9 +12,9 @@ export default function FloorError({ error, reset }: { error: Error & { digest?:
     return () => clearTimeout(t);
   }, [reset]);
   return (
-    <main className="flex h-screen w-screen flex-col items-center justify-center gap-[1.5vw] bg-[var(--bg)] p-[4vw] text-center text-[var(--fg)]">
-      <h1 className="font-display text-[3vw] font-bold">The floor screen could not load</h1>
-      <p className="max-w-[60vw] text-[1.8vw] text-[var(--fg-2)]">
+    <main className="tv items-center justify-center text-center">
+      <h1 className="tv-xl font-display font-bold">The floor screen could not load</h1>
+      <p className="tv-m max-w-[60vw] text-[var(--fg-2)]">
         It tries again by itself every 30 seconds. If this stays on, tell your system administrator{error.digest ? ` (reference ${error.digest})` : ""}.
       </p>
     </main>

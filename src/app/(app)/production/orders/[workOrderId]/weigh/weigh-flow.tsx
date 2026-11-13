@@ -388,6 +388,17 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
           unit={card.unit}
           large
           value={qty}
+          // ADR-135: a keyboard, USB scale or scanner types here too; Enter = Save (only when Save could be pressed).
+          onChange={setQty}
+          decimal
+          maxLength={10}
+          readOnly={!p.canWeigh}
+          // The cursor goes to the weight once the lot is confirmed, so a scale's numbers land here (before that, a
+          // scanner burst must reach the lot scan, which listens only while no box has the cursor).
+          autoFocus={p.canWeigh && lotOk}
+          onEnter={(el) => {
+            if (canSave) el.form?.requestSubmit();
+          }}
           active
           onFocus={() => undefined}
           error={fe.qty ?? null}

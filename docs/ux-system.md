@@ -481,7 +481,8 @@ destination): the owner's menu row was 74 px too long at 1280 px and now has 38 
 button stay visible, no page scrolls sideways, and every tab row is one line at 1280, 1366, 1440, 1536 and 1920 px
 for owner, manager, finance, sales, QA, warehouse (one and two sites) and operator.
 
-**Organisation settings for the top bar (ADR-126).** Settings › How screens look and › Scan and search:
+**Organisation settings for the top bar (ADR-126).** Settings › How screens look and › Scan and search (How screens
+look also holds `ui.setup_edit_forms_folded` and, from ADR-135, `ui.number_entry`, see "Rules: 5.25"):
 
 | Setting | Default (recommended, today) | Other choice |
 |---|---|---|
@@ -623,7 +624,7 @@ number of the component they expand.
 | 5.22 | Avatar and avatar row | initials, photo, count badge, overflow "+n" | team load and approval queues; names on hover/tap |
 | 5.23 | Buttons | primary, cta (dark), secondary, ghost, destructive, icon, operator (large) | one cta per page; destructive never as the default focused button |
 | 5.24 | Bottom sheet / drawer / dialog | phone sheets, tablet/desktop dialogs and side panels | sheets for pickers and "More"; dialogs for confirm and short forms; side panel for detail on xl |
-| 5.25 | Numeric keypad | optional on-screen keypad for weights and counts | shown when the device has no physical keypad in operator mode; large keys 56 px |
+| 5.25 | Numeric keypad (`Keypad`, `KeypadField`, `src/ui/keypad.tsx`) | on-screen keypad for weights, counts and readings (Weigh, Step); the field is always a real input that also takes a physical keyboard, a USB scale or a scanner (ADR-135) | large keys 56 px; mode per device ("Use my keyboard" / "Use the big keypad", localStorage) over the setting `ui.number_entry` (Automatic = keypad on touch screens, typing on computers); rules in "Rules: 5.25" |
 | 5.26 | Summary grid and quiet line | `SummaryGrid` (label/value pairs), `QuietLine` ("nothing went wrong") | see Rules: 5.2 |
 
 ### Rules: 5.2 Record page template (harmony pass, ADR-119)
@@ -712,6 +713,22 @@ to the input, hint 12 px) and `MoreDetails` for everything not needed on most da
   is offered · Code and order in the list), site (Name and address), shelf/area (Name and where it is). The create
   pages of material, product, supplier and reason share the same fields and so the same sections. Other record pages
   measured on the full demo show at most 5 fields at a time (repair job 2, QA lot 4, equipment 5, delivery 5).
+
+### Rules: 5.25 Number entry: big keypad or own keyboard (ADR-135)
+
+Owner 2026-11-13: "the native keypad is disabled … if they can type it with a keyboard instead". The in-app keypad
+stays the default on touch phones (the phone keyboard hides half the screen), and every keypad field takes typing.
+
+| Part | Rule |
+|---|---|
+| Field | `KeypadField` is a real `<input>` with its `<label>`, the unit beside the value, the hint/error tied by `aria-describedby`, and a visible focus ring (`focus-within` ring in `--ring`). |
+| Big keypad mode | Input `readOnly` + `inputMode="none"`: the phone keyboard never opens. Keys from a physical keyboard or a wedge device are handled by `keyFromEvent` → `pressKey` (`src/ui/keypad-keys.ts`), the same rule as the on-screen keys. A polite live region reads the value after each on-screen key press. |
+| Own keyboard mode | A normal input, `inputMode="decimal"` (weights, temperatures) or `"numeric"` (counts); the keypad is hidden; whatever is typed or pasted is cleaned by `cleanTyped` to what the keypad could have typed ("12,5" → "12.5", " 12.50 kg" → "12.50", letters dropped, `maxLength`). Escape empties the box. |
+| Keys | Digits, "." (and "," from some scales), Backspace, Delete/Escape = clear, **Enter = the ✓ action**: Save on Weigh (only when Save could be pressed; never the browser's implicit submit); on Step the next number, then the Step done button (a second Enter presses it: finishing a step stays deliberate). Letters A–F and "-" only in a lot field. Tab, arrows and Ctrl/⌘ shortcuts are left to the browser. Values stay strings; screens convert with decimal.js on submit. |
+| Which mode | `resolveNumberEntry`: the person's choice on this device (`localStorage["bc.numberEntry"]`, read in try/catch; private mode keeps it for the page) wins; else `ui.number_entry` (Settings › How screens look): `auto` (default) = keypad when the device is touch-only (`(hover: none) and (pointer: coarse)`), typing otherwise; `keypad`; `keyboard`. The server render assumes the keypad; the client corrects after hydration. |
+| Switch | "Use my keyboard" / "Use the big keypad" (44 px, link style, keyboard icon) under the keypad, or in its place in own-keyboard mode. |
+| Cursor | The field takes the cursor so a scale's keystrokes land in it: Weigh once the lot is confirmed (before that a scanner burst must reach the lot scan, which listens only while no box has the cursor); Step the first number, except when the step has an equipment or packaging box (their scan listens the same way) or is done. |
+| Tests | `tests/unit/keypad-keys.test.ts` (keys, cleaning, mode, setting), `tests/e2e/keyboard-entry.cjs` (1366 px typing "12.5" + Enter; 390 px touch keypad and the switch). |
 
 ### Rules: 5.8a In-place actions (ADR-043)
 
@@ -1347,6 +1364,24 @@ the remaining Owner screens of the brief. Value labels follow `docs/analytics-kp
   `procurement.reorder_suggestion.*`) link from here as accept-or-dismiss rows with reason
   and their drivers in words. States: the dashboard set; a SKU that fails sufficiency shows
   the sufficiency text, never an empty chart.
+
+### 9.15a Floor screen, the production TV (ADR-084, redesigned by ADR-135)
+
+Owner 2026-11-13: "fix the TV display. It is very ugly." `/floor` (`src/app/floor`), nothing to press, read from 4–5 m.
+
+| Part | Rule |
+|---|---|
+| Size | One unit `--u = min(1vw, 1.7778vh)` (`src/app/floor/floor.css`): 1280 × 720, 1920 × 1080 and 3840 × 2160 show the same picture; `position: fixed; overflow: hidden`, no scrollbars. Type at 1920 × 1080: clock 65 px, site and product names 44 px, steps 32 px, the smallest words 25 px. Fonts are the app's (Poppins for names and numbers, Inter for words). |
+| Header | Leaf mark, site name, one line what the screen is for (ADR-088); the connection pill: **Live · updated 10:42** (green, pulsing dot) or **No internet — showing 10:42 data** (red, wifi-off icon) after 75 s without fresh data or when offline; big clock with the day under it. |
+| Needs attention | A red strip under the header **only when there is something**: a batch with tone `bad` (its note), late orders as one line ("Late: Guava Bar Soap 135 g (needed by Wed 11 Nov)" / "2 orders are late: …"), orders that cannot start for missing materials; at most 3, then "+ N more". |
+| Making now | One card per batch: product name, "day 2" chip, batch number; step or wait line with who (first name or "Anyone") and when it started; a status pill (icon + word: Being made, Ready to start, Waiting, Ready for the next step, Waiting for a second person to check) beside the progress bar and the percent. Left stripe green / amber / red follows the tone (never colour alone). Three cards per page. |
+| Next up | Numbered rows (product, pieces, needed by) with Late (red, clock) and Missing materials (amber, box) pills; three per page. |
+| Waiting | Three lines: batches curing or resting (with how many are finished), waiting for the quality check (oldest), orders missing materials; a zero is grey with a tick. |
+| Today | Made today of planned with a bar, rejects (red with an icon when not zero). Hidden words when the account cannot read the daily log (as before). |
+| Rotation | More cards or rows than fit: pages turn every 12 s ("Page 1 of 2" and dots); the read model still caps at 6 batches and 5 orders and says "+ N more". |
+| Empty | No batches and no orders: one calm panel "No batches today" with a big tick. Panels alone say "Nothing is being made right now" / "No orders waiting to start". |
+| Dark | `/floor?theme=dark` sets `data-tv-theme="dark"`: the dark token column of §2.3/§2.4, scoped to the TV (`src/app/globals.css`). For bright rooms or glare; light stays the default. |
+| Checks | Screenshots and an overflow sweep at 1280 × 720, 1920 × 1080 and 3840 × 2160 (nothing outside the screen). Data rules and permissions are the read model's (`getFloorDisplay`, unchanged). |
 
 ### 9.16 Later-phase screens (outline specs)
 

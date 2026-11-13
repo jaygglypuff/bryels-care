@@ -640,6 +640,18 @@ function FieldsCard(p: Props) {
                   label={fieldQuestion(f.code, f.name) ? `${fieldQuestion(f.code, f.name)} (${plainWords(f.name)})` : plainWords(f.name)}
                   unit={f.uom}
                   value={values[f.id] ?? ""}
+                  // ADR-135: a keyboard or a scale types here too, with the keypad's rules. Enter goes to the next
+                  // number, then to Step done (a second Enter presses it: finishing a step stays a deliberate act).
+                  onChange={(v) => set(f.id, v)}
+                  decimal={f.uom !== "pcs"}
+                  readOnly={!p.canPerform}
+                  // The cursor starts in the first number, except where a label scan may come first (equipment or
+                  // packaging box: their scan listens only while no box has the cursor) or the step is done.
+                  autoFocus={p.canPerform && f.id === numeric[0]?.id && !p.equipment && !p.packaging && step.status !== "completed"}
+                  onEnter={() => {
+                    const next = numeric[numeric.findIndex((n) => n.id === f.id) + 1];
+                    document.getElementById(next ? `f-${next.id}` : `done-${step.stepNo}`)?.focus();
+                  }}
                   active={active === f.id}
                   onFocus={() => setActive(f.id)}
                   error={fe[`param-${f.id}`] ?? null}

@@ -1,8 +1,8 @@
 ---
 key: production.weigh
 title: Weigh the ingredients (Weigh screen)
-version: 6
-updated_at: 2026-11-08
+version: 7
+updated_at: 2026-11-13
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -16,6 +16,14 @@ The Weigh screen shows one card per ingredient, in formula order. The card shows
 4. Type the weight on the keypad under the field. The card shows **OK**, or "Too much by …" / "Too little by …".
 5. Tap **Save** under the keypad. A green line says **Saved: Purified Water 17.919 kg**.
 6. The next ingredient opens by itself.
+
+## Type with a keyboard or a scale
+
+1. On a computer, the weight box is a normal box: type the weight on the keyboard. There is no keypad on the screen.
+2. A keyboard on a tablet works too. So does a scale that sends the weight by cable: after you scan the lot, the cursor waits in the weight box.
+3. Press **Enter** to save. It is the same as **Save**. If the weight is not OK, Enter saves nothing.
+4. **Backspace** takes away the last number. **Esc** empties the box.
+5. On your phone you can choose: tap **Use my keyboard** under the keypad for the phone's own keyboard, or **Use the big keypad** to get the keypad back. Your phone remembers your choice.
 
 ## Second check
 
