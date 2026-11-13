@@ -17,6 +17,7 @@ import { type BatchRow, endEquipmentUses, findStepOfKind, sortedSteps, stepRecor
 import { postBatchMovement, postDispenseConsumption, postPackagingConsumption } from "./execution-postings";
 import { currentPackaging, uncountedPackagingBlockers } from "./packaging";
 import { type FormulaSnapshot, addDays, idempotent, lockBatch, manilaToday } from "./shared";
+import { MessageTitle } from "@/lib/message-titles";
 import { transitionBatch } from "./state";
 import { releaseBatchStagingReservations } from "./staging";
 import { syncWorkOrderProgress } from "./work-orders";
@@ -267,8 +268,8 @@ export async function postBatchToQuarantineLocked(
   });
   // Hand-off (docs/NEXT_APPROVER.md): QA decides the batch on Check quality; tell them once per batch.
   await notifyNextActors(tx, ctx, "batch_qa", { siteId: batch.siteId, excludeUserIds: [] }, {
-    title: `Batch ${batch.batchNumber} waits for your QA decision`,
-    body: `${ctx.displayName} finished the batch (lot ${lotNumber}). Check it and decide if it may be sold.`,
+    title: MessageTitle.batchToDecide(product.name, batch.batchNumber),
+    body: `${ctx.displayName} finished batch ${batch.batchNumber} (lot ${lotNumber}). Check it and decide if it may be sold.`,
     link: `/quality/check/${batch.id}`,
     entityType: "batch",
     entityId: batch.id,

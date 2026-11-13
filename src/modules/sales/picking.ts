@@ -1,4 +1,6 @@
 import "server-only";
+import { MessageTitle } from "@/lib/message-titles";
+import { customerOfShipment } from "./message-names";
 import { notifyNextActors } from "@/modules/governance";
 import { pickPeople } from "./next-approver";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -343,8 +345,8 @@ export async function completePick(ctx: AuthContext, pickId: string, input: { sh
     });
     // Hand-off (ADR-109): the people who may check the boxes (never the picker or a scanner), once per pick.
     await notifyNextActors(tx, ctx, "pack_check", { siteId: pick.siteId, excludeUserIds: [ctx.userId, ...(await pickPeople(tx, s.id))] }, {
-      title: `Check the boxes of delivery ${s.shipmentNumber}`,
-      body: `${ctx.displayName} took the items off the shelf. Scan every box before it is sent out.`,
+      title: MessageTitle.boxesToCheck(await customerOfShipment(tx, s.id)),
+      body: `${ctx.displayName} took the items for delivery ${s.shipmentNumber} off the shelf. Scan every box before it is sent out.`,
       link: `/sales/packing/${s.id}`,
       entityType: "shipment",
       entityId: s.id,

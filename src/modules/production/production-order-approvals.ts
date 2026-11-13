@@ -1,4 +1,5 @@
 import "server-only";
+import { MessageTitle } from "@/lib/message-titles";
 import { and, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type DbOrTx } from "@/db/client";
@@ -130,8 +131,8 @@ export async function notifyProductionOrderApprovers(tx: DbOrTx, ctx: AuthContex
     siteId: wo.siteId,
     kind: "production.order.to_approve",
     severity: "info",
-    title: `Production order ${wo.workOrderNumber} waits for your approval`,
-    body: `${summary}. Created by ${ctx.displayName}. Approve it from To approve or open the order.`,
+    title: MessageTitle.productionOrderToApprove(product.name),
+    body: `Production order ${wo.workOrderNumber}: ${summary}. Created by ${ctx.displayName}. Approve it from To approve or open the order.`,
     entityType: "work_order",
     entityId: wo.id,
     link: `/production/orders/${wo.id}`,

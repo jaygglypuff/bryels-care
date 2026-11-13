@@ -1,5 +1,7 @@
 import { plural } from "@/lib/plural";
 import "server-only";
+import { MessageTitle } from "@/lib/message-titles";
+import { customerOfShipment } from "./message-names";
 import { and, asc, desc, eq, inArray, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type Tx } from "@/db/client";
@@ -530,8 +532,8 @@ export async function completePacking(ctx: AuthContext, shipmentId: string, inpu
     });
     // C9(g) / ADR-109: the boxes are checked; the people who send deliveries out are told, once per delivery.
     await notifyNextActors(tx, ctx, "dispatch", { siteId: s.siteId, excludeUserIds: [ctx.userId] }, {
-      title: `Delivery ${s.shipmentNumber} is checked: send it out`,
-      body: `${ctx.displayName} checked ${boxCount} ${boxCount === 1 ? "box" : "boxes"}.`,
+      title: MessageTitle.deliveryToSend(await customerOfShipment(tx, s.id)),
+      body: `${ctx.displayName} checked ${boxCount} ${boxCount === 1 ? "box" : "boxes"} of delivery ${s.shipmentNumber}.`,
       link: `/sales/shipments/${s.id}`,
       entityType: "shipment",
       entityId: s.id,

@@ -78,8 +78,10 @@ describe("QA is told when a delivery is posted", () => {
     expect(to).not.toContain(whNfd.userId);
     // C9(b): one message per lot and person, each opening that lot on Check quality.
     expect(to.filter((x) => x === qaBothId)).toHaveLength(2);
-    const n = notes.find((x) => x.title.startsWith("Coconut Oil"))!;
-    expect(n.title).toMatch(/^Coconut Oil lot \S+ from Laguna Oleo \(fictional\) waits for the quality check$/);
+    const n = notes.find((x) => x.title.startsWith("Check the Coconut Oil"))!;
+    // ADR-132 §3: "Check the Coconut Oil (lot …0017) from Laguna Oleo"; the full lot number is in the body.
+    expect(n.title).toMatch(/^Check the Coconut Oil \(lot …\d{4}\) from Laguna Oleo \(fictional\)$/);
+    expect(n.body).toMatch(/^Lot \S+, delivery /);
     expect(n.link).toMatch(/^\/quality\/lots\/[0-9a-f-]{36}$/);
     expect(n.siteId).toBe(nfd.id);
     expect(n.body).toContain(r.receiptNumber);

@@ -25,6 +25,7 @@ import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifi
 import { postMovement } from "./ledger";
 import { getSetting } from "@/lib/settings";
 import { isUuid } from "./lots";
+import { MessageTitle } from "@/lib/message-titles";
 import { receivingPoHooks, type PoReceiptLine } from "./receiving-po";
 import {
   DEFAULT_UNPLANNED_REASON,
@@ -716,7 +717,6 @@ async function notifyQaOfReceipt(tx: Tx, ctx: AuthContext, gr: typeof goodsRecei
   const to = (await usersHoldingPermissionAt(tx, ctx.organizationId, "quality.disposition.approve", gr.siteId)).filter((u) => u !== ctx.userId);
   if (!to.length) return [];
   const n = waiting.length;
-  const from = gr.supplierName?.trim() ? ` from ${gr.supplierName.trim()}` : "";
     // End-to-end walk C9(b): one message per lot, opening THAT lot on Check quality (not the whole queue).
   const sent: string[] = [];
   for (const l of waiting) {
@@ -726,8 +726,8 @@ async function notifyQaOfReceipt(tx: Tx, ctx: AuthContext, gr: typeof goodsRecei
         siteId: gr.siteId,
         kind: "quality.lots.received",
         severity: "info",
-        title: `${l.material} lot ${l.lotNumber}${from} waits for the quality check`,
-        body: `Delivery ${receiptNumber} saved to stock by ${ctx.displayName}${n > 1 ? ` (${n} lots in this delivery)` : ""}.${l.documentMissing ? " Still without the supplier certificate (CoA)." : ""} Nobody may use it until QA says OK.`,
+        title: MessageTitle.lotToCheck(l.material, l.lotNumber, gr.supplierName?.trim() || null),
+        body: `Lot ${l.lotNumber}, delivery ${receiptNumber} saved to stock by ${ctx.displayName}${n > 1 ? ` (${n} lots in this delivery)` : ""}.${l.documentMissing ? " Still without the supplier certificate (CoA)." : ""} Nobody may use it until QA says OK.`,
         entityType: "goods_receipt",
         entityId: gr.id,
         link: `/quality/lots/${l.lotId}`,

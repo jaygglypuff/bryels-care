@@ -1,4 +1,6 @@
 import "server-only";
+import { MessageTitle } from "@/lib/message-titles";
+import { customerOfOrder } from "./message-names";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { uuidv7 } from "uuidv7";
@@ -721,8 +723,8 @@ export async function submitOrderInTx(tx: Tx, ctx: AuthContext, orderId: string,
           siteId: o.siteId,
           kind: "sales_order_confirmed",
           severity: "info",
-          title: `Order ${o.orderNumber} confirmed`,
-          body: `${c.name}: set the stock aside and get it from the shelf for delivery on ${o.requestedDeliveryOn ?? "the date the customer asked for"}.`,
+          title: MessageTitle.orderToSetAside(c.name),
+          body: `Order ${o.orderNumber}: set the stock aside and get it from the shelf for delivery on ${o.requestedDeliveryOn ?? "the date the customer asked for"}.`,
           entityType: "sales_order",
           entityId: o.id,
           link: `/sales/${o.id}`,
@@ -794,7 +796,7 @@ export async function approveOrder(ctx: AuthContext, orderId: string, opts: { no
       if (o.submittedBy) {
         await notifyUsers(tx, [o.submittedBy], { organizationId: ctx.organizationId, siteId: o.siteId, kind: "sales_order_approved", severity: "info", title: `Order ${o.orderNumber} approved`, body: `${ctx.displayName} approved the order; it is confirmed.`, entityType: "sales_order", entityId: o.id, link: `/sales/${o.id}` });
       }
-      await notifyRoles(tx, { roleCodes: ["warehouse_operator"], siteId: o.siteId }, { organizationId: ctx.organizationId, siteId: o.siteId, kind: "sales_order_confirmed", severity: "info", title: `Order ${o.orderNumber} confirmed`, body: "Set the stock aside and get it from the shelf.", entityType: "sales_order", entityId: o.id, link: `/sales/${o.id}` });
+      await notifyRoles(tx, { roleCodes: ["warehouse_operator"], siteId: o.siteId }, { organizationId: ctx.organizationId, siteId: o.siteId, kind: "sales_order_confirmed", severity: "info", title: MessageTitle.orderToSetAside(await customerOfOrder(tx, o.id)), body: `Order ${o.orderNumber} is confirmed. Set the stock aside and get it from the shelf.`, entityType: "sales_order", entityId: o.id, link: `/sales/${o.id}` });
       return { orderNumber: o.orderNumber, confirmed: true };
     });
     return result;
