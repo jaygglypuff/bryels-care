@@ -57,7 +57,7 @@ export function PaperPackPrint({ userId, batchId, version, size = "lg" }: { user
   const ready = state === "ready" && !!copy;
   return (
     <div className="flex flex-col gap-2" data-testid="paper-pack-print">
-      <button type="button" onClick={() => void print()} disabled={state === "loading" || state === "saving"} className={cx(buttonClass(ready ? "cta" : "secondary", size), "min-h-[44px]")} data-testid="print-paper-record">
+      <button type="button" onClick={() => void print()} disabled={state === "loading" || state === "saving"} className={cx(buttonClass("secondary", size), "min-h-[44px]")} data-testid="print-paper-record">
         <Printer size={18} aria-hidden /> Print the paper record
       </button>
       <p className={cx("flex items-center gap-1.5 text-[14px]", ready ? "text-[var(--ok-fg)]" : "text-muted")} role="status" data-testid="paper-pack-hint">

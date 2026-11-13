@@ -77,6 +77,7 @@ describe("paper batch record pages (ADR-134)", () => {
     expect(html).toContain("No internet? Write here, then type it in later.");
     // A line that needs no second person says so.
     expect(html).toContain("no check needed");
+    expect(html).toContain("Scale used");
   });
 
   it("a finish page lists the counts to write in; QA can switch the new sections off", () => {

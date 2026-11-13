@@ -119,7 +119,7 @@ export function OfflineWorkspace() {
               </Banner>
             )}
             {s.needsSignIn && <Banner tone="warn" title="Sign in again to sync">Your queued changes stay on this device until you sign in.</Banner>}
-            {!s.referenceAt[siteId] && <Banner tone="info" title={`No offline data for ${site?.code ?? "this site"} yet`}>Open Sync while connected and download the offline data for this site.</Banner>}
+            {!s.referenceAt[siteId] && tab !== "paper" && <Banner tone="info" title={`No offline data for ${site?.code ?? "this site"} yet`}>Open Sync while connected and download the offline data for this site.</Banner>}
 
             <nav aria-label="Offline tasks" className="flex flex-wrap gap-2">
               {(

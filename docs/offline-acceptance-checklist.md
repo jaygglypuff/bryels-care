@@ -72,14 +72,30 @@ tablet. Record each row as Pass / Fail with a screen recording or photo (AC-20).
 | 26 | On the computer, **Remove** the device with a reason. Open the app on the device. | The device shows as not registered; its offline data is cleared; it must be registered again. | |
 | 27 | `offline.no_sensitive_cache`: on a desktop Chrome, after downloading offline data, open DevTools › Application › IndexedDB › `bryels-care-offline`. | Only materials, locations, lots with quantities, open counts, batches and the queue. No prices, costs, customer, payroll or personal data. | |
 
+## 6a. Paper batch record with no internet (ADR-134, docs/offline-sync.md §12)
+
+| # | Do | Expect | Result |
+|---|---|---|---|
+| 28 | On a computer, as the site manager or an operator, open a planned batch. In **Paper batch record** tap **Get the paper record ready**. | One page per step is listed (B-…-P01, P02 …). On the same screen: **Ready to print without internet ✓**. | |
+| 29 | On the tablet, sign in as the production operator and open **My jobs** while the internet works. | "N paper batch records are ready to print without internet." | |
+| 30 | Turn off Wi-Fi (airplane mode). On the open batch page tap **Print the paper record**. | Chrome's print window opens with every page: batch, product, step, a DOC number and a QR code on each page; the weighing page lists every ingredient with target and allowed range and empty boxes for lot, weight, time, done by, checked by; the last page has the finish counts. Print or save as PDF. | |
+| 31 | Still offline, close the app and open it again from the home screen. Open **Paper records** in the offline workspace. Tap **Print the paper record**. | The same pages print. | |
+| 32 | Still offline, try **Step done** on a step screen. | "No internet. Nothing was saved. …write it on the paper batch record now and type it in later." No error page. | |
+| 33 | Write a line on the paper (lot, weight, time, names). Turn the internet back on. Open the batch › **Enter from the paper record**. Type the line with the time from the paper; for a weighing choose "No internet at the time". | "typed in from paper". The batch record shows the paper's time and the names on the paper; Admin › Audit log shows `fromPaper`. | |
+| 34 | Type a weight outside the allowed range from the paper. | Saved as written; "QA was told and decides"; a deviation is open for the batch. | |
+| 35 | Type a lot that is waiting for QA. | Refused: "…We told QA (DEV-…). Keep the paper page"; nothing is saved. | |
+| 36 | As QA, attach the scan of the written page on the closure page; the person who typed it tries to review it. | Refused: they typed lines of this page. Another person reviews it. | |
+| 37 | Sign out on the tablet, sign in as another person, open the offline workspace › **Paper records**. | Nothing of the previous person is listed. | |
+| 38 | On a batch recorded fully in the system, tap **The paper record was not used** with a reason. | The blank pages are closed; the batch can pass QA. | |
+
 ## 7. Sign-off
 
 | Role | Name | Date | Signature |
 |---|---|---|---|
 | Site manager | | | |
 | IT | | | |
-| QA (rows 13–16, 21) | | | |
+| QA (rows 13–16, 21, 30, 33–36) | | | |
 
 Failures are logged in `docs/risk-register.md` or as a backlog defect with the row number, device,
-browser version and recording. Automated counterparts: `tests/integration/platform/offline-sync.test.ts`,
+browser version and recording. Automated counterparts: `tests/integration/platform/offline-sync.test.ts`, `tests/integration/production/paper-batch-record.test.ts`, `tests/unit/offline/paper-packs.test.ts`, `tests/unit/offline/offline-words.test.ts`, `tests/unit/documents/paper-pack.test.ts`,
 `tests/unit/offline/outbox.test.ts`, `tests/e2e/offline-sync.cjs`.

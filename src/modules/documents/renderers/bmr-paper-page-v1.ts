@@ -131,7 +131,7 @@ export const bmrPaperPageRendererV1: Renderer = {
       ? html`<h2>Weighing</h2><table class="wl" data-testid="paper-weighings"><thead><tr><th style="width:4%">#</th><th>Ingredient</th><th style="width:11%">Target</th><th style="width:15%">Allowed range</th><th style="width:13%">Lot number</th><th style="width:10%">Weight</th><th style="width:7%">Time</th><th style="width:9%">Done by</th><th style="width:9%">Checked by</th></tr></thead><tbody>${weighings.map(
           (w) =>
             html`<tr><td>${w.lineNo}</td><td>${w.materialName} <span class="muted">(${w.materialCode})</span>${w.lotHint ? html`<span class="muted" style="display:block">Planned lot ${w.lotHint}</span>` : ""}</td><td>${w.targetText}</td><td>${w.rangeText}<span class="muted" style="display:block">${w.toleranceText}</span></td><td class="w"></td><td></td><td></td><td></td><td>${w.needsCheck ? "" : html`<span class="muted">no check needed</span>`}</td></tr>`,
-        )}</tbody></table>`
+        )}</tbody></table><span class="lbl" style="margin-top:4px">Scale used (code on the scale):</span><div class="line"></div>`
       : ""
   }${
     on.has("parameters")

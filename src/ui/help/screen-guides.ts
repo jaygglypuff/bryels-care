@@ -18,6 +18,8 @@ export const SCREEN_GUIDES: readonly (readonly [RegExp, string])[] = [
   [/^\/production\/orders\/[^/]+\/step/, "production.step"],
   [/^\/production\/[^/]+\/finish/, "production.finish"],
   [/^\/production\/[^/]+\/closure/, "production.bmr"],
+  // ADR-134: Enter from the paper record
+  [/^\/production\/[^/]+\/from-paper/, "production.paper_record"],
   [/^\/production/, "production.production_order"],
   [/^\/quality\/check/, "quality.check"],
   [/^\/quality\/complaints/, "quality.complaint"],

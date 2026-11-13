@@ -20,6 +20,7 @@ The batch manufacturing record is built from what was entered during the batch. 
 1. Open **Close the batch and paper pages**. Under **Blank paper page for step**, issue the page with **Issue page**.
 2. After the step, attach the completed page under **Scan or photo of the completed page** and press **Attach scan**. By attaching, you confirm you entered its values in the system.
 3. An unused page is voided with a reason (**Void page**).
+4. No internet? Use the **Paper batch record** on the batch page: one page for every step, printable without internet. See the guide "No internet? Use the paper batch record".
 
 ## Close the batch
 
