@@ -27,6 +27,7 @@ import {
 } from "./w2c-actions";
 import { fmtLotQty } from "./_ui";
 import { plural } from "@/lib/plural";
+import { severityWords } from "@/lib/severity-words";
 
 export function StartInspectionButton({ batchId, lotId, processStepRecordId }: { batchId?: string; lotId?: string; processStepRecordId?: string }) {
   return <ActionForm action={startInspectionAction} hidden={{ batchId, lotId, processStepRecordId }} submit="Start the quality check" pending="Starting…" variant="secondary" />;
@@ -203,7 +204,7 @@ export function InvestigateForm({ deviationId, levels }: { deviationId: string; 
               </option>
               {levels.map((l) => (
                 <option key={l} value={l}>
-                  {l}
+                  {severityWords(l)}
                 </option>
               ))}
             </Select>

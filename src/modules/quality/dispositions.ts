@@ -271,7 +271,7 @@ async function lotQualityFacts(q: Tx | typeof db, lotId: string) {
     if (i.status === "rejected") blockers.push(`Inspection ${i.number} was rejected by QA review.`);
     else if (i.status !== "approved") blockers.push(`Inspection ${i.number} is ${i.status.replace(/_/g, " ")}; a second QA user must review and approve it before release.`);
     const failed = f.failed.filter((x) => !dev.permittedResultIds.has(x.resultId));
-    if (failed.length) blockers.push(`Failed ${pluralWord(failed.length, "test")} ${failed.map((x) => x.testName).join(", ")} on inspection ${i.number} need an OOS deviation closed with the conclusion that release may proceed.`);
+    if (failed.length) blockers.push(`Failed ${pluralWord(failed.length, "test")} ${failed.map((x) => x.testName).join(", ")} on inspection ${i.number} need a problem report on the result, closed with the answer that the product may be made OK.`);
   }
   blockers.push(...deviationBlockerMessages(dev));
   return { blockers, testers: new Set(insp.flatMap((f) => f.testerIds)) };

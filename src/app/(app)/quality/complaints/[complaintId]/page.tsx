@@ -13,6 +13,7 @@ import { Forbidden } from "../../../forbidden";
 import { ComplaintStatusChip, TraceMatchChip } from "../_ui";
 import { ClassifyForm, CloseForm, RaiseDeviationForm, ReopenForm, ResolveForm, StartInvestigationForm, UpdateComplaintForm } from "../forms";
 import { Help } from "@/ui/help/help";
+import { severityWords } from "@/lib/severity-words";
 
 export const metadata = { title: "Customer complaint" };
 
@@ -120,7 +121,7 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
               ["Delivery", v.shipment ? <span key="s">{v.shipment.drNumber} · {v.shipment.orderId ? <Link className="text-primary-text hover:underline" href={`/sales/${v.shipment.orderId}`}>{v.shipment.orderNumber}</Link> : null} · sent {fmtDate(v.shipment.dispatchedAt)}</span> : "—"],
               ["Pieces affected", c.qtyAffected ? String(Number(c.qtyAffected)) : "—"],
               ["Sample given back", c.sampleReturned ? "Yes" : "No"],
-              ["How serious", c.severity ? `${c.severity}${c.classifiedByName ? ` · ${c.classifiedByName}` : ""}` : "Not rated yet (QA)"],
+              ["How serious", c.severity ? `${severityWords(c.severity)}${c.classifiedByName ? ` · ${c.classifiedByName}` : ""}` : "Not rated yet (QA)"],
             ]}
           />
         </Card>

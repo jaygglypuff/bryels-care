@@ -406,7 +406,7 @@ export async function recordInspectionResult(ctx: AuthContext, input: RecordResu
 
 function assertOpenForResults(ins: InspectionRow) {
   if (!(INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status)) {
-    throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; results can no longer be added. Raise a deviation if something is wrong.`);
+    throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; results can no longer be added. Report a problem if something is wrong.`);
   }
 }
 
@@ -525,7 +525,7 @@ export async function correctInspectionResult(ctx: AuthContext, input: CorrectRe
     if (!orig?.inspectionId) throw new DomainError("not_found", "Result not found in your sites.");
     const ins = await lockInspection(tx, ctx, orig.inspectionId);
     if (!(INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status)) {
-      throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; its results can no longer be corrected. Raise a deviation instead.`);
+      throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; its results can no longer be corrected. Report a problem instead.`);
     }
     return appendInspectionCorrectionTx(tx, ctx, ins, orig, input, reason);
   });
@@ -788,7 +788,7 @@ export async function inProcessQcStatus(q: DbOrTx, _ctx: AuthContext, input: { b
     .limit(1);
   if (!ins) return { status: "pending", message: "The in-process inspection of this step has not been started. QA starts it from Inspections (steps waiting for an in-process check)." };
   if (ins.status === "rejected" || (ins.status === "approved" && ins.outcome === "fail")) {
-    return { status: "failed", message: `In-process inspection ${ins.number} failed. The step is blocked; QA handles the deviation.` };
+    return { status: "failed", message: `In-process inspection ${ins.number} failed. The step is blocked; QA looks into the problem.` };
   }
   if (ins.status === "approved") return { status: "passed" };
   return { status: "pending", message: `In-process inspection ${ins.number} is not complete yet (${INSPECTION_STATUS_LABEL[ins.status as InspectionStatus]?.toLowerCase() ?? ins.status}).` };

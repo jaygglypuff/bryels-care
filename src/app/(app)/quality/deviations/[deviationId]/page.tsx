@@ -13,6 +13,7 @@ import { Forbidden } from "../../../forbidden";
 import { DeviationStatusChip, QaStatusChip, Timeline } from "../../_ui";
 import { CapaStatusChip } from "../../capa/_ui";
 import { CloseDeviationForm, ContainForm, InvestigateForm, UpdateInvestigationForm } from "../../w2c-forms";
+import { severityWords } from "@/lib/severity-words";
 
 export const metadata = { title: "Problem report" };
 
@@ -95,7 +96,7 @@ export default async function DeviationPage({ params, searchParams }: { params: 
               ["Quality check", v.inspection ? <Link key="i" className="text-primary-text hover:underline" href={`/quality/inspections/${v.inspection.id}`}>{v.inspection.number}</Link> : "—"],
               ["Test not OK", v.result ? `${v.result.testName}: ${v.result.result} (should be ${v.result.specification})` : "—"],
               ["Reported", `${d.raisedByName}, ${fmtDateTime(d.raisedAt)}`],
-              ["How serious", d.severity ? `${d.severity}${d.classifiedByName ? ` · ${d.classifiedByName}` : ""}` : "Not rated yet"],
+              ["How serious", d.severity ? `${severityWords(d.severity)}${d.classifiedByName ? ` · ${d.classifiedByName}` : ""}` : "Not rated yet"],
               ["Closed", d.closedAt ? `${d.closedByName}, ${fmtDateTime(d.closedAt)}` : "—"],
               ["May the product be made OK?", d.releasePermitted === null ? "—" : d.releasePermitted ? "Yes" : "No"],
               ["Check again on", d.effectivenessCheckOn ? fmtDate(d.effectivenessCheckOn) : "—"],
@@ -132,7 +133,14 @@ export default async function DeviationPage({ params, searchParams }: { params: 
         <Card>
           <CardTitle>Stock stopped by QA because of this</CardTitle>
           {v.holds.length === 0 ? (
-            <p className="text-[13px] text-muted">No stock was stopped for this report.</p>
+            // ADR-132 §9 (C report B19): a lot QA had already stopped is not "nothing stopped".
+            <p className="text-[13px] text-muted" data-testid="report-stock-stopped">
+              {v.lot?.status === "on_hold"
+                ? "This lot is already stopped by QA. Nobody may use it until QA decides."
+                : v.lot?.status === "quarantine"
+                  ? "This lot is still waiting for the QA check. Nobody may use it until QA says OK."
+                  : "No stock was stopped for this report."}
+            </p>
           ) : (
             <ul className="flex flex-col gap-1 text-[14px]">
               {v.holds.map((h) => (

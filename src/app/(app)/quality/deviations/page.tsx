@@ -8,6 +8,7 @@ import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DeviationStatusChip } from "../_ui";
+import { severityWords } from "@/lib/severity-words";
 
 export const metadata = { title: "Problem reports" };
 
@@ -70,7 +71,7 @@ export default async function DeviationsPage({ searchParams }: { searchParams: P
                 facts={
                   <>
                     {r.batchNumber ? `Batch ${r.batchNumber}` : `Lot ${r.lotNumber}`}
-                    {r.stepRef ? ` · ${r.stepRef}` : ""} · {r.raisedByName}, {fmtDateTime(r.raisedAt)} · {r.severity ? `how serious: ${r.severity}` : "not rated yet"} · {DEVIATION_SOURCE_LABEL[r.source as DeviationSource] ?? r.source}
+                    {r.stepRef ? ` · ${r.stepRef}` : ""} · {r.raisedByName}, {fmtDateTime(r.raisedAt)} · {r.severity ? `how serious: ${severityWords(r.severity).toLowerCase()}` : "not rated yet"} · {DEVIATION_SOURCE_LABEL[r.source as DeviationSource] ?? r.source}
                   </>
                 }
               />

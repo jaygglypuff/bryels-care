@@ -405,7 +405,7 @@ export async function raiseComplaintDeviation(ctx: AuthContext, input: { complai
     const c = await lockComplaint(tx, ctx, input.complaintId);
     if (c.deviationId) {
       const [d] = await tx.select({ n: deviations.deviationNumber }).from(deviations).where(eq(deviations.id, c.deviationId)).limit(1);
-      throw new DomainError("state", `Deviation ${d?.n ?? "(linked)"} was already raised from this complaint.`);
+      throw new DomainError("state", `Problem report ${d?.n ?? "(linked)"} was already made from this complaint.`);
     }
     if (c.status === "closed") throw new DomainError("state", `Complaint ${c.complaintNumber} is closed.`);
     if (!c.lotId) throw new DomainError("validation", "The complaint names no lot of ours; record the lot or box code first (log a new complaint with the code).", { field: "code" });
