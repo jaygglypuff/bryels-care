@@ -277,7 +277,6 @@ export function KeypadField({
           id={id}
           type="text"
           value={value}
-          placeholder="—"
           readOnly={mode === "keypad" || !canType}
           inputMode={mode === "keypad" ? "none" : decimal ? "decimal" : "numeric"}
           enterKeyHint="done"
@@ -311,7 +310,10 @@ export function KeypadField({
             e.preventDefault();
             if (canType) onChange!(pressKey(value, k, rules));
           }}
-          className="w-full min-w-0 bg-transparent text-fg outline-none placeholder:text-muted focus-visible:outline-none"
+          // The ring is drawn on the box around the value and unit (focus-within); the global :focus-visible outline
+          // would draw a second ring inside it.
+          style={{ outline: "none" }}
+          className="w-full min-w-0 bg-transparent text-fg"
         />
         {unit && <span className="shrink-0 text-[16px] font-normal text-muted">{unit}</span>}
       </div>
