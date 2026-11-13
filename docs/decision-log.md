@@ -2904,6 +2904,21 @@ Status: Accepted (UX leftovers of ADR-124, ADR-126, ADR-130 and ADR-131). QA to 
 
 Consequences: one migration (0042), no new permission strings, no new settings. New assumptions A-FIN-CHK-01, A-LOTVIA-OTHER-01, A-RPT-DR2-01, A-RCP-COPY-01. Risk: QA people hold the step-check permission, so they can confirm production counts (flagged in A-FIN-CHK-01).
 
+## ADR-134 Print the batch record with no internet, type it in later (owner 2026-11-13)
+Status: Accepted (owner delegated the choices; A-PAPER-01..09 need QA, owner or site managers). Extends ADR-018, ADR-112, ADR-125 and US-3-20 (hybrid paper pages).
+
+Owner: "They should be able to already print the batch record and fill it up. Then later they can update the record online … so operations won't stop if there is no internet."
+
+1. **One paper batch record pack per batch.** While online, "Get the paper record ready" issues one `bmr_paper_page` per routing step through the existing paper-page service (`issuePageInTx`): DOC number, QR code, checksum, `pack_id`. The weighing page lists every ingredient with blank boxes for lot, weight, time, done by and checked by; the last page has the finish counts; every page says what to do with no internet. The v1 renderer gains optional sections QA can switch off; pages issued earlier re-render to the same checksum. Pages never used are voided together with a reason; unreviewed pages still block the QA decision.
+2. **The device keeps a copy.** The batch page and My jobs save the packs of today's and the next batches (2 days ahead, the person's sites, max 12) from `GET /api/v1/production/paper-packs[/batchId]` (permission, site and checksum checked) into the person's IndexedDB store, wiped on a change of person and deleted at sign-out. "Print the paper record" prints that copy from a sandboxed frame on the batch page or in the precached `/offline` workspace. The service worker still caches no signed-in pages.
+3. **Enter from the paper record.** Lines are typed in through the normal services. Records carry `entry_source = 'paper'`, `paper_record_id`, `occurred_at` (the paper's time), `entered_by` and `outage_reason` (migration `0043_paper_pack_entries`). The people named on paper are recorded as doer and checker (`signedOn: "paper"`; the wet signature plus the second-person review of the transcription is the control, A-PAPER-02). The ledger keeps its single `posted_at`; the paper's time goes in `stock_movements.meta`, and dispensing still posts through `postMovement`. Out-of-range values are recorded as written with a deviation; unusable lots are refused and QA is told. Anyone who typed lines from a page cannot review it, and a page with typed lines cannot be voided.
+4. **NEVER_PAPER_ONLY steps** (dispensing, transfer, reconciliation) may be done on paper during an outage only with a reason, while `production.paper.outage_entry_allowed` is on (default on, change needs approval; QA confirms A-PAPER-01).
+5. **No internet is a sentence, not an error page.** Shared forms answer "No internet. Nothing was saved. … write it on the paper batch record …" (`withNoInternet`) and keep their idempotency key. The floor audit of what stops without internet is in `docs/offline-sync.md` §12.3.
+
+Consequences: migration 0043; new setting; new endpoints under `/api/v1/production/paper-packs`; IndexedDB store v2; no new permission; no seed change.
+
+Open: finish counts from paper keep the typing time (A-PAPER-05); the printed BMR does not yet mark "from paper"; offline reprints are not counted (A-PAPER-03); forms with their own `useActionState` (quality, admin, closure) still show the error page offline; an offline capture screen for put-away and stock moves.
+
 ## ADR-135 Type numbers with a keyboard; a calm floor TV (owner 2026-11-13)
 Status: Accepted (owner delegated the decisions). Extends ADR-084, ADR-119 and ADR-126; amends ux-system component 5.25.
 
