@@ -34,7 +34,7 @@ import { documentsForSourceRead, generateForSource, resolveTemplateVersion, type
 import type { PoReceiptLine, ReceivingPoHooks } from "@/modules/inventory";
 import { toCsv } from "@/modules/masterdata";
 import { notifyRoles } from "@/modules/platform";
-import { notifyNextActors } from "@/modules/governance";
+import { evaluateApprovalRules, notifyNextActors } from "@/modules/governance";
 import { approvalProgress, canDecide, decisionsOf, recordDecision } from "./approvals";
 import { assertAslApproved, moqShortfall, priceFor } from "./asl";
 import { PO_STATUS_LABEL, type PoStatus, logCreation, transitionPo, transitionPr } from "./state";
@@ -1014,6 +1014,22 @@ export async function deletePurchaseOrderDraft(ctx: AuthContext, input: { purcha
     });
     return { deleted: po.poNumber };
   });
+}
+
+/**
+ * ADR-132 §12 (browser walk): what the purchase order wizard may promise before saving. The request's OKs carry over
+ * only when they are at least as many as an order of that amount needs (`requestApprovalCover`, "approval_steps");
+ * the wizard said "covers this order" from the amount alone and the order then went for approval again. Read only;
+ * the caller's site is checked; the save re-checks everything.
+ */
+export async function requestCoverHint(ctx: AuthContext, requestId: string, amount: string): Promise<{ requestSteps: number; orderSteps: number } | null> {
+  ctx.require("procurement.purchase_order.create");
+  if (!/^[0-9a-f-]{36}$/i.test(requestId) || !/^\d+(\.\d+)?$/.test(amount)) return null;
+  const [pr] = await db.select().from(purchaseRequests).where(and(eq(purchaseRequests.id, requestId), eq(purchaseRequests.organizationId, ctx.organizationId))).limit(1);
+  if (!pr || !ctx.allowedSiteIds.includes(pr.siteId)) return null;
+  const req = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: { amount: pr.estimatedTotalAmount ?? "unbounded" } });
+  const order = await evaluateApprovalRules(db, ctx.organizationId, { documentType: "purchase_order", siteId: pr.siteId, basis: { amount } });
+  return { requestSteps: req.steps.filter((s) => s.done).length, orderSteps: Math.max(order.steps.length, 1) };
 }
 
 /** The supplier's name for message titles (ADR-132 §3: names before codes). */

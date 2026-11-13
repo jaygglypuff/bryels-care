@@ -5,7 +5,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { SAVED_PARAMS, savedLanding } from "@/ui/saved-landing";
+import { SAVED_PARAMS, landAtTop, savedLanding } from "@/ui/saved-landing";
 
 const appDir = path.resolve(__dirname, "../../src/app");
 const files = (dir: string): string[] =>
@@ -21,6 +21,16 @@ describe("saved landing", () => {
     expect(savedLanding("created=1", "#lines")).toBe(false);
     expect(savedLanding("tab=lines", "")).toBe(false);
     expect(savedLanding("", "")).toBe(false);
+  });
+
+  it("a new page starts at the top unless reached with Back/Forward or an anchor; filters on one page do not move it", () => {
+    const a = { path: "/procurement/requests/new", search: "" };
+    expect(landAtTop(a, { path: "/procurement/requests/r1", search: "", hash: "" }, false)).toBe(true);
+    expect(landAtTop(a, { path: "/procurement/requests/r1", search: "", hash: "" }, true)).toBe(false);
+    expect(landAtTop(a, { path: "/procurement/requests/r1", search: "", hash: "#lines" }, false)).toBe(false);
+    expect(landAtTop({ path: "/sales", search: "status=open" }, { path: "/sales", search: "status=all", hash: "" }, false)).toBe(false);
+    expect(landAtTop({ path: "/sales/c1", search: "" }, { path: "/sales/c1", search: "saved=1", hash: "" }, false)).toBe(true);
+    expect(landAtTop(null, { path: "/sales", search: "", hash: "" }, false)).toBe(false);
   });
 
   it("knows every 'just saved' word the server actions redirect with", () => {

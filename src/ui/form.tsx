@@ -114,14 +114,14 @@ export function ActionForm<S extends ActionState = ActionState>({
   /** Show the server's message under the button instead of above it. */
   messageBelow?: boolean;
   /** Called once per successful save (ADR-132: a small form that closes itself after saving shows no second "Save"). */
-  onDone?: (state: S) => void;
+  onDone?: (state: NonNullable<S>) => void;
 }) {
   const [state, dispatch] = useInPlaceAction<S>(action);
   const doneFor = useRef<S | null>(null);
   useEffect(() => {
     if (state?.ok && onDone && doneFor.current !== state) {
       doneFor.current = state;
-      onDone(state);
+      onDone(state as NonNullable<S>);
     }
   }, [state, onDone]);
   const fe = state?.fieldErrors ?? {};

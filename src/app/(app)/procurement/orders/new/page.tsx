@@ -1,5 +1,5 @@
 import { requireContext } from "@/lib/auth/context";
-import { approvedMaterialsFor, convertibleRequestLines, lastPurchasePrices, poFormOptions } from "@/modules/procurement";
+import { approvedMaterialsFor, convertibleRequestLines, lastPurchasePrices, poFormOptions, requestCoverHint } from "@/modules/procurement";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { PlainList, PlainRow } from "@/ui/plain-list";
@@ -43,6 +43,9 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const namedChosen = !!chosen && named.includes(chosen.id);
   const namedOther = !!chosen && named.length > 0 && !namedChosen;
   const approvedAmount = fromRequest?.length && fromRequest.every((l) => l.estimatedUnitAmount !== null) ? fromRequest.reduce((s, l) => s + Number(l.qty) * Number(l.estimatedUnitAmount), 0) : null;
+  // ADR-132 §12: the request's OKs carry over only when an order of that amount needs no more OKs than it had.
+  const hint = approvedAmount !== null && request ? await requestCoverHint(ctx, request, approvedAmount.toFixed(2)).catch(() => null) : null;
+  const moreOks = !!hint && hint.requestSteps < hint.orderSteps;
   const neededBy = fromRequest?.map((l) => l.neededByDate).filter((d): d is string => !!d).sort()[0] ?? null;
   return (
     <div className="mx-auto max-w-3xl">
@@ -70,7 +73,9 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 ? ""
                 : approvedAmount !== null
                   ? prices
-                    ? `The request was approved for up to ₱${approvedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Up to that amount the order needs no second OK; above it, it does.`
+                    ? moreOks
+                      ? `The request was approved for up to ₱${approvedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, with ${hint!.requestSteps === 1 ? "1 OK" : `${hint!.requestSteps} OKs`}. An order this big needs ${hint!.orderSteps} OKs, so the order is sent for its OKs when you save it.`
+                      : `The request was approved for up to ₱${approvedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Up to that amount the order needs no second OK; above it, it does.`
                     : "Up to the amount the request was approved for, the order needs no second OK."
                   : "The request had no price, so the order needs an OK of its own."}
             </Banner>
@@ -125,7 +130,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           prices={prices}
           today={today()}
           neededBy={neededBy}
-          approvedAmount={namedOther ? null : approvedAmount}
+          approvedAmount={namedOther || moreOks ? null : approvedAmount}
           changeHref={`/procurement/orders/new${keepRequest ? `?${keepRequest}` : ""}`}
           canSubmit={ctx.can("procurement.purchase_order.submit")}
         />

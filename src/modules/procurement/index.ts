@@ -52,6 +52,7 @@ export {
   expectedReceipts,
   exportPurchaseOrdersCsv,
   poFormOptions,
+  requestCoverHint,
   currentPurchaseOrderDocument,
   lastPurchasePrices,
   type LastPrice,
