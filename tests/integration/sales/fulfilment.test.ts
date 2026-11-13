@@ -361,7 +361,14 @@ describe("US-4-12/13 dispatch again, acknowledgment and the action centre", () =
     const base = { receivedByName: "Marco Tan", receivedByPosition: "Store supervisor", receivedAt: new Date(), remarks: "One box dented", idempotencyKey: key() };
     await expectCode(acknowledgeDeliveryReceipt(wh, shipmentId, { ...base, kind: "photo" }), "validation");
     await expectCode(acknowledgeDeliveryReceipt(whRvs, shipmentId, { ...base, kind: "name_only" }), "not_found");
-    const r = await acknowledgeDeliveryReceipt(wh, shipmentId, { ...base, kind: "drawn", file: { fileName: "signature.png", declaredType: "image/png", bytes: new Uint8Array(PNG) } });
+    // Round 5 A B11 (ADR-133 item 2): a first try refused inside the transaction (time before dispatch, after the image
+    // was stored) leaves no attachment and does not use up the submission key: the retry with the same key saves.
+    const sig = { fileName: "signature.png", declaredType: "image/png", bytes: new Uint8Array(PNG) };
+    const early = await expectCode(acknowledgeDeliveryReceipt(wh, shipmentId, { ...base, receivedAt: new Date(Date.now() - 400 * 86_400_000), kind: "drawn", file: sig }), "validation");
+    expect(early.message).toMatch(/before dispatch/);
+    expect(await db.select().from(fileAttachments).where(eq(fileAttachments.idempotencyKey, `dr_ack:${base.idempotencyKey}`))).toHaveLength(0);
+    const r = await acknowledgeDeliveryReceipt(wh, shipmentId, { ...base, kind: "drawn", file: sig });
+    expect(await db.select().from(fileAttachments).where(eq(fileAttachments.idempotencyKey, `dr_ack:${base.idempotencyKey}`))).toHaveLength(1);
     expect(r.documentNumber).toMatch(/^DOC-/);
     expect((await shipmentRow(shipmentId)).status).toBe("delivered");
     const [dr] = await db.select().from(deliveryReceipts).where(eq(deliveryReceipts.shipmentId, shipmentId));

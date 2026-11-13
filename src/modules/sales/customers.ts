@@ -296,17 +296,32 @@ export type SimilarCustomer = { id: string; code: string; name: string; phone: s
  */
 export async function findSimilarCustomers(ctx: AuthContext, input: { name?: string | null; phone?: string | null; email?: string | null }, q: DbOrTx = db): Promise<SimilarCustomer[]> {
   ctx.require("masterdata.customer.view");
-  const name = customerNameKey(input.name ?? "");
-  const phone = phoneKey(input.phone);
-  const email = (input.email ?? "").trim().toLowerCase();
-  if (!name && phone.length < 7 && !email) return [];
-  const rows = await q.select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, email: customers.email }).from(customers).where(eq(customers.organizationId, ctx.organizationId));
+  return findSimilarCustomersIn(q, ctx.organizationId, input);
+}
+
+/** Why a customer looks like the one being added (pure): the same phone (last 10 digits), email or name key. */
+export function similarBecause(a: { name?: string | null; phone?: string | null; email?: string | null }, b: { name: string; phone: string | null; email: string | null }): SimilarCustomer["why"] {
+  const name = customerNameKey(a.name ?? "");
+  const phone = phoneKey(a.phone);
+  const email = (a.email ?? "").trim().toLowerCase();
+  const why: SimilarCustomer["why"] = [];
+  if (phone.length >= 7 && phoneKey(b.phone) === phone) why.push("phone");
+  if (email && (b.email ?? "").trim().toLowerCase() === email) why.push("email");
+  if (name && customerNameKey(b.name) === name) why.push("name");
+  return why;
+}
+
+/**
+ * The check itself, for create paths (the New customer screen, imports, ADR-133 item 7). It runs inside the create
+ * permission, so the person adding a customer is told about the match even without `masterdata.customer.view`; it
+ * names only the matching customer's name, code and phone.
+ */
+export async function findSimilarCustomersIn(q: DbOrTx, organizationId: string, input: { name?: string | null; phone?: string | null; email?: string | null }): Promise<SimilarCustomer[]> {
+  if (!customerNameKey(input.name ?? "") && phoneKey(input.phone).length < 7 && !(input.email ?? "").trim()) return [];
+  const rows = await q.select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, email: customers.email }).from(customers).where(eq(customers.organizationId, organizationId));
   const out: SimilarCustomer[] = [];
   for (const r of rows) {
-    const why: SimilarCustomer["why"] = [];
-    if (phone.length >= 7 && phoneKey(r.phone) === phone) why.push("phone");
-    if (email && (r.email ?? "").trim().toLowerCase() === email) why.push("email");
-    if (name && customerNameKey(r.name) === name) why.push("name");
+    const why = similarBecause(input, r);
     if (why.length) out.push({ ...r, why });
   }
   return out.slice(0, 5);
@@ -318,15 +333,21 @@ export async function createCustomer(ctx: AuthContext, input: CustomerInput & { 
   const shipTo = input.shipTo ?? (input.shipToAddress ? legacyAddress(input.shipToAddress) : null);
   if (!shipTo) throw new DomainError("validation", "Enter the ship-to address.", { field: "shipTo.line1" });
   return runInTx(opts, async (tx) => {
-    // ADR-131: the New customer screen asks before saving a customer that looks like one we already have.
-    if (input.duplicateCheck && !input.confirmedDifferent && ctx.can("masterdata.customer.view")) {
-      const similar = await findSimilarCustomers(ctx, { name: input.name, phone: input.phone, email: input.email }, tx);
-      if (similar.length) {
-        const s = similar[0];
-        throw new DomainError("conflict", `Already a customer? ${s.name} (${s.code})${s.phone ? ` · ${s.phone}` : ""} has the same ${s.why.join(" and ")}. Open it, or tick “This is a different customer”.`, { code: "POSSIBLE_DUPLICATE", field: "name", similar });
-      }
-    }
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "masterdata.customer.create", async () => {
+      // ADR-131: the New customer screen asks before saving a customer that looks like one we already have. ADR-133
+      // item 7: every create path of the app passes `duplicateCheck: true` (the screen and the customer import;
+      // tests/unit/customer-create-paths.test.ts keeps it that way), unless the person said it is a different customer
+      // (`confirmedDifferent`). Test fixtures and seeds call without it. Inside the idempotent block, so a retried save
+      // answers with the customer it made instead of "Already a customer?".
+      if (input.duplicateCheck && !input.confirmedDifferent) {
+        const similar = await findSimilarCustomersIn(tx, ctx.organizationId, { name: input.name, phone: input.phone, email: input.email });
+        if (similar.length) {
+          const s = similar[0];
+          // Someone who may add but not see customers is told there is a match, without the other customer's details.
+          if (!ctx.can("masterdata.customer.view")) throw new DomainError("conflict", `Already a customer? A customer with the same ${s.why.join(" and ")} exists. Ask someone who can see customers, or tick “This is a different customer”.`, { code: "POSSIBLE_DUPLICATE", field: "name", similar: [] });
+          throw new DomainError("conflict", `Already a customer? ${s.name} (${s.code})${s.phone ? ` · ${s.phone}` : ""} has the same ${s.why.join(" and ")}. Open it, or tick “This is a different customer”.`, { code: "POSSIBLE_DUPLICATE", field: "name", similar });
+        }
+      }
       const taken = async (c: string) => (await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.code, c))).limit(1)).length > 0;
       const typed = input.code?.trim().toUpperCase() || null;
       if (typed && (await taken(typed))) throw new DomainError("conflict", `Customer code ${typed} is already used.`, { field: "code" });

@@ -7,6 +7,7 @@ import { fmtDate, fmtQty } from "@/lib/qty";
 import type { WeighView } from "@/modules/production";
 import { plainNumber } from "@/modules/production/floor-words";
 import { syncAgent } from "@/lib/offline/agent";
+import { queuedWeighCommand } from "@/lib/offline/weigh-queue";
 import { Button, cx, Input, Select } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction, type FormAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
@@ -241,12 +242,9 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
     const queue = async (): Promise<FlowActionState> => {
       if (offPlan) return { ok: false, message: "No signal. What you typed is kept here. Tap Save again when you have signal." };
       try {
-        await syncAgent().enqueue({
-          type: "production.dispense_record.create",
-          siteId: p.siteId,
-          summary: `${card.materialName} ${qty} ${card.unit}`,
-          payload: { batchId: p.batchId, batchMaterialId: card.batchMaterialId, lotRef: lotCode || `BC:LOT:${lot?.lotNumber ?? ""}`, lotVia: lotVia === "tap" ? undefined : (lotVia ?? undefined), locationRef: lot?.locationId ?? null, qty, uom: card.unit, equipmentRef: p.requiresScale ? scale || null : null },
-        });
+        await syncAgent().enqueue(
+          queuedWeighCommand({ siteId: p.siteId, batchId: p.batchId, batchMaterialId: card.batchMaterialId, materialName: card.materialName, qty, unit: card.unit, lotCode, lotNumber: lot?.lotNumber ?? null, lotVia, locationId: lot?.locationId ?? null, requiresScale: !!p.requiresScale, scale }),
+        );
         const msg = `${card.materialName}: saved on this phone. It will send when you have signal.`;
         p.onQueued(msg);
         return { ok: true, message: msg };

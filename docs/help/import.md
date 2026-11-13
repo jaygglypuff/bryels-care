@@ -1,8 +1,8 @@
 ---
 key: platform.import
 title: Import a spreadsheet
-version: 2
-updated_at: 2026-11-06
+version: 3
+updated_at: 2026-11-13
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -24,6 +24,7 @@ Load master data, opening stock or scanned records in five steps: upload, map, v
 
 1. Press **Validate the file**. Large files run in the background, and you get a notification when they finish.
 2. Rows are counted as **Accepted**, **On hold**, **Already there**, **To decide**, **Refused** or **Warnings**. Open each group and fix the file, or choose a **Decision** per row and press **Save decision**.
+3. **Customers**: a row with the same phone or email as a customer you already have is **To decide** ("Possible duplicate: the same phone as existing customer CUS-003 …"). Choose **Same as existing**, **New record** (a different customer) or **Reject**. Two rows of your file with the same phone or email get a warning; the second one is not loaded and the results file says why.
 
 ## 4 Review and approve
 

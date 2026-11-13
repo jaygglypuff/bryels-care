@@ -10,6 +10,7 @@ import * as s from "../schema";
 import { definitionChecksum } from "../../modules/documents/checksum";
 import { boxingNoteRendererV1 } from "../../modules/documents/renderers/boxing-note-v1";
 import { deliveryReceiptRendererV1 } from "../../modules/documents/renderers/delivery-receipt-v1";
+import { deliveryReceiptRendererV2 } from "../../modules/documents/renderers/delivery-receipt-v2"; // ADR-133: demo approves v2
 import { labelRendererV2 } from "../../modules/documents/renderers/label-v2"; // ADR-099: demo layouts use v2
 import { pickListRendererV1 } from "../../modules/documents/renderers/pick-list-v1";
 import { DEFAULT_LABEL_FIELDS } from "../../modules/documents/schemas";
@@ -53,7 +54,30 @@ export async function seedW3e(db: Db) {
 
   await template("BOXING-NOTE", "Boxing note / packing list (A4)", "boxing_note", boxingNoteRendererV1);
   await template("PICK-LIST", "Pick list (A4)", "pick_list", pickListRendererV1);
-  await template("DR-STD", "Delivery receipt (A4, 3 copies)", "delivery_receipt", deliveryReceiptRendererV1);
+  const dr = await template("DR-STD", "Delivery receipt (A4, 3 copies)", "delivery_receipt", deliveryReceiptRendererV1);
+  // ADR-133 item 10 (demo data): QA approved version 2 on the delivery receipt v2 layout (product name first), which
+  // retired version 1. In a real company this happens only through the template approval; code never switches it.
+  const v2At = new Date(approvedAt.getTime() + 86_400_000);
+  await db
+    .update(s.documentTemplateVersions)
+    .set({ status: "retired", effectiveTo: v2At, retiredBy: qa, retiredAt: v2At, retireReason: "Superseded by v2" })
+    .where(and(eq(s.documentTemplateVersions.documentTemplateId, dr), eq(s.documentTemplateVersions.versionNo, 1)));
+  const drV2 = deliveryReceiptRendererV2.defaultDefinition("delivery_receipt");
+  await db.insert(s.documentTemplateVersions).values({
+    documentTemplateId: dr,
+    versionNo: 2,
+    status: "approved",
+    definition: drV2,
+    definitionChecksum: definitionChecksum(drV2),
+    changeNote: "Product name first, code small after it (demo)",
+    createdBy: admin,
+    createdAt: v2At,
+    submittedBy: manager,
+    submittedAt: v2At,
+    approvedBy: qa,
+    approvedAt: v2At,
+    effectiveFrom: v2At,
+  });
   const boxLayout = await template("LBL-BOX", "Box / carton label layout", "label", labelRendererV2, "label/carton/v1");
   await db.insert(s.labelTemplates).values({
     organizationId: O,

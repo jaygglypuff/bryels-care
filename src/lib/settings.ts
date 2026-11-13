@@ -570,7 +570,8 @@ export const SETTINGS = {
   /**
    * ADR-124 item 1: people without invoice access see the invoice stage and who acts next on a delivery and an order
    * (no link). Off: they see only "Delivered" / "Sent out to the customer" (no stage, no names): `billingStepOfShipment`
-   * and `billingStepOfOrder` return the stage `hidden` for them.
+   * and `billingStepOfOrder` return the stage `hidden` for them; ADR-133: orders read "Sent out" instead of "Billed"
+   * (status chip, counts, board, history) and Home activity leaves out invoice events (src/modules/sales/invoice-stage.ts).
    */
   "sales.show_invoice_stage_without_invoice_access": {
     scopes: ["organization"],
@@ -580,7 +581,7 @@ export const SETTINGS = {
     group: "Sales",
     label: "Show the invoice step to people who cannot open invoices",
     description:
-      "On (recommended): on a delivery or an order, everyone who may see it also sees where the invoice is (for example “Waiting for Rosa to approve the invoice”), without a link to the invoice. Off: people who cannot open invoices only see “Delivered”.",
+      "On (recommended): on a delivery or an order, everyone who may see it also sees where the invoice is (for example “Waiting for Rosa to approve the invoice”), without a link to the invoice. Off: people who cannot open invoices only see “Delivered”, a billed order reads “Sent out”, and invoice news is left out of their Home.",
     whoChanges: "The owner or the IT person.",
     requiresApproval: true,
     restricted: true,

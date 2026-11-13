@@ -22,6 +22,7 @@ import { currentReadings } from "./process";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { currentYield, recordScrapReworkLocked, recordYieldLocked, yieldLimits } from "./yield";
 import { plainWords } from "./plain-words";
+import { finishCheckOf } from "./finish-check";
 import { packagingUsedFor, wrapperBalanceSentence, wrapperWord } from "./wrapper-words";
 
 /**
@@ -257,6 +258,10 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
     transferStepNo: transfer?.stepNo ?? null,
     batchWorkOrderId: batch.workOrderId,
     checkers,
+    /** ADR-130: the checker may type their own password on this phone only while `production.sign_off.same_device` is on. */
+    sameDevice: needsChecker ? await getSetting(db, ctx.organizationId, "production.sign_off.same_device") : false,
+    /** ADR-133: counts sent to be checked on the checker's own phone (waiting, or sent back with the reason). */
+    finishCheck: needsChecker && batch.status === "in_process" ? await finishCheckOf(ctx, batch.id) : null,
     defectTypes,
     can: { finish: ctx.canAt("production.batch.post", batch.siteId) && ctx.canAt("production.yield_record.create", batch.siteId) && ctx.canAt("production.batch_output.create", batch.siteId) },
   };
@@ -278,7 +283,11 @@ export async function finishBatch(ctx: AuthContext, input: FinishBatchInput, sig
   });
 }
 
-async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: FinishBatchInput, signers: { checker?: AuthContext | null }) {
+/**
+ * The body of Finish under the batch lock. `opts.checkerLater` (ADR-133): the dry run of "Send the counts to be
+ * checked" (finish-check.ts) runs every rule except the checker's signature, inside a savepoint that is rolled back.
+ */
+export async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: FinishBatchInput, signers: { checker?: AuthContext | null }, opts: { checkerLater?: boolean } = {}) {
   if (batch.status !== "in_process") {
     throw new DomainError("state", batch.status === "awaiting_qc" || batch.status === "quarantined" ? `Batch ${batch.batchNumber} is already finished and waiting for the quality check.` : `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; only a batch being made can be finished.`);
   }
@@ -470,7 +479,7 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
     if (!hold) throw new DomainError("state", "This site has no hold area location for finished batches. Ask an administrator to add one (section Waiting for QA / on hold).");
     locationRef = hold.id;
   }
-  const posted = await postBatchToQuarantineLocked(tx, ctx, batch, { locationRef }, signers, { finishDeviation: !!(deviation || yrow.deviationId) });
+  const posted = await postBatchToQuarantineLocked(tx, ctx, batch, { locationRef }, signers, { finishDeviation: !!(deviation || yrow.deviationId), checkerLater: opts.checkerLater });
 
   // 9. Retained samples leave stock (kept by QA, not for sale).
   if (samples.gt(0)) {

@@ -30,6 +30,7 @@ counts as a check". On (today): the rules above. Off: the **verification checks 
 | Label check (`/quality/label-verification`) | `verifyLabelScan` → `checkEntryMode` | `VerifyScanForm` |
 | Lot check at weighing (Weigh card) | `recordDispense` → `confirmLot` (a typed number, and a bare "last 4", are refused whatever `production.weighing.lot_confirm` says, unless it is "none") | `WeighCard` |
 | Lot check at weighing, offline (`/offline` Weigh) | replay → `recordDispense` → `checkEntryMode` (read at replay time) | `WeighCapture` (from the cached batch `weighing.typedChecks`) |
+| Lot check at weighing, "Other ways" (`/production/orders/[id]/weigh/more`, ADR-133) | `dispenseAction` sends `lotVia` → `recordDispense` → `checkEntryMode` (typed refused); a tapped lot (or no `lotVia`) is a chosen lot → `confirmLot` (refused unless `lot_confirm` is "none") | `WeighForm` (`viaName="lotVia"`; the typing box stays, the server refuses typed while off) |
 | Lot check at Get materials (`scan_lots` on) | `confirmPicked` | `MaterialsList` |
 
 The refusal reads: "This check needs the label scanned. Typing is turned off in Settings." Nothing is recorded. Put-away,
@@ -157,7 +158,7 @@ transfer and step fields of that page no longer exist. Production fields now:
 | `/production/orders/[id]/step/[n]` packaging box (packaging lines) | — | — | the taken lot is shown; nothing to identify | ✓ | n/a |
 | `/production/orders/[id]/weigh` (More details) | scale (`equipmentRef`) | equipment | `kind="equipment"`, `submit="code"`, candidates = the site's scales (the ones that cannot be used greyed with the reason), first usable preselected (ADR-125) | ✓ | ✓ |
 | `/production/orders/[id]/weigh` | `lotConfirm` + `lotConfirmVia` | lot | `kind="lot"`, `mode="emit"`, `allowTap={false}`, `onlyCandidates` (a tap is not a check, A-SCAN-11; ADR-080 §3); "Type the lot number" (all of it or the last 4) is a normal option, recorded `typed` (replaces "Label damaged? Type the last 4"). Round 5: `showCandidates` only under "Use another lot" (the lot to take is shown once, "Take lot …0010 · shelf"); a wrong label says which lot to take. With no signal the weighing is queued with the same `lotRef`/`lotVia` (offline outbox, A-OFF-WGH-01) | ✓ | ✓ |
-| `/production/orders/[id]/weigh/more` ("Other ways to weigh", exec-forms `WeighForm`) | `lotRef` + `locationRef` | lot, shelf | `kind="lot"` candidates = usable lots (FEFO) with `places`; `kind="location"` `hideWhenSingle` | ✓ | ✓ |
+| `/production/orders/[id]/weigh/more` ("Other ways to weigh", exec-forms `WeighForm`) | `lotRef` + `lotVia` + `locationRef` | lot, shelf | `kind="lot"` candidates = usable lots (FEFO) with `places`, `viaName="lotVia"` (ADR-133: a scan or typed number confirms the lot; a tap needs the confirmation of the main Weigh); `kind="location"` `hideWhenSingle` | ✓ | ✓ |
 | `/production/orders/[id]/weigh/more` | 2. Scale (`equipmentRef`) | equipment | `kind="equipment"`, `submit="code"`, blocked scales greyed with the reason (ADR-125) | ✓ | ✓ |
 | `/production/orders/[id]/materials` (setting scan_lots) | `lotCode` + `lotVia` | lot | `kind="lot"`, `allowTap={false}`, `onlyCandidates`, candidates = the lot to take; typed lot number recorded `typed` | ✓ | ✓ |
 | `/production/[batchId]/finish` | `locationRef` | hold area | `kind="location"`, candidates = hold areas, `onlyCandidates` | ✓ | ✓ |

@@ -32,6 +32,7 @@ export { printBatchLabels, packagingLinesOf, type PackagingLineView } from "./pa
 export { isPackagingKind, perPieceSetup, expectedPieces, perPieceQty } from "./packaging-lines";
 // ADR-080 G3: Finish batch (one transaction over the yield, rejects, packaging and hold-area bodies).
 export { finishBatch, getFinishView, defaultHoldLocation, type FinishBatchInput, type FinishReject, type FinishPackaging, type FinishView } from "./finish";
+export { askFinishCheck, confirmFinishCheck, returnFinishCheck, withdrawFinishCheck, finishCheckOf, finishCheckFacts, FINISH_CHECK_MACHINE, type FinishCheckState, type FinishCheckSummary } from "./finish-check";
 export { recordYield, approveYield, recordScrapRework, decideScrapRework } from "./yield";
 export { postBatchToQuarantine, quarantineLocations, transferBlockers, type PostToQuarantineInput } from "./output";
 export { getBatchExecution, batchSiteId, equipmentOptions, packagingLotOptions, signerOptions, type BatchExecution, type ExecStep } from "./execution-queries";

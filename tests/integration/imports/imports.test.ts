@@ -277,6 +277,34 @@ describe("customers kind (W3D customer service, registered by the Wave 3 wiring)
     expect(ev).toHaveLength(1);
     expect(await db.select().from(customers).where(eq(customers.code, "CUS-9102"))).toHaveLength(0);
   });
+
+  it("ADR-133 item 7: 'Already a customer?' in imports: same phone as a customer asks for a decision; a twin row of the file is not loaded, with the reason", async () => {
+    registerAppHooks();
+    const head = "code,name,status,ship_to_line1,ship_to_city,ship_to_province,contact_name,phone,email,min_shelf_life_days,payment_terms_days,credit_limit_amount,currency,tax_identifier,legacy_number";
+    const csv = [
+      head,
+      // Same phone as CUS-9101 (loaded above as +63 900 111 2222), another name.
+      "CUS-9201,Kamia Beauty Corner (fictional),active,1 Bonifacio St.,Calamba,,,(0900) 111-2222,,,,,PHP,,",
+      "CUS-9202,Bagong Tindahan (fictional),active,2 Burgos St.,Calamba,,,0917 555 0303,bago@tindahan.test,,,,PHP,,",
+      // Same email as the row above (spreadsheet row 3, any case): the same customer typed twice.
+      "CUS-9203,Tindahan ni Aling Rosa (fictional),active,3 Del Pilar St.,Calamba,,,,BAGO@tindahan.test,,,,PHP,,",
+    ].join("\n");
+    const r = await upload(admin, "customers", "twins.csv", csv);
+    await startValidation(admin, r.jobId);
+    const rows = (await listImportRows(admin, r.jobId)).rows;
+    expect(rows.map((x) => x.result)).toEqual(["possible_duplicate", "accepted", "rejected"]);
+    expect(JSON.stringify(rows[0].warnings)).toMatch(/same phone as existing customer CUS-9101/);
+    expect(JSON.stringify(rows[2].warnings)).toMatch(/Same email as row 3 of this file/);
+    expect(JSON.stringify(rows[2].errors)).toMatch(/Not loaded: the same email as customer CUS-9202 .*an earlier row of this file/);
+    // The custodian says row 1 is a different customer: it loads; row 3 stays out with its reason.
+    await decideRow(admin, r.jobId, { rowId: rows[0].id, decision: "new_record", note: "Different shop, shared phone" });
+    await submitImport(admin, r.jobId);
+    await approveImport(manager, r.jobId, "Checked against the customer list");
+    await postImport(admin, r.jobId);
+    expect(await db.select().from(customers).where(eq(customers.code, "CUS-9201"))).toHaveLength(1);
+    expect(await db.select().from(customers).where(eq(customers.code, "CUS-9202"))).toHaveLength(1);
+    expect(await db.select().from(customers).where(eq(customers.code, "CUS-9203"))).toHaveLength(0);
+  });
 });
 
 describe("cross-site isolation of imports (authz.cross_site)", () => {

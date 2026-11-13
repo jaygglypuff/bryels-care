@@ -1,8 +1,8 @@
 ---
 key: start.getting_started
 title: Getting started: from an empty company to a shipped order
-version: 5
-updated_at: 2026-11-06
+version: 6
+updated_at: 2026-11-13
 sop: Training guide for the sandbox; not an SOP
 ---
 
@@ -47,7 +47,7 @@ A recipe tells the workers what to put in one batch and what to do, step by step
    - **By pieces** (new recipes start here): type how many pieces one batch makes, for example 70 bars. The system works out the kilograms from the weight of one piece (the product's size, for example 135 g) and the **Expected amount made**, and shows both: "One batch makes 70 bars of 135 g (about 9.9 kg of soap)". The recipe is saved in kilograms (9.948 kg here: 70 × 135 g, plus a little extra for what is lost, rounded up to a whole gram so you always get at least 70). When you open the recipe again it shows 70 bars. If the product has no weight per piece yet, the screen asks **How heavy is one piece? (g)** once and saves it to the product; if you are not allowed to change products it says so, and you choose **By weight** or ask someone who may.
    - **By weight (kg)**: type how many kilograms you mix in one go, for example 10. The screen tells you about how many bars that makes.
 
-   The **Expected amount made**: out of everything you mix, how much ends up as product you can sell (95 means 5 out of every 100 kg is lost in the pot). Want to start from a recipe you already have? Choose it under **Start from another product's recipe** and press **Copy**: you get its ingredients, packaging and steps to change.
+   The **Expected amount made**: out of everything you mix, how much ends up as product you can sell (95 means 5 out of every 100 kg is lost in the pot). Want to start from a recipe you already have? Choose it under **Start from another product's recipe** and press **Copy**: you get its ingredients, packaging and steps to change. It keeps the way that recipe counts one batch (by pieces stays by pieces). If its pieces are another size (for example 135 g and yours are 100 g), the screen lists the wrappers and steps that say "135 g" and asks what to do with each: **Leave it out**, **Copy and change 135 g to 100 g**, or copy it anyway.
 3. **Ingredients.** Tap **Add an ingredient**, type a few letters of its name and tap it. Not in the list? Tap **Add a new ingredient**. Type the amount. Choose **grams** or **percent** at the top: the other number is worked out for you. In percent the total must be exactly 100%; the bar at the bottom says, for example, "Total 97.5% — add 2.5% more". For each ingredient check the **Allowed difference** (how far the scale may be off and still be OK) and tick **Needs a second person to check the weighing** for things like lye, colour, extract and scent. Use the arrows to change the order.
 
    **Packaging for each piece** (below the ingredients): tap **Add packaging (wrapper, label, bottle, box)**, pick the wrapper (or tap **Add a new packaging item**: it is counted in pieces) and type **How many per bar** (usually 1). The screen shows how many one batch needs ("= 70 for one batch"). Packaging is not an ingredient: it is not weighed and not part of the 100%. When a batch of this recipe is planned, the wrappers are set aside with the ingredients and listed on **Get materials**. The recipe page shows them as, for example, "Packaging: 1 Soap wrapper 135 g per bar".

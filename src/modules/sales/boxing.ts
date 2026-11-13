@@ -772,7 +772,8 @@ export async function boxingNoteData(q: DbOrTx, packId: string): Promise<{ data:
       packNumber: p.packNumber,
       sourceText: sourceText.slice(0, 160),
       customerText,
-      productText: `${row.sku} · ${row.productName}`.slice(0, 200),
+      // ADR-133 item 10: name first, code after (built per new document; stored datasets and their reprints keep theirs).
+      productText: `${row.productName} · ${row.sku}`.slice(0, 200),
       lotText: [...lotNumbers].join(", ").slice(0, 300) || "—",
       packedOn: fmtDate(p.createdAt),
       packedBy: row.packer,

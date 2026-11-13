@@ -230,6 +230,21 @@ Branch `worktree-agent-a74afdca240ffb0c0` (UX/front-end slice of ADR-110). C1–
 | Month end | "Before you close <month>": deliveries not billed, deliveries without a bill, unfinished invoices, bills, payments, credits, claims, each a link. The current month only with "Close anyway (with the reason)"; a future month never. |
 | Customers | New numbers keep the CUS-nnn shape (CUS-003 after CUS-002). "Already a customer?" while typing; saving needs "This is a different customer" when the phone, email or name matches. |
 
+### Round 5 leftovers, part B (13 Nov 2026, ADR-133; flows and documents)
+
+| Stage | What changed on the path |
+|---|---|
+| Finish (checker) | When the move-to-QA step needs a checker, Finish offers **"Send the counts to be checked"** (always; the only way while `production.sign_off.same_device` is off). The counts are checked like Finish (a dry run, rolled back), then wait as a card "Check the counts" on the checker's list `/production/checks` (also on their Home, and a message). The operator's Finish shows "Waiting for Jun or Dino to check the counts" with what was sent and "Take the counts back to change them". "Looks right" moves the batch to the QA waiting area in one transaction (operator = doer, checker = signer on their own session; a repeated tap answers once). "Not right" (tapped reason) goes back to the operator with the reason and a message. The operator never confirms their own counts; another site's checker never sees the card. With the setting on, "They are here (their password)" keeps working. |
+| Weigh ("Other ways") | The advanced weigh form on the batch record sends how the lot was given: a typed number is refused while `scan.typed_code_counts_as_check` is off; a lot tapped in the list is confirmed like the main Weigh (`production.weighing.lot_confirm`). |
+| Weigh with no signal | The queued weighing is built by `queuedWeighCommand` (the card's own function) and tested through the phone outbox and the server replay. |
+| Proof of delivery | Save after a refused first try works: the signature is read from the box when Save is tapped, and the typed fields stay. |
+| Production order | When the order fits one batch, the form offers one choice "Make it one batch · 1 batch of 100 bars" (no second, identical "Split into 1 batch"). |
+| Recipe wizard | "Copy from this recipe" keeps the source's "How do you count one batch?" (pieces stay pieces). From a product of another piece size, packaging and steps that name the old size wait for an answer: "Leave it out", "Copy and change 135 g to 100 g" (steps), "Copy it anyway". |
+| Trace | The export (CSV/XLSX) lists the orders a lot waits for (`direction = waiting`: set aside / taken off the shelf for order SO-…, customer, quantity), only at the viewer's sites. |
+| Sales without invoice access | With `sales.show_invoice_stage_without_invoice_access` off, a billed order reads "Sent out" on the list, the page, the board, the customer's history and the counts, and Home's recent activity leaves out invoice events. |
+| Customers | The import asks about a row with the same phone or email as a customer ("possible duplicate"), warns on twin rows in one file and does not load the second one (reason in the report). |
+| Delivery receipt | Renderer v2 prints the product name first and the code small after it. Receipts issued on v1 keep printing (and re-render) with v1; a template moves to v2 only through a new version QA approves (Set-up › Layouts › "Start a new version with the newer layout"). The demo data approves v2. The boxing note's product reads name first. |
+
 ## (d) Taps and screens per role (one order through the whole chain)
 
 | Role | Distinct screens visited | Taps on the happy path | Detours that cost time |

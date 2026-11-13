@@ -33,6 +33,7 @@ import {
   stepPreviewLine,
 } from "@/modules/masterdata/recipe-blocks";
 import type { RecipeWizardOptions } from "@/modules/masterdata";
+import { copiedWithAnswers, planRecipeCopy, sizeQuestion, type RecipeCopyPlan, type RecipeCopySource, type SizeAnswer } from "@/modules/masterdata/recipe-copy";
 import { Button, Card, Input, Select, Textarea, cx } from "@/ui/core";
 import { BlockIcon } from "./block-icon";
 import { RecipeSummary, batchPiecesSentence, piecesPerBatch } from "./recipe-summary";
@@ -145,6 +146,8 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
   const [pending, startTransition] = useTransition();
   /** A copy kept on this device was put back (ADR-116); offers "Start over". */
   const [restored, setRestored] = useState<string | null>(null);
+  /** ADR-133 item 9: a recipe copied from a product of another piece size, with the answers about size-specific items. */
+  const [copyQ, setCopyQ] = useState<CopyQuestions | null>(null);
   const keep = useMemo(() => ({ key: keptKey(options.draftOwner, start.kind, initial.formulaId), base: fingerprint(initial) }), [options.draftOwner, start.kind, initial]);
   const ready = useRef(false);
   const session = () => (typeof window === "undefined" ? null : window.sessionStorage);
@@ -362,9 +365,25 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
           canEditProduct={options.can.editProduct}
           copySources={start.kind === "new" ? options.copySources : []}
           onCopied={(c, from) => {
-            setD((x) => ({ ...x, batchBy: "kg", batchKg: c.batchKg, expectedPct: c.expectedPct, lines: c.lines, steps: c.steps, packaging: c.packaging ?? [] }));
-            setBanner({ ok: true, text: `Copied the ingredients and steps of ${from}. Check them on the next screens.` });
+            // ADR-133 item 9: keep how the source counts one batch; items that name another piece size wait for an answer.
+            const plan = planRecipeCopy(c, products.find((p) => p.id === d.productId)?.pieceG ?? null);
+            const kept = copiedWithAnswers(c, plan, {});
+            setD((x) => sync({ ...x, batchBy: plan.batchBy, pieces: plan.batchBy === "pcs" ? plan.pieces : x.pieces, batchKg: plan.batchKg, expectedPct: plan.expectedPct, lines: plan.lines, steps: kept.steps, packaging: kept.packaging }));
+            setCopyQ(plan.size ? { src: c, plan, answers: {} } : null);
+            setBanner({ ok: true, text: `Copied the ingredients and steps of ${from}${plan.batchBy === "pcs" ? `, counted in pieces like the source (${plan.pieces} pieces a batch)` : ""}. Check them on the next screens.` });
           }}
+        />
+      )}
+      {screen === 2 && copyQ && (
+        <SizeQuestions
+          q={copyQ}
+          onAnswer={(key, a) => {
+            const answers = { ...copyQ.answers, [key]: a };
+            const kept = copiedWithAnswers(copyQ.src, copyQ.plan, answers);
+            setCopyQ({ ...copyQ, answers });
+            setD((x) => ({ ...x, steps: kept.steps, packaging: kept.packaging }));
+          }}
+          onDone={() => setCopyQ(null)}
         />
       )}
 
@@ -727,7 +746,51 @@ function NewProductForm({ families, onCancel, onCreated }: { families: { code: s
 
 /* ================================================================== 2. batch */
 
-type CopyData = { batchKg: string; expectedPct: string; lines: RecipeLineDraft[]; steps: RecipeStepDraft[]; packaging?: RecipePackagingDraft[] };
+type CopyData = RecipeCopySource;
+type CopyQuestions = { src: RecipeCopySource; plan: RecipeCopyPlan; answers: Record<string, SizeAnswer | undefined> };
+
+/**
+ * ADR-133 item 9 (round 5 B B17): after "Copy from this recipe" from a product of another piece size, the packaging and
+ * steps that name the old size are asked about one by one; nothing size-specific is copied without an answer.
+ */
+function SizeQuestions({ q, onAnswer, onDone }: { q: CopyQuestions; onAnswer: (key: string, a: SizeAnswer) => void; onDone: () => void }) {
+  const text = sizeQuestion(q.plan, q.src.from);
+  const to = q.plan.size?.to;
+  const chip = (on: boolean) => cx("min-h-[48px] rounded-full border px-4 text-[15px]", on ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface");
+  const open = q.plan.held.filter((h) => !q.answers[h.key]).length;
+  return (
+    <Card className="mt-4 flex flex-col gap-3 border-2 border-[var(--warn-bd)]" data-testid="copy-size-questions">
+      <h2 className="text-[17px] font-semibold">Another piece size</h2>
+      <p className="text-[15px]">{text}</p>
+      {q.plan.held.map((h) => (
+        <div key={h.key} className="grid gap-2 rounded-[12px] bg-surface-2 p-3" data-testid={`size-item-${h.key}`}>
+          <p className="text-[15px]">
+            <b>{h.kind === "packaging" ? `Packaging: ${h.what}` : `Step: ${h.what}`}</b>
+            {h.words !== h.what && <span className="block text-[14px] text-fg-2">“{h.words}”</span>}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" aria-pressed={q.answers[h.key] === "drop"} className={chip(q.answers[h.key] === "drop")} onClick={() => onAnswer(h.key, "drop")}>
+              Leave it out
+            </button>
+            {h.kind === "step" && to && (
+              <button type="button" aria-pressed={q.answers[h.key] === "change"} className={chip(q.answers[h.key] === "change")} onClick={() => onAnswer(h.key, "change")}>
+                Copy and change {q.plan.size!.from} g to {to} g
+              </button>
+            )}
+            <button type="button" aria-pressed={q.answers[h.key] === "keep"} className={chip(q.answers[h.key] === "keep")} onClick={() => onAnswer(h.key, "keep")}>
+              {h.kind === "packaging" ? "Copy it anyway" : "Copy as it is"}
+            </button>
+          </div>
+        </div>
+      ))}
+      <div>
+        <Button type="button" variant="secondary" size="lg" onClick={onDone} disabled={open > 0}>
+          {open > 0 ? `${open} still to answer` : "Done"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
 
 function BatchScreen({
   d,

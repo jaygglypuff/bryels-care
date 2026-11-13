@@ -1,7 +1,7 @@
 "use client";
 import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
-import { batchPlanText, checkBatchSizes, proposeBatches } from "@/modules/production/batch-plan";
+import { batchChoiceOptions, batchPlanText, checkBatchSizes, proposeBatches } from "@/modules/production/batch-plan";
 import { cx, Input } from "@/ui/core";
 
 /**
@@ -20,7 +20,7 @@ export function BatchChoice({ pieces, refBatchG, yieldPct, pieceG, largestG, lar
   if (!p) {
     return <input type="hidden" name="batchMode" value="split" />;
   }
-  const effective = mode === "one" && !p.one.allowed ? "split" : mode;
+  const effective = mode === "one" && (!p.one.allowed || p.split.count === 1) ? "split" : mode;
   const check = effective === "custom" ? checkBatchSizes(sizes, n, p.maxPieces, word) : null;
   const opt = (value: "split" | "one" | "custom", title: string, detail: string, disabled = false) => (
     <label
@@ -44,9 +44,8 @@ export function BatchChoice({ pieces, refBatchG, yieldPct, pieceG, largestG, lar
       <p className="text-[15px] text-fg-2" data-testid="batch-proposal">
         One batch of the recipe makes about {p.refPieces.toLocaleString("en-PH")} {word}. The largest batch is {p.maxPieces.toLocaleString("en-PH")} {word} ({p.largestFrom}).
       </p>
-      {opt("split", `Split into ${p.split.count} ${p.split.count === 1 ? "batch" : "batches"}`, batchPlanText(p.split.sizes, word))}
-      {opt("one", "Make it one batch", p.one.allowed ? `1 batch of ${n.toLocaleString("en-PH")} ${word}` : p.one.reason!, !p.one.allowed)}
-      {opt("custom", "Choose sizes", "For example 1,500 + 500. Each one up to the largest batch.")}
+      {/* ADR-133 item 8: one choice when splitting gives one batch (never the same choice twice). */}
+      {batchChoiceOptions(p, word).map((o) => opt(o.value, o.title, o.detail, o.disabled))}
       {effective === "custom" && (
         <div className="grid gap-2 rounded-[14px] border border-line p-3">
           {sizes.map((v, i) => (

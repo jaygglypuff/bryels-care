@@ -100,6 +100,8 @@ export type PendingOrder = {
   qty: string;
   uom: string;
   since: Date | null;
+  /** Site of the order (always one of the viewer's sites). */
+  siteCode?: string;
 };
 
 export type TraceResult = {
@@ -417,7 +419,7 @@ class Tracer {
       }
       if (!(Number(r.qty) > 0)) return;
       const words = `${stage === "set_aside" ? "Set aside" : "Taken off the shelf"} for order ${r.orderNumber} (${r.customerName})`;
-      this.pending.push({ stage, words, customerId: r.customerId, customerName: r.customerName, orderId: r.orderId, orderNumber: r.orderNumber, shipmentId: r.shipmentId ?? null, lotId: lot.id, lotNumber: lot.number, productName: lot.label, qty: r.qty, uom: lot.uom ?? "", since: r.since });
+      this.pending.push({ stage, words, customerId: r.customerId, customerName: r.customerName, orderId: r.orderId, orderNumber: r.orderNumber, shipmentId: r.shipmentId ?? null, lotId: lot.id, lotNumber: lot.number, productName: lot.label, qty: r.qty, uom: lot.uom ?? "", since: r.since, siteCode: this.siteCodes.get(r.siteId) });
     };
     for (const r of setAside) add("set_aside", r);
     for (const r of picked) add("picked", r);
@@ -581,7 +583,8 @@ export async function traceGenealogy(ctx: AuthContext, q: { lotNumber?: string; 
 }
 
 export type TraceRow = {
-  direction: "subject" | "reverse" | "forward";
+  /** `waiting`: ADR-124 / ADR-133 item 5, set aside or taken off the shelf for an order, not sent yet. */
+  direction: "subject" | "reverse" | "forward" | "waiting";
   depth: number;
   kind: string;
   number: string;
@@ -629,6 +632,28 @@ export function flattenTrace(t: TraceResult): TraceRow[] {
   if (t.root) rows.push(row(t.root, "subject", 0));
   walk(t.reverse, "reverse", 1);
   walk(t.forward, "forward", 1);
+  // ADR-133 item 5 (ADR-124 open): the orders the lot waits for, after the forward tree. Only the viewer's sites
+  // (traceGenealogy counts the others as hidden and never lists them).
+  for (const p of t.pendingOrders) {
+    rows.push({
+      direction: "waiting",
+      depth: 1,
+      kind: p.stage === "picked" ? "taken_off_shelf_for_order" : "set_aside_for_order",
+      number: p.orderNumber,
+      label: `${p.words} · lot ${p.lotNumber} (${p.productName})`,
+      status: p.stage === "picked" ? "taken off the shelf" : "set aside",
+      site: p.siteCode ?? "",
+      qty: p.qty,
+      uom: p.uom,
+      role: "waiting for the order",
+      supplier: "",
+      supplierLot: "",
+      receipt: "",
+      customer: p.customerName,
+      order: p.orderNumber,
+      date: p.since ? p.since.toISOString() : "",
+    });
+  }
   return rows;
 }
 

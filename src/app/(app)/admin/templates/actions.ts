@@ -57,6 +57,8 @@ export async function versionAction(_prev: ActionState, f: FormData): Promise<Ac
   switch (str(f, "op")) {
     case "new_draft":
       return run(() => createDraftVersion(ctx, templateId, str(f, "changeNote") || null), "New draft created from the latest version.", path);
+    case "new_draft_newer":
+      return run(() => createDraftVersion(ctx, templateId, str(f, "changeNote") || "Newer layout", { newerLayout: true }), "New draft with the newer layout. Look at a test page, then send it to QA.", path);
     case "save":
       return run(() => updateDraftDefinition(ctx, versionId, str(f, "definition"), str(f, "changeNote") || null), "Draft saved and validated.", path);
     case "submit":

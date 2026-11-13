@@ -11,6 +11,7 @@ import { approvalProgress, canDecide } from "./crm-approvals";
 import { businessDate, canSeePrices, isUuid } from "./crm-support";
 import { ORDER_STATUS_LABEL, type OrderStatus, approveOrder, submitOrder } from "./orders";
 import { orderDaysLate } from "./late";
+import { invoiceStageHidden, shownOrderStatus } from "./invoice-stage";
 
 /**
  * Order status board (US-4-06 AC1): one column per resting sales order state (`submitted` is passed
@@ -75,12 +76,14 @@ export async function orderBoard(ctx: AuthContext) {
         .where(inArray(salesOrderLines.salesOrderId, rows.map((r) => r.o.id)))
     : [];
   const prices = canSeePrices(ctx);
+  // ADR-133 item 6: without invoice access (setting off) billed orders sit in "Sent out" and the "Billed" column goes.
+  const hideBilled = await invoiceStageHidden(ctx, ctx.currentSiteId);
   const sod = await sodRequired(db, ctx.organizationId, "sales_order");
   const today = businessDate();
   const cards: OrderCard[] = [];
   for (const { o, customerName } of rows) {
     const ls = lines.filter((l) => l.orderId === o.id);
-    const status = o.status as OrderStatus;
+    const status = shownOrderStatus(o.status as OrderStatus, hideBilled);
     const moves: Record<string, MoveVerdict> = {};
     const approval = status === "pending_approval" ? await approvalProgress(db, ctx.organizationId, { recordType: "sales_order", recordId: o.id, siteId: o.siteId, basis: (o.approvalBasis ?? {}) as Record<string, string | boolean> }) : null;
     for (const col of BOARD_COLUMNS) moves[col.key] = verdict(ctx, o, status, col.key, approval ? canDecide(ctx, "sales_order", approval.next, o.submittedAt, [o.createdBy, o.submittedBy], sod, o.siteId) : false);
@@ -101,7 +104,7 @@ export async function orderBoard(ctx: AuthContext) {
     });
   }
   return {
-    columns: BOARD_COLUMNS.map((c) => ({ ...c, cards: cards.filter((x) => x.status === c.key) })),
+    columns: BOARD_COLUMNS.filter((c) => !(hideBilled && c.key === "invoiced")).map((c) => ({ ...c, cards: cards.filter((x) => x.status === c.key) })),
     pricesVisible: prices,
   };
 }

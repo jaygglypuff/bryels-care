@@ -4,7 +4,7 @@ import { packagingUsedFor, wrapperBalanceSentence, wrapperWord } from "@/modules
 import { Button, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { ScanOrPick } from "@/ui/scan-or-pick";
-import { finishBatchAction } from "./actions";
+import { finishBatchAction, withdrawFinishCheckAction } from "./actions";
 import { returnWrappersAction } from "../../orders/[workOrderId]/flow-actions";
 
 /**
@@ -38,7 +38,19 @@ export type FinishFormProps = {
   checkers: { id: string; displayName: string }[];
   /** ADR-130: the checker of the counts types their OWN password here (a name alone never signs). Always true. */
   requirePassword?: boolean;
+  /** ADR-130 `production.sign_off.same_device`: off = the checker checks only on their own phone (ADR-133). */
+  sameDevice?: boolean;
 };
+
+/** "Jun or Dino" (first names, at most 3) of the people who may check. */
+function checkerNames(list: { displayName: string }[]): string {
+  const names = [...new Set(list.map((c) => c.displayName.trim().split(/\s+/)[0]))];
+  if (!names.length) return "a second person";
+  const shown = names.slice(0, 3);
+  const rest = names.length - shown.length;
+  if (rest > 0) return `${shown.join(", ")} or ${rest === 1 ? "1 other" : `${rest} others`}`;
+  return shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} or ${shown.at(-1)}`;
+}
 
 const n = (v: string) => {
   const x = Number(v.replace(/,/g, ""));
@@ -62,6 +74,11 @@ export function FinishForm(p: FinishFormProps) {
   // Kept in state so a server error does not clear them (React resets uncontrolled fields after an action).
   const [checkerId, setCheckerId] = useState("");
   const [checkerPassword, setCheckerPassword] = useState("");
+  // ADR-133: "phone" = send the counts to the checker's own phone; "here" = their own password on this phone (only
+  // while same-device signing is on).
+  const [checkMode, setCheckMode] = useState<"phone" | "here">(p.sameDevice ? "here" : "phone");
+  const onPhone = p.needsChecker && (checkMode === "phone" || !p.sameDevice);
+  const who = checkerNames(p.checkers);
   const [problemReason, setProblemReason] = useState("");
   const [locationRef, setLocationRef] = useState(p.hold?.id ?? "");
   useEffect(() => {
@@ -119,8 +136,9 @@ export function FinishForm(p: FinishFormProps) {
       if ((v?.leftOver ?? "") === "" || (!stepDamaged && (v?.damaged ?? "") === "")) out.push(`Count the ${wrapperWord(b.materialName)}: how many are left over? Tap Yes if all are as expected.`);
     }
     if ((needsReport || missingWrappers) && problemReason.trim().length < 10) out.push(missingWrappers && !needsReport ? "Some wrappers are missing: count the left-over ones again, or write what happened (at least 10 characters)." : "Write what happened (at least 10 characters).");
-    if (p.needsChecker && !checkerId) out.push("Choose who checked.");
-    if (p.needsChecker && !checkerPassword) out.push("The checker types their own password.");
+    if (p.needsChecker && !onPhone && !checkerId) out.push("Choose who checked.");
+    if (p.needsChecker && !onPhone && !checkerPassword) out.push("The checker types their own password.");
+    if (onPhone && p.checkers.length === 0) out.push("Nobody else from production can check at this site yet. Ask the site manager to add a second person.");
     return out;
   }
   function askToConfirm() {
@@ -144,6 +162,7 @@ export function FinishForm(p: FinishFormProps) {
     >
       <input type="hidden" name="batchId" value={p.batchId} />
       {p.orderId && <input type="hidden" name="orderId" value={p.orderId} />}
+      <input type="hidden" name="checkMode" value={onPhone ? "phone" : "here"} />
       <input type="hidden" name="countsFromLog" value={fromLog ? "yes" : "no"} />
       <input type="hidden" name="changeCounts" value={change ? "yes" : "no"} />
       <input type="hidden" name="rejectTypes" value={types.join("|")} />
@@ -321,10 +340,25 @@ export function FinishForm(p: FinishFormProps) {
       )}
 
       {p.needsChecker && (
-        <fieldset className="grid gap-3 rounded-[16px] border border-line p-4 sm:grid-cols-2">
+        <fieldset className="grid gap-3 rounded-[16px] border border-line p-4 sm:grid-cols-2" data-testid="finish-checker">
           <legend className="px-1 text-[14px] font-semibold">A second person checks your counts</legend>
-          <p className="text-[13px] text-fg-2 sm:col-span-2">The recipe asks for this. Ask someone from production to look at the counts above, then they choose their name and type their own password.</p>
           {p.checkers.length === 0 && <p className="text-[14px] text-[var(--bad-fg)] sm:col-span-2">Nobody else from production can check at this site yet. Ask the site manager to add a second person.</p>}
+          {p.sameDevice && (
+            <div className="flex flex-wrap gap-2 sm:col-span-2" role="radiogroup" aria-label="How does the second person check?">
+              {(["here", "phone"] as const).map((m) => (
+                <button key={m} type="button" role="radio" aria-checked={checkMode === m} onClick={() => setCheckMode(m)} className={cx("min-h-[52px] flex-1 rounded-full border px-4 text-[16px]", checkMode === m ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")} data-testid={`check-mode-${m}`}>
+                  {m === "here" ? "They are here (their password)" : "On their own phone"}
+                </button>
+              ))}
+            </div>
+          )}
+          {onPhone ? (
+            <p className="text-[15px] sm:col-span-2" data-testid="check-on-phone">
+              The recipe asks for this. Tap the button below: {who} {/ or \d+ others$/.test(who) ? "get" : "gets"} your counts on their phone. When they tap &quot;Looks right&quot;, the batch goes to the QA waiting area.
+            </p>
+          ) : (
+            <>
+          <p className="text-[13px] text-fg-2 sm:col-span-2">The recipe asks for this. Ask someone from production to look at the counts above, then they choose their name and type their own password.</p>
           <Field label="Name" htmlFor="checkerId" error={fe.checkerId}>
             <Select id="checkerId" name="checkerId" required value={checkerId} onChange={(e) => setCheckerId(e.target.value)}>
               <option value="">Choose…</option>
@@ -339,6 +373,8 @@ export function FinishForm(p: FinishFormProps) {
             <Field label="Their password (typed by them)" htmlFor="checkerPassword" error={fe.checkerPassword}>
               <Input id="checkerPassword" name="checkerPassword" type="password" autoComplete="off" required value={checkerPassword} onChange={(e) => setCheckerPassword(e.target.value)} />
             </Field>
+          )}
+            </>
           )}
         </fieldset>
       )}
@@ -386,14 +422,14 @@ export function FinishForm(p: FinishFormProps) {
       {confirming ? (
         <div className="rounded-[16px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4" role="alertdialog" aria-labelledby="fin-confirm-title" data-testid="finish-confirm">
           <p id="fin-confirm-title" className="text-[16px] font-semibold">
-            Finish batch {p.batchNumber}? You can&apos;t change the counts after this.
+            {onPhone ? `Send the counts of batch ${p.batchNumber} to ${who} to check?` : `Finish batch ${p.batchNumber}? You can't change the counts after this.`}
           </p>
           <p className="mt-1 text-[15px]">
-            {goodN} good {p.pieceWord} go to {where} for the quality check{needsReport ? "; a problem report is opened for QA" : ""}.
+            {onPhone ? `When they say "Looks right", ${goodN} good ${p.pieceWord} go to ${where} for the quality check${needsReport ? "; a problem report is opened for QA" : ""}.` : `${goodN} good ${p.pieceWord} go to ${where} for the quality check${needsReport ? "; a problem report is opened for QA" : ""}.`}
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
-            <SubmitButton size="lg" pendingText="Finishing…" autoFocus>
-              Yes, finish
+            <SubmitButton size="lg" pendingText={onPhone ? "Sending…" : "Finishing…"} autoFocus>
+              {onPhone ? "Yes, send" : "Yes, finish"}
             </SubmitButton>
             <Button type="button" variant="secondary" size="lg" onClick={() => setConfirming(false)}>
               Back
@@ -403,11 +439,25 @@ export function FinishForm(p: FinishFormProps) {
       ) : (
         <div>
           <Button type="button" variant="cta" size="lg" className="w-full" onClick={askToConfirm} disabled={tooMany || goodN <= 0} data-testid="finish-batch">
-            {needsReport || missingWrappers ? "Finish and report the problem" : "Finish and send to QA"}
+            {onPhone ? "Send the counts to be checked" : needsReport || missingWrappers ? "Finish and report the problem" : "Finish and send to QA"}
           </Button>
           {tooMany && goodN > 0 && <p className="mt-2 text-[14px] text-muted">More wrappers are counted than were taken. Count the left-over and damaged ones again.</p>}
         </div>
       )}
+    </form>
+  );
+}
+
+/** ADR-133: take the counts back while they wait for the second person (to change them). */
+export function TakeBack({ batchId }: { batchId: string }) {
+  const [state, action] = useInPlaceAction(withdrawFinishCheckAction);
+  return (
+    <form action={action} className="grid gap-2">
+      <input type="hidden" name="batchId" value={batchId} />
+      <SubmitButton variant="secondary" size="lg" pendingText="Taking back…" data-testid="finish-check-take-back">
+        Take the counts back to change them
+      </SubmitButton>
+      <FormMessage state={state} />
     </form>
   );
 }

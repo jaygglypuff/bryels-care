@@ -129,3 +129,18 @@ No sideways scroll on any page walked; no frame target under 44 px on phones; ev
 - Walk at 390, 820, 1366, 1440 px for owner, manager, operator, checker, warehouse, sales, purchasing, finance, QA:
   no sideways scroll; no frame target under 44 px; exactly one menu button on phones for office roles and none for
   floor roles; Esc closes the drawer; "0003" + Enter never opens a record.
+
+## 3. Leftovers part B: flows and documents (ADR-133, 2026-11-13)
+
+| Item (audit / ADR open point) | Status | Notes |
+|---|---|---|
+| Finish checker on the checker's own phone (ADR-130 open) | done | "Send the counts to be checked" → card "Check the counts" on `/production/checks` → "Looks right" finishes in one transaction; migration 0042 `batch_finish_checks`; `tests/integration/production/finish-check.test.ts` |
+| Proof-of-delivery Save after a failed try (A B11, ADR-130 open) | done | cause: the signature file lived in a hidden input filled on pointer-up, and React resets form fields after each form action; Save now reads the canvas at tap time; `tests/unit/proof-form-data.test.ts`, retry path in `tests/integration/sales/fulfilment.test.ts` |
+| "Other ways" weigh form sends `lotVia` (ADR-126 open) | done | `tests/integration/scan/other-ways-weigh.test.ts` |
+| Offline Weigh no-signal path tested (ADR-130) | done | `queuedWeighCommand`; `tests/integration/production/offline-weigh-queue.test.ts` |
+| Waiting orders in the trace export (ADR-124 open) | done | `direction = waiting` rows; `tests/integration/quality/trace-pending-orders.test.ts` |
+| Invoice stage setting covers the order chip and Home (ADR-126 open) | done | `src/modules/sales/invoice-stage.ts`; `tests/integration/finance/billing-step.test.ts` |
+| Duplicate-customer check in imports (ADR-131) | done | `tests/integration/imports/imports.test.ts`, `tests/unit/customer-create-paths.test.ts` |
+| Same batch choice twice on New production order (B B7) | done | `batchChoiceOptions`; `tests/unit/batch-choice-options.test.ts` |
+| Recipe "Copy from this recipe" pieces → kg and 135 g items (B B17) | done | `src/modules/masterdata/recipe-copy.ts`; `tests/unit/recipe-copy.test.ts` |
+| Delivery receipt v2, name first (ADR-124 open) | done | renderer v2; v1 receipts keep v1; demo approves v2 (`DEMO_SEED_VERSION` 2026-11-13.1); `tests/integration/documents/delivery-receipt-v2.test.ts`, `tests/unit/documents/delivery-receipt-v2.test.ts` |

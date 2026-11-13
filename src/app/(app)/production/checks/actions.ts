@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
-import { checkDispenses, checkStep, returnDispense, returnStep } from "@/modules/production";
+import { checkDispenses, checkStep, confirmFinishCheck, returnDispense, returnFinishCheck, returnStep } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
 registerAppHooks();
@@ -74,6 +74,30 @@ export async function stepNotRightAction(_: ActionState, fd: FormData): Promise<
     await returnStep(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo, reason: reasonOf(fd) });
     refreshCurrentPage();
     return { ok: true, message: "Sent back with your reason. You will see it here again when it is done." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-133 "Looks right" on a Finish card: the batch moves to the QA waiting area now (one transaction). */
+export async function confirmFinishCheckAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await confirmFinishCheck(ctx, { checkId: uuid.parse(str(fd, "checkId")), idempotencyKey: str(fd, "idempotencyKey") });
+    refreshCurrentPage();
+    return { ok: true, message: `Checked: batch ${r.batchNumber} is in the QA waiting area (${r.location}). Thank you.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-133 "Not right" on a Finish card: back to the operator with the reason; nothing moves. */
+export async function finishNotRightAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    await returnFinishCheck(ctx, { checkId: uuid.parse(str(fd, "checkId")), reason: reasonOf(fd) });
+    refreshCurrentPage();
+    return { ok: true, message: "Sent back with your reason. The operator counts again and sends it to you." };
   } catch (e) {
     return toActionState(e);
   }

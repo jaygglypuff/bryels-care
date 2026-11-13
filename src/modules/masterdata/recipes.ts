@@ -48,6 +48,7 @@ import { loadApprovalPolicy } from "./approval-policy";
 import { approvalState, businessToday, effectiveLabel, requireAny, revisionDecisionFor } from "./versioning";
 import { OWNER_ALONE_VIEWER_NOTE, ownerAloneApprovedSentence } from "@/lib/owner-alone-words";
 import { users } from "@/db/schema";
+import type { RecipeCopySource } from "./recipe-copy";
 
 /**
  * Guided "New recipe" wizard (ADR-089), server side. A thin orchestrator ON TOP of the existing
@@ -889,7 +890,11 @@ export async function getRecipeCopy(ctx: AuthContext, formulaId: string) {
   const r = await getRecipe(ctx, formulaId);
   if (!r) throw new DomainError("not_found", "Recipe not found.");
   const { batchKg, expectedPct, lines, steps } = r.draft;
-  // Packaging is copied per piece (worked out again for the new product's pieces); the batch size by weight.
+  // Packaging is copied per piece (worked out again for the new product's pieces).
   const packaging = (r.draft.packaging ?? []).filter((p) => p.perPiece).map((p) => ({ ...p, from: null }));
-  return { from: `${r.product.name} (${r.formula.code})`, batchKg, expectedPct, lines, steps, packaging };
+  // ADR-133 item 9: the counting mode and the piece size of the source travel with the copy (planRecipeCopy keeps
+  // "by pieces" and asks about packaging and steps that name the old size).
+  const packagingNames = Object.fromEntries(packaging.map((p) => [p.materialId, r.materialNames[p.materialId] ?? ""]));
+  const copy: RecipeCopySource = { from: `${r.product.name} (${r.formula.code})`, batchBy: r.draft.batchBy ?? "kg", pieces: r.draft.pieces ?? "", batchKg, expectedPct, pieceG: r.product.pieceG, lines, steps, packaging, packagingNames };
+  return copy;
 }

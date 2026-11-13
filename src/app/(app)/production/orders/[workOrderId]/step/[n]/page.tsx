@@ -32,7 +32,7 @@ function plainStep(kind: string, isCheck: boolean, isWait: boolean, perPiece = f
       ? "Wrap or fill the pieces, stick a label on each piece, pack them in boxes and stick one label on each box."
       : "Wrap or fill the pieces, pack them in boxes and stick one label on each box.";
   if (kind === "dispensing" || kind === "weighing") return "Weigh out each ingredient on the Weigh screen.";
-  if (kind === "transfer") return "Answer the questions about what was made and the packing left over, then tap Finish and send to QA. The batch goes to the QA waiting area.";
+  if (kind === "transfer") return "Answer the questions about what was made and the packing left over, then tap Finish and send to QA, or Send the counts to be checked when a second person checks them on their phone. The batch goes to the QA waiting area.";
   return "Do this step, write the numbers it asks for, then tap Step done.";
 }
 

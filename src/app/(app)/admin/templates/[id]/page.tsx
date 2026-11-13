@@ -42,6 +42,8 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
         secondary={
           <>
             {!open && ctx.can("documents.template.edit") && <VersionOp templateId={t.id} op="new_draft" label="Start a new version" variant="cta" />}
+            {/* ADR-133 item 10: a newer layout (e.g. delivery receipt v2, product name first) starts as a draft QA must OK. */}
+            {!open && ctx.can("documents.template.edit") && t.newerLayout && <VersionOp templateId={t.id} op="new_draft_newer" label={`Start a new version with the newer layout (v${t.newerLayout.version})`} />}
           </>
         }
       />

@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { inventoryLots, salesOrderLines, stockAllocations } from "@/db/schema";
-import { traceGenealogy } from "@/modules/quality";
+import { flattenTrace, genealogyExport, traceGenealogy } from "@/modules/quality";
 import { allocateOrder, confirmOrder, createOrder, dispatchShipment, manilaToday } from "@/modules/sales";
 import { resetTestDatabase } from "../../support/db";
 import { pickAll, verifyAll } from "../../support/w3e";
@@ -55,6 +55,20 @@ describe("trace names the order a lot waits for", () => {
     expect(p).toHaveLength(1);
     expect(p[0]).toMatchObject({ stage: "set_aside", orderNumber, customerName, qty: "12.000000" });
     expect(p[0].words).toBe(`Set aside for order ${orderNumber} (${customerName})`);
+  });
+
+  it("the trace export lists the waiting order (ADR-133 item 5), only at the viewer's sites", async () => {
+    const t = await traceGenealogy(w.qa, { lotNumber });
+    const rows = flattenTrace(t).filter((r) => r.direction === "waiting" && r.order === orderNumber);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: "set_aside_for_order", number: orderNumber, customer: customerName, status: "set aside", site: "NFD", qty: "12.000000" });
+    expect(rows[0].label.startsWith(`Set aside for order ${orderNumber} (${customerName}) · lot ${lotNumber} (`)).toBe(true);
+    // The export file (genealogyExport.fetch is what runExport calls) carries the same row.
+    const exported = await genealogyExport.fetch(w.qa, { lotNumber }, 5000);
+    expect(exported.some((r) => r.direction === "waiting" && r.order === orderNumber && r.customer === customerName)).toBe(true);
+    // Another site's QA: nothing traces, so nothing is exported.
+    const rvsQa = withPermissions(w.qa, bundle("qa_qc"), w.qa.roleCodes, [w.rvs]);
+    await expect(genealogyExport.fetch(rvsQa, { lotNumber }, 5000)).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("taken off the shelf: 'Taken off the shelf for order …', not also set aside", async () => {

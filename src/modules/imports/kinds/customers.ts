@@ -1,9 +1,9 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { customers } from "@/db/schema";
+import { customers, importJobRows } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
-import { createCustomer } from "@/modules/sales";
+import { createCustomer, similarBecause } from "@/modules/sales";
 import { nameMatches, nextLoaderCode } from "./common";
 import type { ExistingMatch, ImportKindHandler } from "./types";
 
@@ -35,6 +35,8 @@ type CustomerValues = {
 };
 
 const emailOk = (v: string) => z.email().safeParse(v).success;
+/** Run scratch key: the customers loaded by earlier rows of this chunk (ADR-133 item 7). */
+const LOADED_CUSTOMERS = "customers.loaded";
 
 export const customersKind: ImportKindHandler<CustomerValues> = {
   kind: "customers",
@@ -115,7 +117,7 @@ export const customersKind: ImportKindHandler<CustomerValues> = {
     return { values: v, tier1Key: code ? `code:${code}` : null, matchName: name };
   },
   async findExisting(tx, ctx, _job, rows) {
-    const existing = await tx.select({ id: customers.id, code: customers.code, name: customers.name }).from(customers).where(eq(customers.organizationId, ctx.organizationId));
+    const existing = await tx.select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, email: customers.email }).from(customers).where(eq(customers.organizationId, ctx.organizationId));
     const out = new Map<number, ExistingMatch>();
     for (const { rowNo, values } of rows) {
       const same = values.code ? existing.find((c) => c.code === values.code) : undefined;
@@ -123,8 +125,28 @@ export const customersKind: ImportKindHandler<CustomerValues> = {
         out.set(rowNo, { tier: 1, entityType: "customer", entityId: same.id, label: `${same.code} ${same.name}`, message: `Customer ${same.code} already exists; the row is skipped (imports are create-only).` });
         continue;
       }
+      // ADR-133 item 7: the New customer screen's "Already a customer?" rule (same phone, same email, nearly the same
+      // name) also holds here; the custodian decides "same as existing", "new record" or "reject".
+      const twin = existing.map((c) => ({ c, why: similarBecause({ name: values.name, phone: values.phone, email: values.email }, c) })).find((x) => x.why.length);
+      if (twin) {
+        out.set(rowNo, { tier: 2, entityType: "customer", entityId: twin.c.id, label: `${twin.c.code} ${twin.c.name}`, message: `Possible duplicate: the same ${twin.why.join(" and ")} as existing customer ${twin.c.code} ${twin.c.name}. Decide "same as existing", "new record" or "reject".` });
+        continue;
+      }
       const m = nameMatches(values.name, existing.map((c) => ({ id: c.id, label: `${c.code} ${c.name}`, names: [c.name] })), "customer", "customer");
       if (m) out.set(rowNo, m);
+    }
+    return out;
+  },
+  /** ADR-133 item 7: two rows of the file with the same phone or email (the second one is checked again when it posts). */
+  fileChecks(rows) {
+    const out = new Map<number, string[]>();
+    const seen: { rowNo: number; values: CustomerValues }[] = [];
+    for (const r of rows) {
+      const first = seen.find((x) => similarBecause(r.values, { name: x.values.name, phone: x.values.phone, email: x.values.email }).some((w) => w !== "name"));
+      if (first) {
+        const why = similarBecause(r.values, { name: first.values.name, phone: first.values.phone, email: first.values.email }).filter((w) => w !== "name");
+        out.set(r.rowNo, [`Same ${why.join(" and ")} as row ${first.rowNo} of this file: if it is the same customer, leave this row out.`]);
+      } else seen.push(r);
     }
     return out;
   },
@@ -135,21 +157,34 @@ export const customersKind: ImportKindHandler<CustomerValues> = {
     }
     if (!v.shipToLine1 || !v.shipToCity) throw new DomainError("validation", "The ship-to address (street and city) is required.", { field: "ship_to_line1" });
     const code = v.code ?? (await nextLoaderCode(k.tx, "customers", "code", k.ctx.organizationId, "CUS", k.state));
-    const c = await createCustomer(
-      k.ctx,
-      {
-        code,
-        name: v.name,
-        status: v.status,
-        shipTo: { label: "Main", line1: v.shipToLine1, city: v.shipToCity, province: v.shipToProvince, contactName: v.contactName, phone: v.phone },
-        contactName: v.contactName,
-        phone: v.phone,
-        email: v.email,
-        minShelfLifeDays: v.minShelfLifeDays ?? 0,
-        ...(credit ? { creditLimitAmount: v.creditLimitAmount, paymentTermsDays: v.paymentTermsDays, taxIdentifier: v.taxIdentifier } : {}),
-      },
-      { tx: k.tx },
-    );
+    // ADR-133 item 7: createCustomer runs the "Already a customer?" check on every row. The custodian's "new record"
+    // decision on a possible duplicate is the screen's "This is a different customer" tick. A match with a row loaded
+    // earlier in this run fails the row with the reason in the import report. In the dry run (validation), a match
+    // with a customer that existed before is already the row's "possible duplicate" question (findExisting), so the
+    // dry run goes on and the custodian decides.
+    const [decided] = await k.tx.select({ decision: importJobRows.decision }).from(importJobRows).where(eq(importJobRows.id, k.row.id)).limit(1);
+    const loaded = (k.state.get(LOADED_CUSTOMERS) as Set<string> | undefined) ?? new Set<string>();
+    k.state.set(LOADED_CUSTOMERS, loaded);
+    const input = {
+      code,
+      name: v.name,
+      status: v.status,
+      shipTo: { label: "Main", line1: v.shipToLine1, city: v.shipToCity, province: v.shipToProvince, contactName: v.contactName, phone: v.phone },
+      contactName: v.contactName,
+      phone: v.phone,
+      email: v.email,
+      minShelfLifeDays: v.minShelfLifeDays ?? 0,
+      ...(credit ? { creditLimitAmount: v.creditLimitAmount, paymentTermsDays: v.paymentTermsDays, taxIdentifier: v.taxIdentifier } : {}),
+    };
+    const c = await createCustomer(k.ctx, { ...input, duplicateCheck: true, confirmedDifferent: decided?.decision === "new_record" }, { tx: k.tx }).catch((e) => {
+      if (!(e instanceof DomainError && e.details?.code === "POSSIBLE_DUPLICATE")) throw e;
+      const similar = (e.details.similar as { id: string; code: string; name: string; why: string[] }[] | undefined) ?? [];
+      const inThisRun = similar.find((x) => loaded.has(x.id));
+      if (k.dryRun && similar.length > 0 && !inThisRun) return createCustomer(k.ctx, { ...input, duplicateCheck: true, confirmedDifferent: true }, { tx: k.tx });
+      const s = inThisRun ?? similar[0];
+      throw new DomainError("conflict", s ? `Not loaded: the same ${s.why.join(" and ")} as customer ${s.code} ${s.name}${inThisRun ? " (an earlier row of this file)" : ""}. If it is a different customer, choose "new record" for this row.` : "Not loaded: it looks like a customer we already have.", { field: "name", code: "POSSIBLE_DUPLICATE" });
+    });
+    loaded.add(c.id);
     return { entityType: "customer", entityId: c.id, label: c.code, warnings: v.code ? [] : [`Code ${c.code} assigned by the loader.`] };
   },
 };

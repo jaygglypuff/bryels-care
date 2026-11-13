@@ -353,7 +353,8 @@ describe("product, ingredients and versions", () => {
     expect(copy.lines.length).toBeGreaterThan(0);
     expect(copy.steps.length).toBeGreaterThan(0);
     const pid = await newProduct("Wizard Soap Copy");
-    const { from, ...parts } = copy;
+    // The wizard keeps the source counting mode (ADR-133 item 9); this new product has no piece size, so it saves by kg here.
+    const { from, packagingNames: _names, pieceG: _pieceG, ...parts } = { ...copy, batchBy: "kg" as const, pieces: "" };
     expect(from).toMatch(/F-GBS-01/);
     const r = await saveRecipe(planner, { productId: pid, formulaId: null, routingId: null, view: "g", changeSummary: "", useFrom: "", formulaNotes: "", routingNotes: "", ...parts });
     expect(r.formula).toMatchObject({ revisionNo: 1, status: "draft" });
@@ -413,7 +414,11 @@ describe("by pieces and packaging for each piece (ADR-088 §4, ADR-092)", () => 
     const again = await db.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id)).orderBy(asc(bomLines.lineNo));
     expect(again.map(({ id: _i, ...l }) => l)).toEqual(lines.map(({ id: _i, ...l }) => l));
     // "Copy from another recipe" carries the packaging per piece (worked out again for the new product)
-    expect((await getRecipeCopy(planner, r.formulaId)).packaging).toEqual([expect.objectContaining({ materialId: wrapper.id, perPiece: "1", from: null })]);
+    const copy = await getRecipeCopy(planner, r.formulaId);
+    expect(copy.packaging).toEqual([expect.objectContaining({ materialId: wrapper.id, perPiece: "1", from: null })]);
+    // ADR-133 item 9 (B B17): the copy keeps how the source counts one batch and says its piece size and packaging names.
+    expect(copy).toMatchObject({ batchBy: "pcs", pieces: "70", pieceG: "135" });
+    expect(copy.packagingNames[wrapper.id]).toBeTruthy();
   });
 
   it("refuses packaging as an ingredient, an ingredient as packaging, and pieces that are not a whole number", async () => {
