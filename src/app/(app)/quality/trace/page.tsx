@@ -19,10 +19,10 @@ export const metadata = { title: "Where it came from and where it went" };
 export const dynamic = "force-dynamic";
 
 const ROLE_LABEL = { consumed: "used", produced: "made", shipped: "shipped", on_order: "on order", relotted: "given a new lot number (transfer or customer return)" } as const;
-/** Pick a lot by its name instead of typing its number (ADR-088): the lots of the current site, newest use-by first. */
+/** Pick a lot by its name instead of typing its number (ADR-088): the lots of the current site, newest first (last received or made; ADR-132 §8, C report B18). */
 async function lotChoices(ctx: Awaited<ReturnType<typeof requireContext>>) {
   if (!ctx.can("inventory.lot.view")) return [];
-  const rows = await listLots(ctx, { includeEmpty: true });
+  const rows = await listLots(ctx, { includeEmpty: true, order: "newest" });
   return rows.map((l) => ({ lotNumber: l.lotNumber, label: `${l.itemName} · ${l.lotNumber}${l.supplierName ? ` · ${l.supplierName}` : ""}` }));
 }
 

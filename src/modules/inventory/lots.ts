@@ -50,7 +50,8 @@ export function allowedDestinationKinds(status: string, expiresOn: string | null
   return ["quarantine", "hold", "rejected"];
 }
 
-export type LotFilter = { q?: string; kind?: "material" | "product"; status?: string; locationId?: string; includeEmpty?: boolean };
+/** `order`: "fefo" (default, earliest expiry first) or "newest" (last received or made first; the trace and recall pickers, ADR-132 §8). */
+export type LotFilter = { q?: string; kind?: "material" | "product"; status?: string; locationId?: string; includeEmpty?: boolean; order?: "fefo" | "newest" };
 
 /** Lots of the current site with on-hand totals, in FEFO order (earliest expiry first). */
 export async function listLots(ctx: AuthContext, f: LotFilter = {}) {
@@ -113,7 +114,7 @@ export async function listLots(ctx: AuthContext, f: LotFilter = {}) {
     .where(and(...conds))
     .groupBy(inventoryLots.id, materials.id, products.id)
     .having(f.includeEmpty ? undefined : sql`coalesce(sum(${inventoryBalances.qtyBase}), 0) > 0`)
-    .orderBy(sql`${inventoryLots.expiresOn} asc nulls last`, asc(inventoryLots.lotNumber))
+    .orderBy(...(f.order === "newest" ? [desc(inventoryLots.createdAt), desc(inventoryLots.lotNumber)] : [sql`${inventoryLots.expiresOn} asc nulls last`, asc(inventoryLots.lotNumber)]))
     .limit(500);
   return rows;
 }

@@ -23,7 +23,7 @@ const ROLE_WORD = { start: "The one you chose", upstream: "Went into it", downst
 /** Pick a lot by its name instead of typing its number (ADR-088): the lots of the current site, newest use-by first. */
 async function lotChoices(ctx: Awaited<ReturnType<typeof requireContext>>) {
   if (!ctx.can("inventory.lot.view")) return [];
-  const rows = await listLots(ctx, { includeEmpty: true });
+  const rows = await listLots(ctx, { includeEmpty: true, order: "newest" });
   return rows.map((l) => ({ lotNumber: l.lotNumber, label: `${l.itemName} · ${l.lotNumber}${l.supplierName ? ` · ${l.supplierName}` : ""}` }));
 }
 
