@@ -1,15 +1,16 @@
 "use client";
 import Link from "next/link";
-import { CheckCircle2, Scale, ClipboardCheck, XCircle } from "lucide-react";
+import { CheckCircle2, Scale, ClipboardCheck, PackageCheck, XCircle } from "lucide-react";
 import { useState } from "react";
 import type { CheckCard } from "@/modules/production";
 import type { ActionState } from "@/lib/errors";
 import { Button, cx, Input } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction, type FormAction } from "@/ui/form";
-import { confirmStepAction, confirmWeighingsAction, stepNotRightAction, weighingNotRightAction } from "./actions";
+import { confirmFinishCheckAction, confirmStepAction, confirmWeighingsAction, finishNotRightAction, stepNotRightAction, weighingNotRightAction } from "./actions";
 
 const WEIGH_REASONS = ["Wrong lot", "Wrong weight", "Scale not zeroed", "Other"] as const;
 const STEP_REASONS = ["Not done right", "Wrong number", "Area not clean", "Other"] as const;
+const FINISH_REASONS = ["Wrong count", "Wrappers do not add up", "Wrong place", "Other"] as const;
 
 /**
  * The checker's list (ADR-130). The list keeps the last "Checked. Thank you." on top after the card it came from
@@ -43,6 +44,8 @@ export function ChecksList({ cards, viewerName }: { cards: CheckCard[]; viewerNa
           {cards.map((c) =>
             c.kind === "weighings" ? (
               <WeighingsCard key={c.key} card={c} confirm={wrap(confirmWeighingsAction)} notRight={wrap(weighingNotRightAction)} />
+            ) : c.kind === "finish" ? (
+              <FinishCheckCard key={c.key} card={c} confirm={wrap(confirmFinishCheckAction)} notRight={wrap(finishNotRightAction)} />
             ) : (
               <StepCheckCard key={c.key} card={c} confirm={wrap(confirmStepAction)} notRight={wrap(stepNotRightAction)} />
             ),
@@ -134,6 +137,44 @@ function StepCheckCard({ card, confirm, notRight }: { card: SCard; confirm: Form
         </Button>
       ) : (
         <NotRightForm hidden={{ batchId: card.batchId, stepNo: String(card.stepNo) }} reasons={STEP_REASONS} action={notRight} onCancel={() => setOpen(false)} />
+      )}
+    </section>
+  );
+}
+
+type FCard = Extract<CheckCard, { kind: "finish" }>;
+
+/** ADR-133: the Finish counts the operator sent. "Looks right" moves the batch to the QA waiting area at once. */
+function FinishCheckCard({ card, confirm, notRight }: { card: FCard; confirm: FormAction; notRight: FormAction }) {
+  const [state, action] = useInPlaceAction<ActionState>(confirm);
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check the counts of ${card.batchNumber}`} data-testid="check-card-finish">
+      <h2 className="flex items-center gap-2 text-title text-fg">
+        <PackageCheck size={24} aria-hidden /> Check the counts
+      </h2>
+      <p className="mt-1 text-[16px] text-fg-2">
+        {card.productName} · batch <span className="font-semibold tabular text-fg">{card.batchNumber}</span> · counted by {card.sentBy}
+      </p>
+      <ul className="mt-3 grid gap-1 rounded-[14px] bg-surface-2 p-3 text-[17px] text-fg">
+        {card.facts.map((f) => (
+          <li key={f}>{f}</li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[15px]">Count the pieces and the left-over wrappers yourself first.</p>
+      <form action={action} className="mt-2 grid gap-2">
+        <input type="hidden" name="checkId" value={card.checkId} />
+        <SubmitButton variant="cta" size="lg" pendingText="Saving…" className="w-full" data-testid="looks-right">
+          <CheckCircle2 size={20} aria-hidden /> Looks right — send to QA
+        </SubmitButton>
+        <FormMessage state={state} />
+      </form>
+      {!open ? (
+        <Button type="button" variant="secondary" size="lg" className="mt-2 w-full" onClick={() => setOpen(true)} data-testid="not-right">
+          <XCircle size={20} aria-hidden /> Not right
+        </Button>
+      ) : (
+        <NotRightForm hidden={{ checkId: card.checkId }} reasons={FINISH_REASONS} action={notRight} onCancel={() => setOpen(false)} />
       )}
     </section>
   );

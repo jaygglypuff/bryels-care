@@ -83,7 +83,7 @@ export async function postBatchToQuarantineLocked(
   batch: BatchRow,
   input: Omit<PostToQuarantineInput, "batchId" | "idempotencyKey">,
   signers: { checker?: AuthContext | null } = {},
-  opts: { finishDeviation?: boolean } = {},
+  opts: { finishDeviation?: boolean; checkerLater?: boolean } = {},
 ) {
   if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; only a batch being made can go to the QA waiting area.`);
   const steps = sortedSteps(batch.formulaSnapshot as FormulaSnapshot);
@@ -98,7 +98,8 @@ export async function postBatchToQuarantineLocked(
   // ADR-080 §6: the checker follows the frozen move-to-QA step's "needs a checker"; a recipe without that step needs
   // none (the Finish screen reads the same rule, getFinishView.needsChecker). Owner 2026-11-07: the old default (yes)
   // refused recipes made in the wizard with a message the screen never asked for.
-  if (transfer?.requiresChecker && !checker) throw new DomainError("validation", "A second person must check the counts. Choose who checked.", { field: "checkerId", rule: "V-SOD" });
+  // ADR-133: `checkerLater` is only the rolled-back dry run of "Send the counts to be checked"; nothing is posted with it.
+  if (transfer?.requiresChecker && !checker && !opts.checkerLater) throw new DomainError("validation", "A second person must check the counts. Choose who checked.", { field: "checkerId", rule: "V-SOD" });
   if (checker) {
     ctx.assertSeparation(checker.userId === ctx.userId, "The checker must be a different person from the operator.", { rule: "V-SOD" });
     checker.require("production.process_step_record.approve");

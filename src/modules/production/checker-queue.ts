@@ -2,11 +2,12 @@ import "server-only";
 import Decimal from "decimal.js";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batchMaterials, batches, dispenseRecords, inventoryLots, materials, processStepRecords, processStepReadings, products, users } from "@/db/schema";
+import { batchFinishChecks, batchMaterials, batches, dispenseRecords, inventoryLots, materials, processStepRecords, processStepReadings, products, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { getSetting } from "@/lib/settings";
 import { checkPermission } from "./execution";
-import { flowHref } from "./flow-paths";
+import { finishHref, flowHref } from "./flow-paths";
+import { finishCheckFacts, type FinishCheckSummary } from "./finish-check";
 import { plainWords } from "./plain-words";
 import { type FormulaSnapshot } from "./shared";
 import { plainNumber, weighUnitFor } from "./floor-words";
@@ -23,6 +24,8 @@ import { plainNumber, weighUnitFor } from "./floor-words";
  * |   one card per weighing when not)     |                                                |                                      |
  * | Check "Heat and mix" of B-26-0004     | process_step_records awaiting_check, done by   | the step kind's check permission     |
  * |                                      |  someone else                                  |                                      |
+ * | Check the counts of B-26-0004         | batch_finish_checks waiting, sent by someone   | production.process_step_record.approve |
+ * |  (ADR-133, Finish)                    |  else                                          |                                      |
  *
  * Read model only. The commands are `checkDispenses` / `returnDispense` and `checkStep` / `returnStep`, which
  * enforce the same rules again (separation of duties, permission at the site, still waiting).
@@ -60,6 +63,18 @@ export type CheckCard =
       stepKind: string;
       doneBy: string;
       /** What was typed on the step, in plain words ("Mix temperature: 70 °C"). */
+      facts: string[];
+      batchHref: string;
+    }
+  | {
+      /** ADR-133: Finish counts sent to be checked on the checker's own phone ("Looks right" finishes the batch). */
+      kind: "finish";
+      key: string;
+      checkId: string;
+      batchId: string;
+      batchNumber: string;
+      productName: string;
+      sentBy: string;
       facts: string[];
       batchHref: string;
     };
@@ -157,6 +172,21 @@ export async function checkerQueue(ctx: AuthContext): Promise<CheckerQueue> {
       .map((r) => `${plainWords(r.name)}: ${r.num !== null ? `${plainNumber(r.num)}${r.uom ? ` ${r.uom}` : ""}` : r.text ?? (r.bool === null ? "" : r.bool ? "yes" : "no")}${r.within === false ? " (outside the range)" : ""}`);
     cards.push({ kind: "step", key: `s:${s.id}`, batchId: s.batchId, batchNumber: b.batchNumber, productName: b.productName, stepNo: s.stepNo, stepName: plainWords(s.name), stepKind: s.kind ?? "", doneBy: s.doneBy ?? "someone", facts, batchHref: flowHref({ batchId: s.batchId, workOrderId: b.workOrderId }, `step/${s.stepNo}`) });
     count += 1;
+  }
+
+  // ADR-133: Finish counts waiting for a second person (the move-to-QA step's check permission).
+  if (canStepCheck) {
+    const sent = await db
+      .select({ id: batchFinishChecks.id, batchId: batchFinishChecks.batchId, summary: batchFinishChecks.summary, sentBy: users.displayName })
+      .from(batchFinishChecks)
+      .innerJoin(users, eq(users.id, batchFinishChecks.requestedBy))
+      .where(and(eq(batchFinishChecks.siteId, siteId), eq(batchFinishChecks.status, "waiting"), inArray(batchFinishChecks.batchId, [...byId.keys()]), ne(batchFinishChecks.requestedBy, ctx.userId)))
+      .orderBy(asc(batchFinishChecks.requestedAt));
+    for (const f of sent) {
+      const b = byId.get(f.batchId)!;
+      cards.push({ kind: "finish", key: `f:${f.id}`, checkId: f.id, batchId: f.batchId, batchNumber: b.batchNumber, productName: b.productName, sentBy: f.sentBy, facts: finishCheckFacts(f.summary as FinishCheckSummary), batchHref: finishHref(f.batchId) });
+      count += 1;
+    }
   }
   return { cards, count, together };
 }

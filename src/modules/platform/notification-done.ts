@@ -165,6 +165,12 @@ export const DONE_RULES: readonly DoneRule[] = [
     recordId: dedupePart(1),
     waiting: (q, _org, recIds) => ids(q, sql`select id::text as id from process_step_records where id in (${idList(recIds)}) and status = 'awaiting_check'`),
   },
+  // ADR-133: Finish counts sent to be checked (dedupe handoff.finish_check:<check>).
+  {
+    kinds: ["handoff.finish_check"],
+    recordId: dedupePart(1),
+    waiting: (q, _org, recIds) => ids(q, sql`select id::text as id from batch_finish_checks where id in (${idList(recIds)}) and status = 'waiting'`),
+  },
 ];
 
 const RULE_BY_KIND: ReadonlyMap<string, DoneRule> = new Map(DONE_RULES.flatMap((r) => r.kinds.map((k) => [k, r] as const)));

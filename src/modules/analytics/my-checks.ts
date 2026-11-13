@@ -24,7 +24,9 @@ export async function checksWaitingForMe(ctx: AuthContext): Promise<CheckItem[]>
       out.push(
         c.kind === "weighings"
           ? { key: c.key, text: `${c.weighings.length === 1 ? `Check ${c.operatorNames.join(" and ")}'s weighing` : `Check ${c.weighings.length} weighings`}: ${c.productName}`, detail: `Batch ${c.batchNumber} · weighed by ${c.operatorNames.join(" and ")}`, href: CHECKS_HREF, button: "Check" }
-          : { key: c.key, text: `Check "${c.stepName}": ${c.productName}`, detail: `Batch ${c.batchNumber} · done by ${c.doneBy}`, href: CHECKS_HREF, button: "Check" },
+          : c.kind === "finish"
+            ? { key: c.key, text: `Check the counts: ${c.productName}`, detail: `Batch ${c.batchNumber} · sent by ${c.sentBy}`, href: CHECKS_HREF, button: "Check" }
+            : { key: c.key, text: `Check "${c.stepName}": ${c.productName}`, detail: `Batch ${c.batchNumber} · done by ${c.doneBy}`, href: CHECKS_HREF, button: "Check" },
       );
   }
   // Box checks: deliveries taken off the shelf by someone else, waiting for the second check (status "picked").
