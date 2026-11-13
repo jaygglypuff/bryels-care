@@ -358,6 +358,10 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 > for the same screen is hidden (`[data-frame-help] [data-page-help]`); phones and floor roles keep the page's one. A
 > "?" with its own words or for one step always shows.
 >
+> **After a save (ADR-132).** A new page reached without Back/Forward or an #anchor starts at the top
+> (`src/ui/saved-landing.tsx`, in the frame); with a "just saved" word in the URL (`?created=1`, `?saved=1`, …) the
+> green banner takes the focus. A "saved as a draft" banner shows only while the record is still a draft.
+>
 > **Browser-tab titles (ADR-132).** Every page that renders exports `metadata.title` (or `generateMetadata`); the tab
 > reads "<page> · Bryel's Care". `tests/unit/page-titles.test.ts` walks every page file.
 >
