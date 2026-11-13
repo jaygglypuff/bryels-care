@@ -586,6 +586,14 @@ async function openOrder(page, customer) {
   await waitUrl(page, /\/sales\/[0-9a-f-]{36}$/);
 }
 
+
+/** Round 5 (ADR-131): approving and setting aside ask "… ? Yes, continue / Back" first. */
+async function confirmIfAsked(page) {
+  const yes = page.getByRole('button', { name: 'Yes, continue' });
+  try { await yes.first().waitFor({ state: 'visible', timeout: 3000 }); } catch { return; }
+  await yes.first().click();
+}
+
 section('k. the Isla Spa order is set aside (use first); the warehouse gets it from the shelf by scanning labels', async () => {
   const { page, close } = await asUser(who('warehouse.nfd'));
   if (facts.islaOrderHref) await go(page, facts.islaOrderHref);
@@ -595,6 +603,7 @@ section('k. the Isla Spa order is set aside (use first); the warehouse gets it f
   if (await setAside.count()) {
     await expectText(page, 'Next: set aside the stock for this order');
     await setAside.click();
+    await confirmIfAsked(page); // round 5 (ADR-131): set aside asks first
     await expectText(page, 'set aside 48 of 48');
     await shot(page, 'isla-set-aside');
   }
@@ -723,10 +732,17 @@ section('o. finance makes and sends the invoice from the delivery', async () => 
   await expectText(page, '48 pcs × ₱185.00');
   await shot(page, 'invoice-draft');
   const send = page.getByRole('button', { name: 'Send for approval' });
-  if (await send.count()) {
-    await send.click();
-    await expectText(page, 'This invoice waits for approval.');
+  if (!(await send.count())) {
+    // ADR-131 §6: below finance.invoice.one_step_below (₱50,000) one finance person saves it to the books in one step;
+    // no owner approval (sections p and q collapse into q).
+    facts.invoiceOneStep = true;
+    await expectText(page, /save it to the books/);
+    log('invoice below the one-step amount: no approval needed');
+    await close();
+    return;
   }
+  await send.click();
+  await expectText(page, 'This invoice waits for approval.');
   // The small demo has one finance person (Rosa, who sent it), so the owner approves (owner override): the screen
   // must name her, not "Nobody can do it yet".
   await expectText(page, /Next: .*Ana \(owner\)/);
@@ -739,6 +755,7 @@ section('o. finance makes and sends the invoice from the delivery', async () => 
 });
 
 section('p. the owner approves the invoice on To approve (side panel)', async () => {
+  if (facts.invoiceOneStep) { log('skipped: the invoice is below the one-step amount (ADR-131)'); return; }
   const { page, close } = await asUser(who('owner'));
   await go(page, '/approvals');
   await page.locator('li', { hasText: 'Invoice for Isla Spa Supplies' }).first().waitFor();
@@ -760,14 +777,17 @@ section('q. finance saves the invoice to the books', async () => {
     facts.invoiceUrl = page.url().replace(BASE, '');
   }
   await go(page, facts.invoiceUrl);
-  await expectText(page, 'Next: save it to the books.');
+  await expectText(page, /save it to the books/);
   await page.getByRole('button', { name: 'Save to the books' }).click();
+  await confirmIfAsked(page);
   // Money is saved for good: the person types their password (step-up), then saves.
-  const pw = page.locator('#invoice-issue-pw');
-  await pw.waitFor({ timeout: 5000 }).catch(() => {});
+  // Any password box now showing (the step-up after the click, or the one-step form that shows it up front).
+  const pw = page.locator('main input[type=password]');
+  await pw.first().waitFor({ timeout: 5000 }).catch(() => {});
   if (await pw.count()) {
-    await pw.fill(PW);
+    await pw.first().fill(PW);
     await page.getByRole('button', { name: 'Save to the books' }).last().click();
+    await confirmIfAsked(page);
   }
   await page.getByText(/INV-\d{4}-\d{6}/).first().waitFor();
   facts.invoice = (await page.locator('main').innerText()).match(/INV-\d{4}-\d{6}/)[0];

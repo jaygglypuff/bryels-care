@@ -15,7 +15,7 @@ import { Chip } from "@/ui/status";
 type Tone = "ok" | "warn" | "bad" | "info" | "neu" | "appr" | "hold" | "rej" | "q" | "exp";
 type Icon = typeof CircleDashed;
 const TONES: Record<string, { tone: Tone; label: string; I: Icon }> = {
-  draft: { tone: "neu", label: "Draft – not sent for approval", I: CircleDashed },
+  draft: { tone: "neu", label: "Draft – not in the books yet", I: CircleDashed },
   submitted: { tone: "appr", label: "Waiting for approval", I: PauseCircle },
   approved: { tone: "info", label: "Approved – save to the books next", I: CheckCircle2 },
   issued: { tone: "info", label: "In the books – not paid yet", I: Send },

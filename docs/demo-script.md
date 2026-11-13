@@ -206,7 +206,8 @@ so they change from month to month.
   folder). It runs scenes 1–8 and carries the lotion order on to the invoice: Get materials, Weigh (each lot label
   scanned, Jun confirms from his list "Waiting for you to check", one card for the batch's weighings, ADR-130), the steps,
   piece and box labels in one print trip, Finish as the last step, Check quality, set aside, get from shelf,
-  second check (Dino), send out, proof of delivery, invoice (Ana approves because Rosa sent it; Rosa saves it to the
-  books). `ONLY=d,e` runs single sections. The server needs `FILE_STORAGE` (the signature on the proof of delivery is a
+  second check (Dino), send out, proof of delivery, invoice (₱8,880 is below the ₱50,000 one-step amount, so Rosa saves
+  it to the books alone with her password, ADR-131 §6; above that amount it goes to Ana on To approve first). Set aside
+  and approvals ask "… ? Yes, continue" first. `ONLY=d,e` runs single sections. The server needs `FILE_STORAGE` (the signature on the proof of delivery is a
   file); a production build (`pnpm build && pnpm start`) is steadier than `next dev` for a full run.
 - The old screenshots of the full demo (`docs/demo/*.png`, 23 Oct) were removed on 2026-11-06 (ADR-115 §5): they no longer matched the app.
