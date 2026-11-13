@@ -80,3 +80,6 @@ export { FLOW_COUNT_DEFS, FLOW_STAGES, ageWords, countWords, isFlowCountKey, sta
 export type { FlowCount, FlowCountKey, FlowStage, FlowStageKey } from "./work-flow-stages";
 // Round 5 (ADR-129): the second-person checks waiting for the signed-in person (Home).
 export { checksWaitingForMe, type CheckItem } from "./my-checks";
+// ADR-132 §1: "Needs me" badge and Home "Needs you" card, one number.
+export { needsMeSummary, type NeedsMe } from "./needs-me";
+export { countNeedsMe, needsMeBreakdown, isActionMessage, type NeedsMeCount } from "./needs-me-count";

@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { fmtDate } from "@/lib/qty";
-import { checksWaitingForMe, getOperationsCenter, getOwnerHome, getWorkFlowCounts, type CheckItem } from "@/modules/analytics";
+import { checksWaitingForMe, getOperationsCenter, needsMeBreakdown, getOwnerHome, getWorkFlowCounts, type CheckItem } from "@/modules/analytics";
 import { myApprovalCount } from "@/modules/action-centre";
 import { notInvoicedShipments, payablesSummary, receivablesSummary } from "@/modules/finance";
 import { nextActors } from "@/modules/governance";
@@ -16,6 +16,7 @@ import { EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
 import { navPersona } from "../nav";
+import { needsMeFor } from "../needs-me";
 import { RecentActivity, SalesWeek, attentionItems, type AttentionItem } from "./simple-home";
 import { firstActionable, salesItems } from "./home-next";
 import { businessActivity } from "./activity-sentence";
@@ -159,17 +160,17 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
     throw e;
   }
   const salesDesk = persona === "sales" && ctx.can("sales.sales_order.view") && !all;
-  const [oc, approvals, unbilled, soCounts, soFlow, rec, pay, checks] = await Promise.all([
+  const [oc, needs, unbilled, soCounts, soFlow, rec, pay] = await Promise.all([
     getOperationsCenter(ctx, { all }),
-    myApprovalCount(ctx).catch(() => 0),
+    needsMeFor(ctx),
     ctx.can("finance.invoice.view") ? notInvoicedShipments(ctx).catch(() => null) : Promise.resolve(null),
     salesDesk ? orderCounts(ctx).catch(() => null) : Promise.resolve(null),
     salesDesk ? getWorkFlowCounts(ctx, ["so_short", "so_can_set_aside"]).catch(() => []) : Promise.resolve([]),
     ctx.can("finance.invoice.view") && persona !== "sales" ? receivablesSummary(ctx).catch(() => null) : Promise.resolve(null),
     ctx.can("finance.supplier_bill.view") ? payablesSummary(ctx).catch(() => null) : Promise.resolve(null),
-    // The owner is not a floor checker (B report #9): second checks go to the warehouse and the site manager.
-    persona === "sales" || persona === "owner" ? Promise.resolve([] as CheckItem[]) : checksWaitingForMe(ctx).catch(() => [] as CheckItem[]),
   ]);
+  const approvals = needs.approvals;
+  const checks = needs.checkItems;
   const notBilled = unbilled ? { count: unbilled.count, toMake: unbilled.toMake, waitingApproval: unbilled.waitingApproval, toSave: unbilled.toSave, oldestDays: unbilled.oldestDispatchedAt ? Math.floor((Date.now() - unbilled.oldestDispatchedAt.getTime()) / 86_400_000) : null } : null;
   const qs = all ? "?scope=all" : "";
   const stockHref = `/dashboard/details/stock${qs}`;
@@ -229,16 +230,19 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
   const mine = lines.filter((l) => l.mine);
   const others = lines.filter((l) => !l.mine && !WATCH_OUT.has(l.item.key));
   const watch = lines.filter((l) => !l.mine && WATCH_OUT.has(l.item.key));
-  const needsYou = approvals + checks.length + mine.length;
+  // ADR-132 §1: the same number as the "Needs me" badge (approvals + checks + messages that ask you to act).
+  const needsYou = needs.total;
   const waitingSummary = others.filter((l) => l.who).slice(0, 2).map((l) => l.who!);
   const next =
     approvals > 0
       ? <NextStep text={`Next: ${plural(approvals, "thing waits", "things wait")} for your decision.`} action={{ label: "Open To approve", href: "/approvals" }} />
       : checks.length > 0
         ? <NextStep text={`Next: ${checks[0].text.charAt(0).toLowerCase()}${checks[0].text.slice(1)}.`} action={{ label: checks[0].button, href: checks[0].href }} />
-        : mine.length > 0
-          ? <NextStep text={`Next: ${mine[0].item.text}.`} action={{ label: "Open it", href: mine[0].item.href }} />
-          : <NextStep text="Nothing needs you now." waitingFor={waitingSummary.length ? `Waiting on others: ${waitingSummary.join(" · ")}.` : undefined} />;
+        : needs.messages > 0
+          ? <NextStep text={`Next: ${plural(needs.messages, "message asks", "messages ask")} you to do something.`} action={{ label: "Open messages", href: "/notifications" }} />
+          : mine.length > 0
+            ? <NextStep text={`Next: ${mine[0].item.text}.`} action={{ label: "Open it", href: mine[0].item.href }} />
+            : <NextStep text="Nothing needs you now." waitingFor={waitingSummary.length ? `Waiting on others: ${waitingSummary.join(" · ")}.` : undefined} />;
   const sm = home.salesMonth;
   return (
     <div className="space-y-5">
@@ -261,15 +265,16 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
             {Number(pay.overdue) > 0 ? `${peso(pay.overdue)} of it is late` : pay.openCount ? plural(pay.openCount, "bill to pay", "bills to pay") : "No bills to pay"}
           </MoneyCard>
         )}
-        <MoneyCard title="Needs you" icon={<ClipboardCheck size={16} />} href={approvals > 0 || needsYou === 0 ? "/approvals" : checks[0]?.href ?? mine[0]?.item.href ?? "/approvals"} value={needsYou.toLocaleString("en-PH")} tone={needsYou > 0 ? "attention" : "neutral"} testId="card-needs-you">
+        <MoneyCard title="Needs you" icon={<ClipboardCheck size={16} />} href={needs.href} value={needsYou.toLocaleString("en-PH")} tone={needsYou > 0 ? "attention" : "neutral"} testId="card-needs-you">
           {needsYou === 0 ? (
             <span className="inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> Nothing to decide</span>
           ) : (
-            [approvals ? plural(approvals, "approval", "approvals") : null, checks.length ? plural(checks.length, "check", "checks") : null, mine.length ? plural(mine.length, "other job", "other jobs") : null].filter(Boolean).join(" · ")
+            needsMeBreakdown(needs)
           )}
         </MoneyCard>
       </section>
       <ChecksForMe checks={checks} />
+      <LineList title="Also yours" testId="home-mine" icon={<ArrowRight size={18} />} lines={mine} />
       {(others.length > 0 || watch.length > 0 || home.salesWeek) && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
           <div className="flex min-w-0 flex-col gap-4">

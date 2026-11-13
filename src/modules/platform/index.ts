@@ -9,6 +9,7 @@ export {
   usersForJob,
   listMyNotifications,
   unreadNotificationCount,
+  openActionMessages,
   markNotificationRead,
   markAllNotificationsRead,
   acknowledgeNotification,

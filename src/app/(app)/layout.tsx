@@ -2,7 +2,6 @@ import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { unreadNotificationCount } from "@/modules/platform";
-import { myApprovalCount } from "@/modules/action-centre";
 import { qaQueueCount } from "@/modules/quality";
 import { screenPreferences } from "@/modules/governance";
 import { getMaintenanceState } from "@/lib/maintenance";
@@ -10,6 +9,7 @@ import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
 import { AREAS_BY_PERSONA, buildNav, homeHref, isApprover, isFloor, navPersona, setupSections, tabsFor } from "./nav";
 import { Shell } from "./shell";
+import { needsMeFor } from "./needs-me";
 import { helpForScreen, signOut, switchSite } from "./actions";
 import { masterSearchAction } from "./search-actions";
 
@@ -19,7 +19,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await requireContext();
   const can = (p: Parameters<typeof ctx.can>[0]) => ctx.can(p);
   // Round 5 (ADR-129): one menu per job (nav.ts); the bottom bar follows the role.
-  const approvalCount = await myApprovalCount(ctx).catch(() => 0); // ADR-075 "To approve" badge
+  // ADR-132 §1: one "Needs me" number (approvals + checks + messages asking to act); its approvals are the ADR-075 badge.
+  const needsMe = await needsMeFor(ctx);
+  const approvalCount = needsMe.approvals;
   const approver = isApprover(can, ctx.roleCodes, ctx.permissions, approvalCount); // ADR-082: hidden from people who never approve
   const persona = navPersona(can, ctx.roleCodes);
   const nav = buildNav(can, ctx.roleCodes, { approver });
@@ -44,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       qaCount={qaCount}
       unreadCount={unreadCount}
       approvalCount={approvalCount}
+      needsMeCount={needsMe.total}
       showApprovals={approver}
       switchSite={switchSite}
       loadHelp={helpForScreen}

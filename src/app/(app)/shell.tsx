@@ -52,6 +52,8 @@ type Props = {
   unreadCount: number;
   /** ADR-075: approvals waiting for the signed-in user (the "To approve" badge). */
   approvalCount?: number;
+  /** ADR-132 §1: things waiting for this person (approvals + checks + action messages); the "Needs me" badge. */
+  needsMeCount?: number;
   /** ADR-082: show the "To approve" button only to people who approve something. */
   showApprovals?: boolean;
   switchSite: (fd: FormData) => Promise<void>;
@@ -136,7 +138,7 @@ function DrawerSync({ userId }: { userId: string }) {
  * (My account, Help, Set-up, All screens, sign out). Under it the open area's tabs (at most five, then one flat "More").
  * Phones and tablets: one ☰ (not for floor roles) and the role's bottom bar. Esc closes the drawer and the menus.
  */
-export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dashboard", floor = false, needsMeArea = false, hasSetup = false, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dashboard", floor = false, needsMeArea = false, hasSetup = false, qaCount, unreadCount, approvalCount = 0, needsMeCount, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const accountRef = useRef<HTMLDetailsElement>(null);
@@ -182,7 +184,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
   const { group: activeGroup, href: activeHref } = activeEntry(nav, pathname);
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
-  const needsMe = approvalCount + unreadCount;
+  const needsMe = needsMeCount ?? approvalCount + unreadCount;
   const badges: NavBadges = { ...(qaCount ? { "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}), ...(unreadCount ? { "/notifications": unreadCount } : {}) };
   const areaBadge = (g: NavGroup) => (g.label === "Needs me" ? needsMe : 0);
   const tabBadge = (t: Tab) => (t.needsMe ? needsMe : badges[t.href]);
