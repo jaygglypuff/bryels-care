@@ -1,8 +1,8 @@
 ---
 key: production.finish
 title: Finish a batch
-version: 4
-updated_at: 2026-11-08
+version: 5
+updated_at: 2026-11-13
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -34,9 +34,18 @@ When every step of the batch is done, you finish it. Finishing counts what was m
 ## Finish the batch
 
 1. **Goes to** says the QA waiting area. To choose another one, open **More details**.
-2. If the recipe asks for a second person to check the counts, they choose their name and type **their own password**.
-3. Tap **Finish and send to QA**. The screen asks: "You can't change the counts after this." Tap **Yes, finish**, or **Back** to look again.
+2. If the recipe asks for a second person to check the counts, there are two ways:
+   - **On their own phone** (always there; the only way when your company turned off checks on your phone): tap **Send the counts to be checked**, then **Yes, send**. The screen says "Waiting for Jun or Dino to check the counts". They see **Check the counts** on their list **Waiting for you to check**, look at the real pieces and tap **Looks right**. The batch goes to the QA waiting area by itself. You can go on with other work.
+   - **They are here (their password)**: they choose their name and type **their own password** on your phone.
+3. With the password: tap **Finish and send to QA**. The screen asks: "You can't change the counts after this." Tap **Yes, finish**, or **Back** to look again.
 4. You go back to the order. The green message at the top says the batch is finished and who checks it next. Nothing more for you on this batch.
+
+## The second person said "Not right"
+
+1. You get a message, and Finish shows what they said, for example "Jun said not right: Wrong count".
+2. Count again, change the numbers and tap **Send the counts to be checked** again.
+3. To change the counts while they still wait, tap **Take the counts back to change them**.
+4. You can never check your own counts.
 
 ## Something is wrong
 

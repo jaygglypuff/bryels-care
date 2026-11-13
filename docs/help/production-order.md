@@ -1,8 +1,8 @@
 ---
 key: production.production_order
 title: Make a product with a production order
-version: 4
-updated_at: 2026-11-06
+version: 5
+updated_at: 2026-11-13
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -33,6 +33,7 @@ A production order says what to make, how many and by when. You follow it on one
 3. The screen says how many one batch makes and the largest batch the mixer takes. Then it offers:
    - **Split into 2 batches** (the usual), for example "2 batches of 1,000 bars".
    - **Make it one batch**. Only if it fits in the largest batch. If not, the button is grey and says why.
+   - When the order fits in one batch, you see only **Make it one batch** (no second choice that says the same).
    - **Choose sizes**, for example 1,500 and 500. Each one must fit in the largest batch, and together they must make the number you typed.
 4. You never type the ingredient amounts. They are worked out from the size of each batch.
 5. Choose **Needed by** if the products are needed by a date, and the **Start date**.

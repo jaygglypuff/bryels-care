@@ -3231,6 +3231,17 @@ an order the owner made and approved alone can still be sent, answered and recei
 UPDATE that writes a checked column is checked as before (drift test in `tests/integration/procurement/r5-purchasing.test.ts`:
 the migration ends with the canonical file). `pnpm -s drizzle-kit generate` reports no changes. The next generated file
 must be renamed to `0042_<description>` (snapshot `0042_snapshot.json`).
+Done that way for the Finish check on the checker's own phone (ADR-133 item 1): `0042_finish_checks` (idx 41, snapshot
+`0042_snapshot.json`; `0041_snapshot.json` restored after drizzle-kit overwrote it). It adds the table
+`batch_finish_checks` (`src/db/schema/floor-decisions.ts`): the Finish counts an operator sent to be checked — `input`
+(the Finish form as sent, re-run at confirm) and `summary` (what the checker reads, jsonb), `status` `waiting` →
+`confirmed` | `returned` | `withdrawn` (CHECK `ck_batch_finish_checks_status`; state machine `batch_finish_check` in
+`src/modules/production/finish-check.ts`), `requested_by` / `decided_by` (CHECK: never the same person;
+`ck_batch_finish_checks_decided`: confirmed and returned have a decider and a time), `reason` (≥ 3 characters when
+returned), `finish_key` (unique: the idempotency key of the Finish run at confirm) and the send's `idempotency_key`
+(unique per organization). One waiting check per batch (partial unique index `batch_finish_checks_one_waiting_uq`). No
+custom SQL. `pnpm -s drizzle-kit generate` reports no changes. The next generated file must be renamed to
+`0043_<description>` (snapshot `0043_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

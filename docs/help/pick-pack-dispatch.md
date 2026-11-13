@@ -1,8 +1,8 @@
 ---
 key: sales.fulfilment
 title: Get from shelf, check the boxes, send out
-version: 4
-updated_at: 2026-11-08
+version: 5
+updated_at: 2026-11-13
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -34,4 +34,5 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 ## Proof of delivery
 
 1. When the signed copy comes back, open the delivery and press **Save proof of delivery**.
+   - If Save says something is wrong (for example the time is before the truck left), fix it and press **Save proof of delivery** again. What you typed and the signature stay; you do not need to sign again.
 2. **Send out** lists deliveries still waiting for their proof of delivery.
