@@ -110,6 +110,9 @@ const id = (base: string) => (r: Row) => `${base}/${r.id}`;
  * Every record type that has a number, with its permission and page (owner request 2026-11-08 list). Label jobs
  * and transfers have no number of their own (a label job carries the number of what it labels) and are left out.
  */
+/** Address words of a customer ("pasig", "rizal st"): every saved address (ADR-132 §4, C report #15). */
+const CUSTOMER_ADDRESSES = "(select string_agg(concat_ws(' ', a.line1, a.line2, a.city, a.province), ' ') from customer_addresses a where a.customer_id = t.id and a.deleted_at is null)";
+
 export const RECORD_TYPES: readonly RecordType[] = [
   // ---------------------------------------------------------------- money
   { key: "supplier_bill", noun: "Supplier bill", icon: "money", prefixes: ["BILL"], from: "supplier_bills t join suppliers p on p.id = t.supplier_id", num: "t.bill_number", alsoNum: ["t.supplier_reference"], name: "p.name", status: "t.status", date: "t.bill_date", scope: "site", view: ["finance.supplier_bill.view"], href: id("/finance/bills"), words: { cols: ["p.name"], group: "money" } },
@@ -158,8 +161,8 @@ export const RECORD_TYPES: readonly RecordType[] = [
   { key: "material", noun: "Material", icon: "material", prefixes: ["MAT"], from: "materials t", num: "t.code", name: "t.name", status: "t.status", scope: "org", view: ["masterdata.material.view"], href: id("/masterdata/materials"), master: true, words: { cols: ["t.name", "t.code", "t.common_name"], group: "items", order: "name" } },
   { key: "product", noun: "Product", icon: "product", prefixes: ["PRD"], from: "products t", num: "t.sku_code", name: "t.name", status: "t.status", scope: "org", view: ["masterdata.product.view"], href: id("/masterdata/products"), master: true, words: { cols: ["t.name", "t.sku_code"], group: "items", order: "name" } },
   { key: "sku", noun: "Sellable item", icon: "product", prefixes: ["SKU"], from: "skus t", num: "t.code", name: "t.name", status: "t.status", extra: "t.product_id::text", scope: "org", view: ["masterdata.sku.view"], href: (r) => `/masterdata/products/${r.extra}/skus/${r.id}`, master: true },
-  { key: "supplier", noun: "Supplier", icon: "supplier", prefixes: ["SUP"], from: "suppliers t", num: "t.code", alsoNum: ["t.legacy_number"], name: "t.name", scope: "org", view: ["masterdata.supplier.view"], href: id("/procurement/suppliers"), master: true, words: { cols: ["t.name", "t.code", "t.contact_name"], group: "parties", order: "name" } },
-  { key: "customer", noun: "Customer", icon: "customer", prefixes: ["CUS"], from: "customers t", num: "t.code", name: "t.name", status: "t.status", scope: "org", view: ["masterdata.customer.view"], href: id("/sales/customers"), master: true, words: { cols: ["t.name", "t.code", "t.contact_name"], group: "parties", order: "name" } },
+  { key: "supplier", noun: "Supplier", icon: "supplier", prefixes: ["SUP"], from: "suppliers t", num: "t.code", alsoNum: ["t.legacy_number"], name: "t.name", scope: "org", view: ["masterdata.supplier.view"], href: id("/procurement/suppliers"), master: true, words: { cols: ["t.name", "t.code", "t.contact_name", "t.address_line1", "t.city"], group: "parties", order: "name" } },
+  { key: "customer", noun: "Customer", icon: "customer", prefixes: ["CUS"], from: "customers t", num: "t.code", name: "t.name", status: "t.status", scope: "org", view: ["masterdata.customer.view"], href: id("/sales/customers"), master: true, words: { cols: ["t.name", "t.code", "t.contact_name", "t.ship_to_address", CUSTOMER_ADDRESSES], group: "parties", order: "name" } },
   { key: "shelf", noun: "Shelf or area", icon: "shelf", prefixes: ["LOC"], from: "locations t join sites so on so.id = t.site_id", org: "so.organization_id", num: "t.code", name: "t.name", status: "t.status", scope: "site", view: ["masterdata.location.view"], href: id("/inventory/locations"), master: true, words: { cols: ["t.name"], group: "setup", order: "name" } },
   { key: "warehouse", noun: "Warehouse", icon: "shelf", prefixes: ["WH"], from: "warehouses t join sites so on so.id = t.site_id", org: "so.organization_id", num: "t.code", name: "t.name", scope: "site", view: ["masterdata.warehouse.view"], href: id("/masterdata/warehouses"), master: true },
   { key: "line", noun: "Making area / line", icon: "equipment", prefixes: ["LINE"], from: "production_lines t", num: "t.code", name: "t.name", status: "t.status", scope: "site", view: ["masterdata.production_line.view"], href: id("/masterdata/lines"), master: true },
@@ -171,6 +174,13 @@ export const RECORD_TYPES: readonly RecordType[] = [
   // People who hold a job at a site where the caller may view people, or organisation-wide (scopeFor "person").
   { key: "person", noun: "Person who uses the app", icon: "person", prefixes: [], from: "users t", num: "t.email", name: "t.display_name", status: "t.status", scope: "org", view: ["identity.user.view"], href: id("/admin/users"), master: true, words: { cols: ["t.display_name"], group: "people", order: "name" } },
 ];
+
+/**
+ * Round 5 leftovers (ADR-132 §4): the records floor people (operator, checker, warehouse) look for. Their search shows
+ * only these record types; everything else they may view still opens by link and by its whole number on the Scan
+ * screen. The permission and site of every type are checked as for everyone (`viewableTypes`).
+ */
+export const FLOOR_RECORD_TYPES: readonly string[] = ["batch", "lot", "box", "shelf", "sales_order", "work_order", "shipment", "delivery_receipt", "goods_receipt"];
 
 /**
  * Record types that are only noise in a short-number search (round 5, A report #15, C report #15: "Set
@@ -323,14 +333,15 @@ export type MasterSearchResult = { groups: MasterGroup[]; /** The one record who
  * Records for typed text: numbers first (exact, then partial), then words by name. Groups in a fixed order; empty
  * groups are left out. Text shorter than 2 letters or digits finds nothing.
  */
-export async function masterSearch(ctx: AuthContext, input: string): Promise<MasterSearchResult> {
+export async function masterSearch(ctx: AuthContext, input: string, opts: { onlyTypes?: readonly string[] } = {}): Promise<MasterSearchResult> {
   await requireSearchAccess(ctx);
   const raw = String(input ?? "").slice(0, MAX_QUERY_LENGTH).trim();
   const q = parseNumberQuery(raw);
   // Round 5: a short number ("4", "SO 4", "order 4", "0003") finds the records whose number ends with it.
   const short = parseShortNumber(raw);
   if (q.compact.length < 2 && !short) return { groups: [], exactHref: null };
-  const types = viewableTypes(ctx);
+  // ADR-132 §4: floor people see their record types only (never more than they may view).
+  const types = viewableTypes(ctx).filter((x) => !opts.onlyTypes || opts.onlyTypes.includes(x.type.key));
   const byKey = new Map(types.map((x) => [x.type.key, x.type]));
   const notNoise = (x: { type: RecordType }) => !EXACT_ONLY_TYPES.includes(x.type.key);
 
