@@ -300,8 +300,14 @@ export function KeypadField({
               onEnter?.(e.currentTarget);
               return;
             }
-            // Own keyboard: the input edits itself (cursor, selection) and onChange cleans it.
-            if (mode === "keyboard") return;
+            // Own keyboard: the input edits itself (cursor, selection, Delete) and onChange cleans it; Escape clears.
+            if (mode === "keyboard") {
+              if (e.key === "Escape" && canType) {
+                e.preventDefault();
+                onChange!("");
+              }
+              return;
+            }
             e.preventDefault();
             if (canType) onChange!(pressKey(value, k, rules));
           }}

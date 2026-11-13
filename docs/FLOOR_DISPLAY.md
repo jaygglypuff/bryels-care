@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | MVP built as `/floor` (ADR-084, 2026-10-30); warehouse variant, rotation, dark theme and signed display link not built (see §9) |
+| Status | MVP built as `/floor` (ADR-084, 2026-10-30); redesigned with rotation and a dark option (ADR-135, 2026-11-13); warehouse variant and signed display link not built (see §9) |
 | Owner request | "A dashboard that is flashed on a screen in real time in the production area: what is currently being processed, what needs to be processed, etc." |
 | Brief | Part II §9 (central work board), Part IV §9 (central operations board), §8 (mobile/tablet: screens are arrangements of the same workflows) |
 
@@ -96,7 +96,8 @@ disabled. Wi-Fi to the internet (the app is on Railway).
 | Step | Content | Status |
 |---|---|---|
 | MVP | `/floor` page + read model + auto-refresh + display role, production panels (§2) | **Built** (ADR-084) |
-| Next | Warehouse variant (`?area=warehouse`), rotation, dark theme, signed display link | Not built |
+| Redesign | Calm cards, problems strip, page rotation, connection pill, `?theme=dark` (§9.2) | **Built** (ADR-135) |
+| Next | Warehouse variant (`?area=warehouse`), signed display link | Not built |
 
 ### 9.1 As built (MVP)
 
@@ -126,3 +127,34 @@ Rules as built (§3 refined):
   made; confirm with the owner after use).
 - **Session**: the TV account keeps a normal session; it must sign in again after `session.absolute_hours`
   (default 7 days). The signed display link (Next) removes this.
+
+### 9.2 Redesign (ADR-135, owner 2026-11-13: "fix the TV display. It is very ugly.")
+
+The data and its rules (§9.1) are unchanged: same read model, same permission checks, same caps (6 batches + "N more",
+5 orders + "N more"). Only the picture changed. Full rules: `docs/ux-system.md` §9.15a.
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ [leaf] North Fields Plant                          (● Live · updated 10:42)     10:42  │
+│        Bryel's Care · what we make now, what is next…                  Saturday 14 Nov │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ ⚠ NEEDS ATTENTION  ⏱ Late: Guava Bar Soap 135 g (needed by Wed 11 Nov)     (only if any)│
+├──────────────────────────────────────────────────────┬─────────────────────────────────┤
+│ MAKING NOW                     + 2 more being made   │ NEXT UP                         │
+│ ┃ Acapulco Soap 135 g          [day 2] BM-2611-0001  │ (1) Aloe Hand Lotion   [⏱ Late] │
+│ ┃ Step 4 of 8 · Pour into moulds   👤 Rhea · 08:10    │     96 pieces · Needed by Fri   │
+│ ┃ [▶ Being made] ████████░░░░░░░░░░░░░░░░    37%     │ (2) …                           │
+│ ┃ … up to 3 cards; more turn every 12 s  Page 1 of 2 ├─────────────────────────────────┤
+│                                                      │ WAITING  ✓ 0 curing · 🔍 2 QA … │
+├──────────────────────────────────────────────────────┴─────────────────────────────────┤
+│ TODAY  Made 412 of 600 planned  ███████████████░░░░░ 68%                   Rejects 9    │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Sizes** follow one unit (1 % of the width on a 16:9 screen), so 1280 × 720, 1920 × 1080 and 3840 × 2160 show the
+  same picture and nothing scrolls. At 1920 × 1080: clock 65 px, names 44 px, the smallest words 25 px.
+- **Connection**: "Live · updated 10:42", or "No internet — showing 10:42 data" (red, with an icon) after 75 s without
+  fresh data or when the TV is offline.
+- **Dark background**: open `/floor?theme=dark` (bookmark it on the TV). Light is the default.
+- **Cheap Android TV browsers**: plain CSS (flex, grid, `min()`, `calc()`), no new libraries, no web fonts beyond the
+  app's own; the only motion is the soft fade between pages and the pulsing Live dot (both off with reduced motion).
