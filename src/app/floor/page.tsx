@@ -8,7 +8,7 @@ import "./floor.css";
 export const metadata = { title: "Floor screen" };
 export const dynamic = "force-dynamic";
 
-/** ADR-135: three batch cards and four orders per page; more rotate every 12 s (the read model caps them at 6 and 5). */
+/** ADR-135: three batch cards and three orders per page; more rotate every 12 s (the read model caps them at 6 and 5). */
 const CARDS_PER_PAGE = 3;
 const NEXT_PER_PAGE = 3;
 /** At most this many problems in the strip at the top; the rest are counted ("+ 2 more"). */
@@ -50,7 +50,7 @@ export default async function FloorPage({ searchParams }: { searchParams: Promis
           <div className="min-w-0">
             <h1 className="tv-l truncate font-display font-bold">{v.site.name}</h1>
             {/* ADR-088: the one sentence that says what this screen is for (TV size). */}
-            <p className="tv-xs truncate text-[var(--fg-2)]">Bryel&apos;s Care · what we make now, what is next, what waits. It updates by itself.</p>
+            <p className="tv-xs truncate text-[var(--fg-2)]">This screen is for everyone on the floor: what we make now, what is next, what waits.</p>
           </div>
         </div>
         <FloorRefresher generatedAt={v.generatedAt} />

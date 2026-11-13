@@ -136,7 +136,7 @@ The data and its rules (§9.1) are unchanged: same read model, same permission c
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │ [leaf] North Fields Plant                          (● Live · updated 10:42)     10:42  │
-│        Bryel's Care · what we make now, what is next…                  Saturday 14 Nov │
+│        This screen is for everyone on the floor: what we make now…     Saturday 14 Nov │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
 │ ⚠ NEEDS ATTENTION  ⏱ Late: Guava Bar Soap 135 g (needed by Wed 11 Nov)     (only if any)│
 ├──────────────────────────────────────────────────────┬─────────────────────────────────┤
