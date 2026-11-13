@@ -2869,3 +2869,22 @@ Open:
 - Owner and accountant: the one-step amounts.
 - Accountant: tax rates.
 - QA: approving a delivery with no test.
+
+## ADR-132 Round 5 leftovers, part A: one "Needs me" number, grouped messages with names, one help door, pages that land at the top (2026-11-13)
+Status: Accepted (round 5 audits A, B and C, leftovers of ADR-129/130/131; part A). Extends ADR-125 §5 and ADR-129.
+1. **One "Needs me" number.** The menu badge and Home's "Needs you" card read `needsMeSummary`: approvals the person can decide + checks waiting for them + open messages that ask them to act (kinds in `RESOLVABLE_KINDS`, read or not, not taken on). A message about a record already on the approvals list, or about a weighing, step or box check, is not counted again. The owner and the sales desk get no floor checks. The card shows the breakdown.
+2. **Many messages, one row.** 3 or more messages of one kind family, screen, Manila day and state make one row ("12 lots are ready to put away") with "Open the list" and "See each one". Each message keeps its buttons and its own clearing.
+3. **Message titles lead with names and places** (`src/lib/message-titles.ts`), with short numbers ("lot …0017"). The full number is in the body.
+4. **Search.** Customers are found by saved-address words and suppliers by street and city. Operators, checkers and warehouse people see `FLOOR_RECORD_TYPES` only. Permissions and site scoping are unchanged.
+5. **One help door per page.** A page's plain "?" hides where the frame's "?" shows (office roles from 640 px).
+6. **Pages land at the top.** A new page reached without Back/Forward or an anchor starts at the top; a "just saved" URL also focuses the green banner. A "saved as a draft" banner shows only while the record is a draft.
+7. **Every page sets a browser-tab title**, "<page> · Bryel's Care".
+8. **Trace and recall lot pickers list newest first**; other lists keep earliest expiry first.
+9. **Problem reports speak plain words:** "Small / Big / Very serious" (the levels stay company QA configuration), "This lot is already stopped by QA", and no "deviation" in messages.
+10. **Form keys are made after hydration** (`useClientKey`, `useRenewableClientKey`); actions accept a form sent before its key exists.
+11. **Label previews hide the layout code and version** (still printed); QA and layout editors see them under More details.
+12. **Browser-walk fixes:** the purchase order wizard says when the request's OKs are not enough (`requestCoverHint`); an order-line change closes after saving; print-page back links are 44 px.
+
+Consequences: no migration; no permission change. "Needs me" now runs the checker queue and open action messages on each page load for floor roles.
+
+Open: whether a request's OK should count as step 1 of the order's approval (owner); rounding "Ask to buy" to pack sizes (owner); names-first titles for QA review, CAPA and recall messages; walk "Fix a mistake" and invoice Email/Print on the full demo.
