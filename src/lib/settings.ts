@@ -430,6 +430,23 @@ export const SETTINGS = {
     requiresApproval: true,
   },
   /**
+   * ADR-134: weighing, the move to the hold area and reconciliation are never "paper only" steps
+   * (NEVER_PAPER_ONLY_STEP_KINDS). While this is on they may still be done on the printed paper batch record when the
+   * system cannot be reached, and typed in later from the paper with the reason ("No internet at the time"). Off: those
+   * steps must be done in the system. QA confirms (A-PAPER-01).
+   */
+  "production.paper.outage_entry_allowed": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-PAPER-01",
+    group: "Production",
+    label: "Weighing may be done on paper when there is no internet, and typed in later",
+    description: "On: when the internet or the system is down, people weigh and move the batch on the printed paper record and type it in later with the reason. Off: weighing, the move to the hold area and counting what is left must always be done in the system.",
+    whoChanges: "QA decides; the site manager asks.",
+    requiresApproval: true,
+  },
+  /**
    * ADR-089 (guided recipe wizard): the "Allowed difference" filled in for a new ingredient line, as
    * a percentage of its amount. Only a starting value: the author changes it per line and QA checks it
    * when approving the recipe. The 2 % default is the value of the built-in example (ADR-079), not a

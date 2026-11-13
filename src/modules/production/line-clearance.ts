@@ -1,11 +1,11 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
-import { type DbOrTx, db } from "@/db/client";
+import { type DbOrTx, type Tx, db } from "@/db/client";
 import { fileAttachments, processStepChecklistResults, processStepRecords } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { type SnapshotStep, type StepRecord, assertCheckerFor, findStep, finishStep, openStep, stepLabel } from "./execution";
+import { type BatchRow, type SnapshotStep, type StepRecord, assertCheckerFor, findStep, finishStep, openStep, stepLabel } from "./execution";
 import { idempotent, lockBatch } from "./shared";
 
 export type ClearanceAnswer = { itemId: string; answer: "yes" | "no" | "na"; note?: string | null; photoAttachmentId?: string | null };
@@ -67,49 +67,7 @@ export async function submitChecklist(ctx: AuthContext, input: SubmitChecklistIn
       if (!items.length) throw new DomainError("validation", `${stepLabel(step)} has no checklist items in its routing revision.`);
       if (signers.checker) assertCheckerFor(signers.checker, ctx.userId, step.stepKind, batch.siteId);
       const rec = await openStep(tx, ctx, batch, step);
-      const current = await currentChecklistAnswers(tx, rec.id);
-      const photoIds = input.answers.map((a) => a.photoAttachmentId).filter((x): x is string => !!x);
-      if (photoIds.length) {
-        const found = await tx
-          .select({ id: fileAttachments.id })
-          .from(fileAttachments)
-          .where(and(inArray(fileAttachments.id, photoIds), eq(fileAttachments.organizationId, ctx.organizationId)));
-        if (found.length !== new Set(photoIds).size) throw new DomainError("validation", "A photo was not found. Upload it again.");
-      }
-      let written = 0;
-      for (const a of input.answers) {
-        const item = items.find((i) => i.id === a.itemId);
-        if (!item) throw new DomainError("validation", "An answered item is not part of this step's checklist.");
-        const prev = current.find((c) => c.routingStepChecklistItemId === item.id);
-        const note = a.note?.trim() || null;
-        if (prev && prev.answer === a.answer && (prev.note ?? null) === note && !a.photoAttachmentId) continue; // unchanged
-        if (item.requiresPhoto && !a.photoAttachmentId && !prev?.photoAttachmentId) {
-          throw new DomainError("validation", `Item ${item.itemNo} needs a photo.`, { fieldErrors: { [`photo-${item.id}`]: "Add a photo." } });
-        }
-        await tx.insert(processStepChecklistResults).values({
-          organizationId: ctx.organizationId,
-          siteId: batch.siteId,
-          processStepRecordId: rec.id,
-          routingStepChecklistItemId: item.id,
-          itemNo: item.itemNo,
-          itemText: item.text,
-          isBlocking: item.isBlocking,
-          answer: a.answer,
-          note,
-          photoAttachmentId: a.photoAttachmentId ?? prev?.photoAttachmentId ?? null,
-          answeredBy: ctx.userId,
-          supersedesId: prev?.id ?? null,
-        });
-        written += 1;
-      }
-      await audit(tx, ctx, {
-        action: "production.line_clearance.answered",
-        entityType: "process_step_record",
-        entityId: rec.id,
-        entityNumber: batch.batchNumber,
-        siteId: batch.siteId,
-        after: { stepNo: step.stepNo, name: step.name, area: step.area ?? null, answers: input.answers.map((a) => ({ item: items.find((i) => i.id === a.itemId)?.itemNo, answer: a.answer })), changed: written },
-      });
+      await writeChecklistAnswersInTx(tx, ctx, batch, step, rec, input.answers);
       const blockers = await checklistBlockers(tx, step, rec);
       if (blockers.length) {
         await tx.update(processStepRecords).set({ blockedReason: blockers.join(" ") }).where(eq(processStepRecords.id, rec.id));
@@ -120,4 +78,57 @@ export async function submitChecklist(ctx: AuthContext, input: SubmitChecklistIn
     });
     return result;
   });
+}
+
+/**
+ * Writes checklist answers in the caller's transaction (caller holds the batch lock and opened the step): a changed
+ * answer supersedes the earlier one, never overwrites it. Also used by "Enter from the paper record" (ADR-134).
+ */
+export async function writeChecklistAnswersInTx(tx: Tx, ctx: AuthContext, batch: BatchRow, step: SnapshotStep, rec: StepRecord, answers: ClearanceAnswer[], extra: Record<string, unknown> = {}) {
+  const items = step.checklistItems ?? [];
+  const input = { answers };
+  const current = await currentChecklistAnswers(tx, rec.id);
+  const photoIds = input.answers.map((a) => a.photoAttachmentId).filter((x): x is string => !!x);
+  if (photoIds.length) {
+    const found = await tx
+      .select({ id: fileAttachments.id })
+      .from(fileAttachments)
+      .where(and(inArray(fileAttachments.id, photoIds), eq(fileAttachments.organizationId, ctx.organizationId)));
+    if (found.length !== new Set(photoIds).size) throw new DomainError("validation", "A photo was not found. Upload it again.");
+  }
+  let written = 0;
+  for (const a of input.answers) {
+    const item = items.find((i) => i.id === a.itemId);
+    if (!item) throw new DomainError("validation", "An answered item is not part of this step's checklist.");
+    const prev = current.find((c) => c.routingStepChecklistItemId === item.id);
+    const note = a.note?.trim() || null;
+    if (prev && prev.answer === a.answer && (prev.note ?? null) === note && !a.photoAttachmentId) continue; // unchanged
+    if (item.requiresPhoto && !a.photoAttachmentId && !prev?.photoAttachmentId) {
+      throw new DomainError("validation", `Item ${item.itemNo} needs a photo.`, { fieldErrors: { [`photo-${item.id}`]: "Add a photo." } });
+    }
+    await tx.insert(processStepChecklistResults).values({
+      organizationId: ctx.organizationId,
+      siteId: batch.siteId,
+      processStepRecordId: rec.id,
+      routingStepChecklistItemId: item.id,
+      itemNo: item.itemNo,
+      itemText: item.text,
+      isBlocking: item.isBlocking,
+      answer: a.answer,
+      note,
+      photoAttachmentId: a.photoAttachmentId ?? prev?.photoAttachmentId ?? null,
+      answeredBy: ctx.userId,
+      supersedesId: prev?.id ?? null,
+    });
+    written += 1;
+  }
+  await audit(tx, ctx, {
+    action: "production.line_clearance.answered",
+    entityType: "process_step_record",
+    entityId: rec.id,
+    entityNumber: batch.batchNumber,
+    siteId: batch.siteId,
+    after: { ...extra, stepNo: step.stepNo, name: step.name, area: step.area ?? null, answers: input.answers.map((a) => ({ item: items.find((i) => i.id === a.itemId)?.itemNo, answer: a.answer })), changed: written },
+  });
+  return written;
 }

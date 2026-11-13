@@ -196,6 +196,18 @@ export const bmrPaperPageDataSchema = z.object({
     checklist: z.array(z.object({ itemNo: z.number().int(), text })).max(50),
     issuedBy: text,
     issuedAt: text,
+    /**
+     * ADR-134 (paper batch record pack): the weighing step's page lists every ingredient with blank boxes for lot,
+     * weight, time, done by and checked by. Absent on pages issued before ADR-134 (their text is unchanged).
+     */
+    weighings: z
+      .array(z.object({ lineNo: z.number().int(), materialName: text, materialCode: text, targetText: text, toleranceText: text, rangeText: text, needsCheck: z.boolean(), lotHint: opt }))
+      .max(80)
+      .optional(),
+    /** ADR-134: the last page lists the finish counts to write in (good pieces, rejects, packaging). */
+    finishCounts: z.array(z.object({ label: text, uom: opt })).max(30).optional(),
+    /** ADR-134: one plain line saying what to do when there is no internet. */
+    outageNote: opt.optional(),
   }),
   notice: text,
 });
