@@ -80,6 +80,9 @@ body { font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; 
 .tabular { font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* ADR-132 §5 (round 5 C B22): one help door per page. Where the frame shows its "?" (office roles from 640 px; the
+   Shell sets data-frame-help on <main>), the page's plain "?" for the same screen is hidden. */
+@media (min-width: 640px) { [data-frame-help] [data-page-help] { display: none; } }
 
 /* Touch targets (UX audit R2, brief: large targets, 44 px). Checkboxes and radios are drawn at 20 px in the
    brand colour; a label that wraps one is the hit area and is at least 44 px tall wherever it is a block

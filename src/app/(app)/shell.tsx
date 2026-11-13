@@ -434,7 +434,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
       </header>
 
       <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
-        <main id="main" className="min-w-0 flex-1 py-5 sm:py-7">
+        <main id="main" className="min-w-0 flex-1 py-5 sm:py-7" data-frame-help={loadHelp && !floor ? "on" : undefined}>
           <DeletedNotice pathname={pathname} />
           {children}
         </main>
