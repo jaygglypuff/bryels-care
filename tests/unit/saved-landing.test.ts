@@ -1,6 +1,6 @@
 /**
- * ADR-132 §6 (round 5 C report B23): after a save the record opens at the top with its success message in view. The
- * frame scrolls up only when the URL says "just saved" and has no #anchor (back/forward and anchors are left alone).
+ * ADR-132 §6 (round 5 C report B23): after a save the record opens at the top with its success message in view. A
+ * new page starts at the top (not Back/Forward, not an anchor); a "just saved" URL also focuses the green banner.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -24,13 +24,12 @@ describe("saved landing", () => {
   });
 
   it("a new page starts at the top unless reached with Back/Forward or an anchor; filters on one page do not move it", () => {
-    const a = { path: "/procurement/requests/new", search: "" };
-    expect(landAtTop(a, { path: "/procurement/requests/r1", search: "", hash: "" }, false)).toBe(true);
-    expect(landAtTop(a, { path: "/procurement/requests/r1", search: "", hash: "" }, true)).toBe(false);
-    expect(landAtTop(a, { path: "/procurement/requests/r1", search: "", hash: "#lines" }, false)).toBe(false);
-    expect(landAtTop({ path: "/sales", search: "status=open" }, { path: "/sales", search: "status=all", hash: "" }, false)).toBe(false);
-    expect(landAtTop({ path: "/sales/c1", search: "" }, { path: "/sales/c1", search: "saved=1", hash: "" }, false)).toBe(true);
-    expect(landAtTop(null, { path: "/sales", search: "", hash: "" }, false)).toBe(false);
+    const a = "/procurement/requests/new";
+    expect(landAtTop(a, { path: "/procurement/requests/r1", hash: "" }, false)).toBe(true);
+    expect(landAtTop(a, { path: "/procurement/requests/r1", hash: "" }, true)).toBe(false);
+    expect(landAtTop(a, { path: "/procurement/requests/r1", hash: "#lines" }, false)).toBe(false);
+    expect(landAtTop("/sales", { path: "/sales", hash: "" }, false)).toBe(false); // filters on the same page
+    expect(landAtTop(null, { path: "/sales", hash: "" }, false)).toBe(false); // first load: the browser decides
   });
 
   it("knows every 'just saved' word the server actions redirect with", () => {
