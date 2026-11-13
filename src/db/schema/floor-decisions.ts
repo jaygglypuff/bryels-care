@@ -184,3 +184,54 @@ export const batchPauses = pgTable(
     check("ck_batch_pauses_where", sql`length(btrim(${t.whereStopped})) >= 2`),
   ],
 );
+
+export const FINISH_CHECK_STATUSES = ["waiting", "confirmed", "returned", "withdrawn"] as const;
+export type FinishCheckStatus = (typeof FINISH_CHECK_STATUSES)[number];
+
+/**
+ * ADR-133 "Finish check on the checker's own phone" (ADR-130 open point, migration 0042). When the recipe's move-to-QA
+ * step needs a checker, the operator may send the Finish counts to be checked instead of a co-signature on their
+ * device: `input` is the Finish form as sent (re-run unchanged at confirm), `summary` what the checker reads. The
+ * checker confirms from their own session ("Looks right": Finish runs in that transaction, idempotent with
+ * `finish_key`) or sends it back with a reason. One waiting check per batch; the checker is never the operator.
+ * Status moves once from `waiting` (state machine `batch_finish_check` in src/modules/production/finish-check.ts).
+ */
+export const batchFinishChecks = pgTable(
+  "batch_finish_checks",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references((): AnyPgColumn => batches.id),
+    status: text("status").notNull().default("waiting"),
+    input: jsonb("input").notNull(),
+    summary: jsonb("summary").notNull(),
+    /** Idempotency key of the Finish run at confirm (so a retried confirm never finishes twice). */
+    finishKey: text("finish_key").notNull(),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    reason: text("reason"),
+    idempotencyKey: text("idempotency_key"),
+  },
+  (t) => [
+    index("batch_finish_checks_batch_idx").on(t.batchId, t.requestedAt),
+    index("batch_finish_checks_site_status_idx").on(t.siteId, t.status),
+    uniqueIndex("batch_finish_checks_one_waiting_uq").on(t.batchId).where(sql`${t.status} = 'waiting'`),
+    uniqueIndex("batch_finish_checks_idem_uq").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
+    uniqueIndex("batch_finish_checks_finish_key_uq").on(t.finishKey),
+    check("ck_batch_finish_checks_status", sql`${t.status} in (${inList(FINISH_CHECK_STATUSES)})`),
+    check("ck_batch_finish_checks_decider", sql`${t.decidedBy} is null or ${t.decidedBy} <> ${t.requestedBy}`),
+    check("ck_batch_finish_checks_decided", sql`(${t.status} in ('confirmed', 'returned')) = (${t.decidedBy} is not null and ${t.decidedAt} is not null)`),
+    check("ck_batch_finish_checks_returned", sql`${t.status} <> 'returned' or length(btrim(coalesce(${t.reason}, ''))) >= 3`),
+  ],
+);
