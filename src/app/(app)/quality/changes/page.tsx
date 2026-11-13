@@ -7,6 +7,8 @@ import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
 import { ChangeStatusChip } from "../capa/_ui";
 
+export const metadata = { title: "Change requests" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

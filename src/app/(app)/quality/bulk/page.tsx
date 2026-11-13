@@ -9,6 +9,8 @@ import { BulkForm } from "../w2c-forms";
 import { StepUpGate } from "../../admin/users/step-up-gate";
 import { plural } from "@/lib/plural";
 
+export const metadata = { title: "Decide many lots at once" };
+
 export const dynamic = "force-dynamic";
 
 type SP = { warehouseId?: string; itemKind?: string; materialKind?: string; status?: string; expiresFrom?: string; expiresTo?: string; lotPrefix?: string };

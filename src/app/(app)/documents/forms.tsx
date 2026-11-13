@@ -4,17 +4,18 @@ import type { ActionState } from "@/lib/errors";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { downloadPdfAction, reprintDocumentAction, voidDocumentAction } from "./actions";
+import { useClientKey } from "@/ui/use-client-key";
 
 export function DocReprintForm({ id, reasons }: { id: string; reasons: readonly { code: string; label: string; requiresNote: boolean }[] }) {
   const [state, action] = useActionState<ActionState, FormData>(reprintDocumentAction, null);
-  const [key] = useState(() => crypto.randomUUID());
+  const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const [reason, setReason] = useState("");
   const needsNote = reasons.find((r) => r.code === reason)?.requiresNote ?? false;
   const fe = state?.fieldErrors ?? {};
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label="Reason for the reprint" htmlFor="reasonCode" error={fe.reasonCode}>
         <Select id="reasonCode" name="reasonCode" value={reason} onChange={(e) => setReason(e.target.value)} required>
           <option value="">Choose a reason…</option>

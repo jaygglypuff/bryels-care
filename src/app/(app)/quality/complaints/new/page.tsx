@@ -6,6 +6,8 @@ import { Forbidden } from "../../../forbidden";
 import { LogComplaintForm } from "../forms";
 import { Help } from "@/ui/help/help";
 
+export const metadata = { title: "Write down a complaint" };
+
 export const dynamic = "force-dynamic";
 
 /** Log a complaint (W07-06): customer, the label's lot or box, what is reported. */

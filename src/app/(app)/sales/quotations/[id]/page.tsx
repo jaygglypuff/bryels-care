@@ -129,7 +129,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         }
       />
       <PageIntro>This screen is for one price offer: the prices we promised {d.customer.name}, until when, and the next step.</PageIntro>
-      {saved && (
+      {/* ADR-132 §12: only while it is still a draft (after Send the old "saved as a draft" line was wrong). */}
+      {saved && q.status === "draft" && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title="Price offer saved as a draft. Send it when it is ready." />
         </div>

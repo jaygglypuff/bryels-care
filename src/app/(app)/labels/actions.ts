@@ -14,6 +14,7 @@ import {
 } from "@/modules/documents";
 import { getReceipt } from "@/modules/inventory";
 import { previewHref, receiptLabelsTarget } from "./receipt-print";
+import { formKey } from "@/lib/form-key";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 
@@ -104,7 +105,7 @@ export async function reprintAction(_prev: ActionState, f: FormData): Promise<Ac
       reasonCode: str(f, "reasonCode"),
       note: str(f, "note") || null,
       copies: str(f, "copies") || "1",
-      idempotencyKey: str(f, "idempotencyKey"),
+      idempotencyKey: formKey(f),
     });
     target = `/print/labels/${r.jobId}?auto=1`;
   } catch (e) {

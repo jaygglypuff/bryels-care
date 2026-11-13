@@ -9,6 +9,9 @@ import { Help } from "@/ui/help/help";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { ComplaintStatusChip, TraceMatchChip } from "./_ui";
+import { severityWords } from "@/lib/severity-words";
+
+export const metadata = { title: "Customer complaints" };
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +66,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                 facts={
                   <>
                     {r.productName ?? "Product not known"}
-                    {r.lotNumber ? ` · lot ${r.lotNumber}` : ""} · {r.severity ? `how serious: ${r.severity}` : "not rated yet"} · {fmtDateTime(r.receivedAt)}
+                    {r.lotNumber ? ` · lot ${r.lotNumber}` : ""} · {r.severity ? `how serious: ${severityWords(r.severity).toLowerCase()}` : "not rated yet"} · {fmtDateTime(r.receivedAt)}
                     <span className="ml-1 inline-block align-middle">
                       <TraceMatchChip match={r.traceMatch} />
                     </span>

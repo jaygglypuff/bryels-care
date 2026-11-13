@@ -10,6 +10,8 @@ import { Forbidden } from "../../forbidden";
 import { CapaStatusChip, exportLinkCls } from "./_ui";
 import { plural } from "@/lib/plural";
 
+export const metadata = { title: "Fix-and-prevent plans" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

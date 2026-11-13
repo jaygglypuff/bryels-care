@@ -10,6 +10,7 @@ import { activeEntry, groupHref, groupSections, MORE, type NavBadges, type NavGr
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
+import { SavedLanding } from "@/ui/saved-landing";
 import { DemoBanner } from "@/ui/demo-banner";
 import { SignOutButton, SyncChip, useSync } from "@/ui/sync-status";
 import { FrameHelp, type FrameHelpResult } from "@/ui/help/frame-help";
@@ -52,6 +53,8 @@ type Props = {
   unreadCount: number;
   /** ADR-075: approvals waiting for the signed-in user (the "To approve" badge). */
   approvalCount?: number;
+  /** ADR-132 §1: things waiting for this person (approvals + checks + action messages); the "Needs me" badge. */
+  needsMeCount?: number;
   /** ADR-082: show the "To approve" button only to people who approve something. */
   showApprovals?: boolean;
   switchSite: (fd: FormData) => Promise<void>;
@@ -136,7 +139,7 @@ function DrawerSync({ userId }: { userId: string }) {
  * (My account, Help, Set-up, All screens, sign out). Under it the open area's tabs (at most five, then one flat "More").
  * Phones and tablets: one ☰ (not for floor roles) and the role's bottom bar. Esc closes the drawer and the menus.
  */
-export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dashboard", floor = false, needsMeArea = false, hasSetup = false, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dashboard", floor = false, needsMeArea = false, hasSetup = false, qaCount, unreadCount, approvalCount = 0, needsMeCount, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const accountRef = useRef<HTMLDetailsElement>(null);
@@ -182,7 +185,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
   const { group: activeGroup, href: activeHref } = activeEntry(nav, pathname);
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
-  const needsMe = approvalCount + unreadCount;
+  const needsMe = needsMeCount ?? approvalCount + unreadCount;
   const badges: NavBadges = { ...(qaCount ? { "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}), ...(unreadCount ? { "/notifications": unreadCount } : {}) };
   const areaBadge = (g: NavGroup) => (g.label === "Needs me" ? needsMe : 0);
   const tabBadge = (t: Tab) => (t.needsMe ? needsMe : badges[t.href]);
@@ -432,8 +435,10 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
       </header>
 
       <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
-        <main id="main" className="min-w-0 flex-1 py-5 sm:py-7">
+        <main id="main" className="min-w-0 flex-1 py-5 sm:py-7" data-frame-help={loadHelp && !floor ? "on" : undefined}>
           <DeletedNotice pathname={pathname} />
+          {/* ADR-132 §6: after a save the record opens at the top with its success message. */}
+          <SavedLanding />
           {children}
         </main>
       </div>

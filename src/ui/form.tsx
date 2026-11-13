@@ -1,6 +1,6 @@
 "use client";
 import { useFormStatus } from "react-dom";
-import { useActionState, useRef, useState, type ComponentProps, type MouseEvent, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ComponentProps, type MouseEvent, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Button, cx, type ButtonVariant } from "./core";
 import { WhoCanHelp } from "./who-can-help";
@@ -98,6 +98,7 @@ export function ActionForm<S extends ActionState = ActionState>({
   children,
   className = "flex flex-col gap-3",
   messageBelow = false,
+  onDone,
 }: {
   action: FormAction<S>;
   hidden?: Record<string, string | null | undefined>;
@@ -112,8 +113,17 @@ export function ActionForm<S extends ActionState = ActionState>({
   className?: string;
   /** Show the server's message under the button instead of above it. */
   messageBelow?: boolean;
+  /** Called once per successful save (ADR-132: a small form that closes itself after saving shows no second "Save"). */
+  onDone?: (state: NonNullable<S>) => void;
 }) {
   const [state, dispatch] = useInPlaceAction<S>(action);
+  const doneFor = useRef<S | null>(null);
+  useEffect(() => {
+    if (state?.ok && onDone && doneFor.current !== state) {
+      doneFor.current = state;
+      onDone(state as NonNullable<S>);
+    }
+  }, [state, onDone]);
   const fe = state?.fieldErrors ?? {};
   const message = <FormMessage state={state} />;
   const formRef = useRef<HTMLFormElement>(null);

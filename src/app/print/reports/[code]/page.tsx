@@ -43,7 +43,7 @@ export default async function ReportPrintPage({ params, searchParams }: { params
         @media print { thead { display: table-header-group; } tr { break-inside: avoid; } }
       `}</style>
       <div className="no-print mx-auto mb-4 flex max-w-[297mm] items-center justify-between gap-3 px-4">
-        <a href={`/reports/${out.code}`} className="text-[14px] text-primary-text hover:underline">← Back to the report</a>
+        <a href={`/reports/${out.code}`} className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">← Back to the report</a>
         <PrintButton />
       </div>
       <article className="mx-auto w-full max-w-[297mm] overflow-x-auto bg-white p-[12mm] text-[11px] leading-snug text-black shadow-sm print:overflow-visible print:p-0 print:shadow-none">

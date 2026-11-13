@@ -5,7 +5,7 @@
  * (letters, dash, digits: B-26-0003, BM-2610-0026, DRM-2610-018, SUP-0006); the words around them stay.
  * Pure (unit-tested); the stored title is unchanged.
  */
-const RECORD_NO = /\b(?:DR\s+)?[A-Z]{1,5}-\d{2,4}(?:-\d{2,7})?\b/g;
+const RECORD_NO = /(?<!\bshelf\s)\b(?:DR\s+)?[A-Z]{1,5}-\d{2,4}(?:-\d{2,7})?\b/g;
 
 export function codeLast(title: string): { text: string; codes: string[] } {
   const codes: string[] = [];

@@ -5,13 +5,12 @@ import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { amendAction, closeBatchAction, decideReopenAction, issuePaperAction, requestReopenAction, reviewPaperAction, voidPaperAction, withdrawReopenAction } from "./actions";
+import { useRenewableClientKey } from "@/ui/use-client-key";
 
 /** Client forms of the closure page; every action is re-checked by the services (US-3-19, US-3-20). */
 
-function useKey() {
-  const [key, setKey] = useState(() => crypto.randomUUID());
-  return [key, () => setKey(crypto.randomUUID())] as const;
-}
+/** The form's key, made after hydration (ADR-125, ADR-132 §10); `renew` after a save that keeps the form. */
+const useKey = useRenewableClientKey;
 
 const confirmSubmit = (text: string) => (e: React.FormEvent<HTMLFormElement>) => {
   if (!window.confirm(text)) e.preventDefault();
@@ -23,7 +22,7 @@ export function CloseBatchForm({ batchId, batchNumber }: { batchId: string; batc
   return (
     <form action={action} onSubmit={confirmSubmit(`Close batch ${batchNumber}? The record becomes final; changes later need a reopen approved by a site manager and QA.`)} className="space-y-3">
       <input type="hidden" name="batchId" value={batchId} />
-      <input type="hidden" name="idempotencyKey" value={key} suppressHydrationWarning />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label="Closure note (optional)" htmlFor="close-note" error={state?.fieldErrors?.note}>
         <Textarea id="close-note" name="note" maxLength={1000} rows={2} />
       </Field>
@@ -42,7 +41,7 @@ export function ReopenRequestForm({ batchId, fromState }: { batchId: string; fro
   return (
     <form action={action} onSubmit={confirmSubmit("Request a reopen of this closed batch? A QA user must co-approve before anything changes.")} className="space-y-3">
       <input type="hidden" name="batchId" value={batchId} />
-      <input type="hidden" name="idempotencyKey" value={key} suppressHydrationWarning />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label="While it is amended, the batch goes to" htmlFor="targetState" error={fe.targetState}>
         <Select id="targetState" name="targetState" defaultValue={fromState ?? "quarantined"} required>
           {fromState && <option value={fromState}>Back to {fromState} (record correction only; the QA decision stands)</option>}
@@ -132,7 +131,7 @@ export function AmendmentForm({ batchId, amendments }: { batchId: string; amendm
   return (
     <form action={action} onSubmit={confirmSubmit("Record this amendment? It cannot be edited or deleted; a mistake is corrected by another amendment.")} className="grid gap-3 sm:grid-cols-2">
       <input type="hidden" name="batchId" value={batchId} />
-      <input type="hidden" name="idempotencyKey" value={key} suppressHydrationWarning />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label="BMR section" htmlFor="section" error={fe.section}>
         <Select id="section" name="section" required defaultValue="process_steps">
           {SECTIONS.map(([v, l]) => (
@@ -182,7 +181,7 @@ export function IssuePaperForm({ batchId, steps }: { batchId: string; steps: { s
   return (
     <form action={async (f) => { await action(f); renew(); }} className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <input type="hidden" name="batchId" value={batchId} />
-      <input type="hidden" name="idempotencyKey" value={key} suppressHydrationWarning />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label="Blank paper page for step" htmlFor="stepNo" error={state?.fieldErrors?.stepNo}>
         <Select id="stepNo" name="stepNo" required>
           {steps.map((s) => (

@@ -92,7 +92,9 @@ describe("production orders in To approve", () => {
     expect(new Set(recipients).size).toBe(recipients.length);
     const mgr = before.find((n) => n.recipientUserId === w.manager.userId)!;
     expect(mgr.link).toBe(`/production/orders/${orderId}`);
-    expect(mgr.title).toBe(`Production order ${orderNumber} waits for your approval`);
+    // ADR-132 §3: the product leads; the order number is in the body.
+    expect(mgr.title).toMatch(/^Approve making \S/);
+    expect(mgr.body).toContain(orderNumber);
     // Nobody who only works at the other site.
     const [rvsOnly] = await db.select().from(users).where(eq(users.email, "warehouse.rvs@bryels-care.test"));
     expect(recipients).not.toContain(rvsOnly.id);

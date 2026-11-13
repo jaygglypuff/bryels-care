@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { DbOrTx, Tx } from "@/db/client";
-import { batches, idempotencyKeys, rolePermissions, userSiteAssignments, users } from "@/db/schema";
+import { batches, idempotencyKeys, products, rolePermissions, userSiteAssignments, users } from "@/db/schema";
 import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -159,4 +159,10 @@ export async function idempotent<T extends object>(
     .set({ result: sql`${JSON.stringify(result)}::jsonb` })
     .where(eq(idempotencyKeys.id, inserted[0].id));
   return { result, replayed: false };
+}
+
+/** The product's name for message titles (ADR-132 §3: names before codes); "the product" when it cannot be read. */
+export async function productNameOf(q: DbOrTx, productId: string): Promise<string> {
+  const [p] = await q.select({ name: products.name }).from(products).where(eq(products.id, productId)).limit(1);
+  return p?.name ?? "the product";
 }

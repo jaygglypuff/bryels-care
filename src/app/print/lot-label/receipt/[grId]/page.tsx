@@ -59,7 +59,7 @@ export default async function ReceiptLabelsPage({ params, searchParams }: { para
         <Banner tone="info" title="No label is approved yet">QA must approve a raw material label first ({LABELS_MENU_PATH}).</Banner>
       ) : (
         <>
-          {preview?.options[0] && <LabelPreview kind="sack" data={preview.options[0].face} sentence={`This is the label. ${preview.options.length > 1 ? "Other sizes are below. " : ""}Stick one on each sack or drum.`} />}
+          {preview?.options[0] && <LabelPreview kind="sack" data={preview.options[0].face} layout={preview.showLayout ? preview.options[0].layout : null} sentence={`This is the label. ${preview.options.length > 1 ? "Other sizes are below. " : ""}Stick one on each sack or drum.`} />}
           <section className="rounded-[20px] border border-line bg-surface p-5">
             {labelledText && <p className="mb-3 text-[15px] text-[var(--warn-fg)]">{labelledText} already {labelledNames.length === 1 ? "has" : "have"} labels, so they are not printed again. Lost one? Open the lot and print it again with a reason.</p>}
             <ReceiptJobsForm

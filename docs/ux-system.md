@@ -325,7 +325,9 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 >    want" (`src/ui/search-enter.ts`). Never the first hit of another type.
 > 3. **Words on the buttons where they fit:** To approve, Messages, Help show their words from 768/1024 px with one
 >    site; with the site selector from 1536 px. Owner and manager have no To approve or Messages button: both are in
->    **Needs me** (badge = approvals + unread messages).
+>    **Needs me** (ADR-132: badge = things waiting for this person's action — approvals they can decide + checks waiting
+>    for them + open messages that ask them to act, not FYI; the same number as Home's "Needs you" card, one function
+>    `needsMeSummary`).
 > 4. **The sync chip shows only when something waits to be sent or there is no signal**, with words ("3 pending",
 >    "Offline"); "all saved" shows nothing. The drawer keeps the line in words.
 > 5. **One menu button.** Phones: one ☰ in the top bar (none for floor roles); never a Menu tab. The avatar menu has
@@ -347,6 +349,24 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 > **Messages (round 5):** a message that asks for work clears itself when the work is done or is no longer the
 > person's (`src/modules/platform/notification-done.ts`); the bell and the open list count only messages that still
 > need the person; history shows them as **Done**. Floor roles have no "Mark read" or "I'm on it" (tap = read).
+> ADR-132: three or more messages of one kind and screen on one day are **one row** ("12 lots are ready to put away",
+> **Open the list**, "See each one"); each message keeps its own buttons. Titles **lead with names and places**
+> ("Put the Coconut Oil (lot …0017) on shelf A-01"); the full record number is in the body
+> (`src/lib/message-titles.ts`).
+>
+> **One help door per page (ADR-132).** Where the frame shows its "?" (office roles from 640 px), a page's plain "?"
+> for the same screen is hidden (`[data-frame-help] [data-page-help]`); phones and floor roles keep the page's one. A
+> "?" with its own words or for one step always shows.
+>
+> **After a save (ADR-132).** A new page reached without Back/Forward or an #anchor starts at the top
+> (`src/ui/saved-landing.tsx`, in the frame); with a "just saved" word in the URL (`?created=1`, `?saved=1`, …) the
+> green banner takes the focus. A "saved as a draft" banner shows only while the record is still a draft.
+>
+> **Browser-tab titles (ADR-132).** Every page that renders exports `metadata.title` (or `generateMetadata`); the tab
+> reads "<page> · Bryel's Care". `tests/unit/page-titles.test.ts` walks every page file.
+>
+> **Floor search (ADR-132).** Operators, checkers and warehouse people see batches, lots, boxes, shelves, customer and
+> production orders and deliveries in Search; customers and suppliers are also found by address words.
 
 > **Frame rules after the UX audit, round 2 (2026-10-31).** (1) One door per job: a screen that has a
 > top-bar button is not repeated in the tab rows (Messages = bell at every width; To approve = top-bar

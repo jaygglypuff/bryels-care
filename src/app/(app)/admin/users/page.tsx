@@ -11,6 +11,8 @@ import { plainRoleName } from "@/ui/role-names";
 import { Forbidden } from "../../forbidden";
 import { UserStatusChip } from "./user-status";
 
+export const metadata = { title: "People who use the app" };
+
 export const dynamic = "force-dynamic";
 
 const STATUSES = ["invited", "active", "locked", "deactivated"];

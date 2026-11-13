@@ -5,6 +5,8 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { CreateWorkOrderForm } from "../../forms";
 
+export const metadata = { title: "Report a broken machine" };
+
 export const dynamic = "force-dynamic";
 
 /** Report a problem / raise a corrective or inspection work order (W13), optionally for one piece of equipment. */

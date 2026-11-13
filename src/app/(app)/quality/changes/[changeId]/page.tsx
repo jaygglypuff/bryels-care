@@ -13,6 +13,8 @@ import { Forbidden } from "../../../forbidden";
 import { ChangeStatusChip } from "../../capa/_ui";
 import { CancelChangeForm, CloseChangeForm, DecideChangeForm, EditChangeForm, ImplementChangeForm, LinkRevisionForm, SubmitChangeForm } from "../forms";
 
+export const metadata = { title: "Change request" };
+
 export const dynamic = "force-dynamic";
 
 /** Change control detail: proposal, impact assessment, approval card, implementation and closure. */

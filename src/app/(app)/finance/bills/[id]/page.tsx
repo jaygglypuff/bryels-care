@@ -125,7 +125,7 @@ export default async function BillPage({ params, searchParams }: { params: Promi
         }
       />
       <PageIntro>This screen is for one bill a supplier sent us: what they charge, whether it matches the order and the delivery, and paying it.</PageIntro>
-      {created && (
+      {created && b.status === "draft" && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title="Supplier bill saved.">Send it for approval: the system first checks it against the order and the delivery.</Banner>
         </div>

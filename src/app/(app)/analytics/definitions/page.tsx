@@ -7,6 +7,8 @@ import { Banner, Chip } from "@/ui/status";
 import { PageIntro } from "@/ui/guide";
 import { LABEL_TEXT } from "@/ui/charts/format";
 
+export const metadata = { title: "What each number means" };
+
 export const dynamic = "force-dynamic";
 
 const AREA_TEXT: Record<string, string> = { operations: "Operations", inventory: "Inventory", quality: "Quality", sales: "Sales", finance: "Finance", owner: "Owner" };

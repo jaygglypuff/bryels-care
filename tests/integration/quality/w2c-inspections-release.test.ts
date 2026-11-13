@@ -199,7 +199,7 @@ describe("US-3-15 / US-3-21 release blocked by deviations and holds, decided by 
     expect(d.deviationNumber).toMatch(/^DEV-\d{2}-\d{4}$/);
     deviationId = d.deviationId;
     const v = await getBatchRelease(qaLead, b.batchId);
-    expect(v.blockers.map((x) => x.message).join(" ")).toMatch(new RegExp(`Deviation ${d.deviationNumber} is open`));
+    expect(v.blockers.map((x) => x.message).join(" ")).toMatch(new RegExp(`Problem report ${d.deviationNumber} is still open`));
     await expectCode(decideBatch(qaLead, { batchId: b.batchId, decision: "release", reason: "Release attempt with an open deviation" }), "state");
   });
 

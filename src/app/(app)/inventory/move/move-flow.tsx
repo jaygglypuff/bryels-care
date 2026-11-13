@@ -10,6 +10,7 @@ import { Banner } from "@/ui/status";
 import type { MoveResult } from "@/modules/inventory/moves";
 import { LOCATION_KIND_WORDS, LotStatusChip } from "@/ui/inventory/bits";
 import { lookupSourceAction, postMoveAction, undoMoveAction, type LotMatch, type SourceInfo } from "./actions";
+import { useRenewableClientKey } from "@/ui/use-client-key";
 
 type Loc = { id: string; code: string; name: string; kind: string };
 
@@ -75,7 +76,7 @@ export function MoveFlow({ locations, initialSource, initialDestination, lots = 
   const [unit, setUnit] = useState<string>(() => startAmount(initialSource).unit);
   const [dest, setDest] = useState<Loc | null>(initialDestination);
   const [reason, setReason] = useState("");
-  const [key, setKey] = useState(newKey);
+  const [key, renewKey] = useRenewableClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<LotMatch[]>([]);
   const [result, setResult] = useState<MoveResult | null>(null);
@@ -117,7 +118,7 @@ export function MoveFlow({ locations, initialSource, initialDestination, lots = 
     setReason("");
     setError(null);
     setResult(null);
-    setKey(newKey());
+    renewKey();
   };
 
   if (result) return <UndoToast result={result} onDone={reset} />;

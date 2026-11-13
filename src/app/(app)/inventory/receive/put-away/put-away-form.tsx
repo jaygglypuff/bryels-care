@@ -5,6 +5,7 @@ import { Field, Input, Select } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 import { putAwayAction } from "./actions";
+import { useClientKey } from "@/ui/use-client-key";
 
 type Bal = { locationId: string; code: string; name: string; qtyText: string; looseQtyText: string; boxed: boolean };
 type Dest = { id: string; code: string; name: string; kind: string; sectionLabel?: string; suggested?: boolean };
@@ -36,7 +37,7 @@ export function PutAwayForm({
   uom: string;
   fromTask: boolean;
 }) {
-  const [key] = useState(() => crypto.randomUUID());
+  const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const [state, dispatch] = useActionState<ActionState, FormData>(putAwayAction, null);
   const [to, setTo] = useState<PickCandidate | null>(() => {
     const d = destinations.find((x) => x.id === defaultTo);
@@ -54,7 +55,7 @@ export function PutAwayForm({
   return (
     <form action={dispatch} className="space-y-4">
       <input type="hidden" name="lot" value={lotNumber} />
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <ScanOrPick kind="location" name="fromLocationId" label="Take it from which place?" candidates={fromCands} defaultValue={defaultFrom} hideWhenSingle required onlyCandidates search={false} error={fe.fromLocationId} />
       <div className="grid grid-cols-[1fr_auto] items-end gap-2 sm:max-w-sm">
         <Field label="How much? (optional)" htmlFor="qty" error={fe.qty} hint="Leave empty to move everything from there, boxes too.">

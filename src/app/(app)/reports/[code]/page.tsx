@@ -11,6 +11,8 @@ import { Forbidden } from "../../forbidden";
 import { ReportFootnotes, ReportHeader, ReportTable } from "../report-view";
 import { ReportAdminForm } from "./forms";
 
+export const metadata = { title: "Report" };
+
 export const dynamic = "force-dynamic";
 
 type SP = Record<string, string | string[] | undefined>;

@@ -15,6 +15,8 @@ import { Forbidden } from "../../../forbidden";
 import { StepUpGate } from "../../users/step-up-gate";
 import { EditRoleForm, RetireRoleForms } from "../forms";
 
+export const metadata = { title: "Job and what it may do" };
+
 export const dynamic = "force-dynamic";
 
 const SENS = { N: "neu", S: "warn", R: "bad" } as const;

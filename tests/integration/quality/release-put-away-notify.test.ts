@@ -1,7 +1,7 @@
 /**
  * Usability test 2026-10-30: when QA releases a lot whose stock waits in a quarantine/hold/receiving
  * place, the warehouse people of that site (inventory.movement.post there) are told, in the release
- * transaction, once per lot: "Coconut Oil lot L-… is ready — put it on A-01" with a link to Put away.
+ * transaction, once per lot: "Put the Coconut Oil (lot …0024) on shelf A-01" with a link to Put away.
  * People of other sites are not told; a lot already on a shelf sends nothing.
  */
 import { randomUUID } from "node:crypto";
@@ -62,7 +62,9 @@ describe("QA release tells the warehouse to put the lot away", () => {
     expect(to.has(await userId("joy.ramos@bryels-care.test"))).toBe(false); // RVS only
     expect(to.has(qa.userId)).toBe(false);
     const n = notes.find((x) => x.recipientUserId === wh.userId)!;
-    expect(n.title).toBe(`Coconut Oil lot ${lot.lotNumber} is ready — put it on A-01`);
+    // ADR-132 §3: names and places first, the lot short; the full lot number is in the body.
+    expect(n.title).toBe(`Put the Coconut Oil (lot …${lot.lotNumber.replace(/\D/g, "").slice(-4)}) on shelf A-01`);
+    expect(n.body).toContain(lot.lotNumber);
     expect(n.link).toBe("/inventory/receive/put-away");
     expect(n.siteId).toBe(nfd.id);
     expect(n.body).toContain("QUA-01");

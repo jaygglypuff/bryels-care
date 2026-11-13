@@ -14,6 +14,8 @@ import { LotPickerNav } from "../lot-picker-nav";
 import { QaStatusChip, fmtLotQty } from "../_ui";
 import { isAre, plural } from "@/lib/plural";
 
+export const metadata = { title: "Who received it" };
+
 export const dynamic = "force-dynamic";
 
 const RELATION_WORD = { subject: "The one you chose", source: "Made it", downstream: "Used it", sibling: "Used the same material lot" } as const;
@@ -21,7 +23,7 @@ const ROLE_WORD = { start: "The one you chose", upstream: "Went into it", downst
 /** Pick a lot by its name instead of typing its number (ADR-088): the lots of the current site, newest use-by first. */
 async function lotChoices(ctx: Awaited<ReturnType<typeof requireContext>>) {
   if (!ctx.can("inventory.lot.view")) return [];
-  const rows = await listLots(ctx, { includeEmpty: true });
+  const rows = await listLots(ctx, { includeEmpty: true, order: "newest" });
   return rows.map((l) => ({ lotNumber: l.lotNumber, label: `${l.itemName} · ${l.lotNumber}${l.supplierName ? ` · ${l.supplierName}` : ""}` }));
 }
 

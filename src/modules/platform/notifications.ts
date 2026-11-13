@@ -6,7 +6,7 @@ import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
-import { resolveDoneNotifications } from "./notification-done";
+import { RESOLVABLE_KINDS, resolveDoneNotifications } from "./notification-done";
 
 export const SEVERITIES = ["info", "warning", "critical"] as const;
 export type Severity = (typeof SEVERITIES)[number];
@@ -152,6 +152,28 @@ export async function unreadNotificationCount(ctx: AuthContext): Promise<number>
     .from(notifications)
     .where(and(eq(notifications.recipientUserId, ctx.userId), isNull(notifications.readAt), isNull(notifications.acknowledgedAt), isNull(notifications.resolvedAt)));
   return Number(r?.n ?? 0);
+}
+
+/**
+ * Round 5 leftovers (ADR-132 §1): the signed-in person's open messages that ask them to act (kinds that clear when
+ * the work is done), read or not. "Needs me" counts these (analytics `needsMeSummary`); the bell still counts unread.
+ */
+export async function openActionMessages(ctx: AuthContext) {
+  await clearDone(ctx);
+  return db
+    .select({ id: notifications.id, kind: notifications.kind, entityType: notifications.entityType, entityId: notifications.entityId, link: notifications.link, createdAt: notifications.createdAt })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.recipientUserId, ctx.userId),
+        eq(notifications.organizationId, ctx.organizationId),
+        isNull(notifications.acknowledgedAt),
+        isNull(notifications.resolvedAt),
+        inArray(notifications.kind, RESOLVABLE_KINDS as string[]),
+      ),
+    )
+    .orderBy(desc(notifications.createdAt))
+    .limit(300);
 }
 
 async function own(ctx: AuthContext, id: string) {

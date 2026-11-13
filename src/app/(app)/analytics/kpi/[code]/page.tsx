@@ -9,6 +9,8 @@ import { Banner } from "@/ui/status";
 import { fmtKpi, hhmm } from "@/ui/charts/format";
 import { CategoryChip, RecordRef, ValueLabelChip, plainKpi, rangeText } from "../../kpi-ui";
 
+export const metadata = { title: "The records behind a number" };
+
 export const dynamic = "force-dynamic";
 
 const AGG_TEXT: Record<string, string> = {

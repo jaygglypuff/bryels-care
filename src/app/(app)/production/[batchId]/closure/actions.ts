@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError, toActionState, type ActionState } from "@/lib/errors";
 import { closeBatch, decideReopen, issuePaperPage, recordAmendment, requestReopen, reviewPaperRecord, voidPaperPage, withdrawReopen } from "@/modules/production";
 import { plural } from "@/lib/plural";
+import { formKey } from "@/lib/form-key";
 
 /** Server actions of the batch closure page (US-3-19, US-3-20). Thin: the services check everything. */
 
@@ -32,7 +33,7 @@ async function run(f: FormData, fn: () => Promise<unknown>, ok: string): Promise
 export async function closeBatchAction(_p: ActionState, f: FormData): Promise<ActionState> {
   try {
     const ctx = await requireContext();
-    const r = await closeBatch(ctx, { batchId: str(f, "batchId"), note: str(f, "note") || null, idempotencyKey: str(f, "idempotencyKey") });
+    const r = await closeBatch(ctx, { batchId: str(f, "batchId"), note: str(f, "note") || null, idempotencyKey: formKey(f) });
     revalidatePath(path(f));
     return { ok: true, message: `Batch closed. Final BMR ${r.documentNumber} (${r.watermark}) is ready to print${r.reservationsReleased ? `; ${plural(r.reservationsReleased, "reservation")} released` : ""}.` };
   } catch (e) {
@@ -50,7 +51,7 @@ export async function requestReopenAction(_p: ActionState, f: FormData): Promise
         targetState: str(f, "targetState") as "released",
         reason: str(f, "reason"),
         amendmentScope: str(f, "amendmentScope"),
-        idempotencyKey: str(f, "idempotencyKey"),
+        idempotencyKey: formKey(f),
       }),
     "Reopen requested. QA has been asked to co-approve.",
   );
@@ -80,7 +81,7 @@ export async function amendAction(_p: ActionState, f: FormData): Promise<ActionS
         correctedValue: str(f, "correctedValue"),
         reason: str(f, "reason"),
         supersedesId: str(f, "supersedesId") || null,
-        idempotencyKey: str(f, "idempotencyKey"),
+        idempotencyKey: formKey(f),
       }),
     "Amendment recorded. It prints on the BMR with the previous value.",
   );
@@ -88,7 +89,7 @@ export async function amendAction(_p: ActionState, f: FormData): Promise<ActionS
 
 export async function issuePaperAction(_p: ActionState, f: FormData): Promise<ActionState> {
   const ctx = await requireContext();
-  return run(f, () => issuePaperPage(ctx, { batchId: str(f, "batchId"), stepNo: Number(str(f, "stepNo")), idempotencyKey: str(f, "idempotencyKey") }), "Paper page issued. Print it from the list below.");
+  return run(f, () => issuePaperPage(ctx, { batchId: str(f, "batchId"), stepNo: Number(str(f, "stepNo")), idempotencyKey: formKey(f) }), "Paper page issued. Print it from the list below.");
 }
 
 export async function reviewPaperAction(_p: ActionState, f: FormData): Promise<ActionState> {

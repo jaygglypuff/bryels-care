@@ -28,7 +28,8 @@ export type LabelEntityType = "inventory_lot" | "location" | "container" | "batc
 export type LabelKind = "sack" | "tub" | "bar" | "product_box" | "box" | "shelf";
 
 /** `rendererVersion` 1 = the old label layout (re-audit B #12: the screen says QA can approve the new one). */
-export type LabelOption = { templateId: string; name: string; media: string; widthMm: number; heightMm: number; face: LabelFaceData; rendererVersion: number | null };
+/** `layout`: the approved layout and version that prints it (ADR-132 §11: shown under More details to QA and layout editors only). */
+export type LabelOption = { templateId: string; name: string; media: string; widthMm: number; heightMm: number; face: LabelFaceData; rendererVersion: number | null; layout: { code: string; name: string; versionNo: number } };
 
 export type LabelPreview = {
   entity: { type: LabelEntityType; id: string; number: string; name: string | null; appliesTo: string; siteId: string; state: string | null };
@@ -43,6 +44,8 @@ export type LabelPreview = {
   /** The site's label printer the job is recorded against (the person still picks it in the print window). */
   printer: { name: string; printerName: string } | null;
   canReprint: boolean;
+  /** ADR-132 §11: QA and layout editors see the layout code and version (under More details); floor people do not. */
+  showLayout: boolean;
   reprintReasons: { code: string; label: string; requiresNote: boolean }[];
 };
 
@@ -104,7 +107,7 @@ export async function labelPreview(
     };
     const out = renderFrozen(version.definition, "label", { meta: previewMeta(layout.code, layout.name, version.versionNo, version.definitionChecksum, e, siteCode), data });
     const rendererVersion = (version.definition as { renderer?: { version?: number } } | null)?.renderer?.version ?? null;
-    options.push({ templateId: t.id, name: t.name, media: `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm`, widthMm: Number(t.mediaWidthMm), heightMm: Number(t.mediaHeightMm), face: labelFace(data, out.body.value, out.css), rendererVersion });
+    options.push({ templateId: t.id, name: t.name, media: `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm`, widthMm: Number(t.mediaWidthMm), heightMm: Number(t.mediaHeightMm), face: labelFace(data, out.body.value, out.css), rendererVersion, layout: { code: layout.code, name: layout.name, versionNo: version.versionNo } });
   }
 
   const existing = history
@@ -131,6 +134,7 @@ export async function labelPreview(
     blocked,
     printer: stations[0] ? { name: stations[0].name, printerName: stations[0].printerName } : null,
     canReprint: ctx.can("inventory.label_job.create") && ctx.can("documents.reprint.create"),
+    showLayout: ctx.can("quality.disposition.view") || ctx.can("documents.template.edit"),
     reprintReasons: reasons.map((r) => ({ code: r.code, label: r.label, requiresNote: r.requiresNote })),
   };
 }

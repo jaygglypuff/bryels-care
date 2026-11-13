@@ -11,6 +11,7 @@ import { Chip } from "@/ui/status";
 import type { PriceBooks } from "../new/order-form";
 import { useActionForm } from "../use-action-form";
 import { saveQuoteAction } from "./actions";
+import { useClientKey } from "@/ui/use-client-key";
 
 type Line = { key: number; productId: string; qtyUnits: string; unitPrice: string };
 type CustomerOpt = { id: string; code: string; name: string; status?: string; addresses?: { id: string; label: string; text: string; isDefaultShipTo: boolean }[] };
@@ -23,7 +24,6 @@ const safeD = (v: string) => {
     return new Decimal(0);
   }
 };
-const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 function listPrice(book: PriceBooks[string] | undefined, productId: string, qty: string): string | null {
   const breaks = book?.[productId];
@@ -37,7 +37,7 @@ function listPrice(book: PriceBooks[string] | undefined, productId: string, qty:
 /** Price offer (quotation, W09-01): usual prices fill in; a lower price is a discount that may need approval (more than 10 % by default). */
 export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, today, initial, initialCustomerId }: { customers: CustomerOpt[]; products: { id: string; skuCode: string; name: string }[]; priceBooks: PriceBooks; defaultValidUntil: string; today: string; initial?: QuoteFormInitial; initialCustomerId?: string }) {
   const { state, pending, onSubmit } = useActionForm(saveQuoteAction);
-  const [key] = useState(newKey);
+  const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const [customerId, setCustomerId] = useState(initial?.customerId ?? initialCustomerId ?? "");
   const [validUntil, setValidUntil] = useState(initial?.validUntil ?? defaultValidUntil);
   const [shipTo, setShipTo] = useState(initial?.shipToAddressId ?? "");
@@ -54,7 +54,7 @@ export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, 
   const update = (k: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
   return (
     <form onSubmit={onSubmit} className="flex max-w-4xl flex-col gap-4">
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <input type="hidden" name="lines" value={JSON.stringify(lines.map(({ productId, qtyUnits, unitPrice }) => ({ productId, qtyUnits, unitPrice })))} />
       {initial && <input type="hidden" name="quoteId" value={initial.quoteId} />}
       {initial && <input type="hidden" name="customerId" value={initial.customerId} />}

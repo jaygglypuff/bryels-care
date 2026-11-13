@@ -17,7 +17,7 @@ Status: **done** = built and tested in that part; **partly** = what is left is n
 | Item (audit) | Status | Part | Notes |
 |---|---|---|---|
 | Owner/manager menu Home · Needs me · Sell · Make · Buy & stock · Money (B §Navigation, #10) | done | 1 | `AREAS_BY_PERSONA`; ≤ 5 tabs + one flat More; tests `nav-per-role` |
-| Needs me = To approve + Problems & alerts + Messages, badge (B #1 #2) | done | 1 | badge = approvals + unread messages |
+| Needs me = To approve + Problems & alerts + Messages, badge (B #1 #2) | done | 1, A | ADR-132: badge = Home "Needs you" = approvals I can decide + checks waiting for me + open messages that ask me to act (`needsMeSummary`); the card shows "1 approval · 4 messages" |
 | Set-up behind the avatar menu, reachable by search (B #10) | done | 1 | `/setup`; `/management` redirects there |
 | Production plan under Make (B task 8) | done | 1 | a Make tab |
 | Purchasing chip row removed; purchasing appears once (B #10, C §5) | done | 1 | `SubNav` renders nothing |
@@ -32,7 +32,7 @@ Status: **done** = built and tested in that part; **partly** = what is left is n
 | Menu highlight matches the page; batch record ≠ Management (B B13) | done | 1 | `activeEntry`; test |
 | Old URLs keep working; permissions unchanged | done | 1 | every page still checks on the server |
 | Two sub-menu dropdowns open at once (C B17) | done | 1 | no section dropdowns any more; one More |
-| Second "?" in record headers (C B22) | not | — | `RecordHeader` keeps its own "?"; left for the record-template owner |
+| Second "?" in record headers (C B22) | done | A | ADR-132: a page's plain "?" hides where the frame shows its "?" (office roles from 640 px); measured: one help button on every office page at 1366 px, one on phones |
 
 ### Homes
 
@@ -63,8 +63,8 @@ Status: **done** = built and tested in that part; **partly** = what is left is n
 | Questions and actions ("who owes", "this month's sales", "new customer") (B task 6, C #15) | done | 1 | `SEARCH_QUESTIONS`, `SEARCH_ACTIONS` |
 | Short numbers ("4", "SO 4", "order 4", "0003") (C #15, A B14) | done | 1 | "ends with" match; set-asides, stock changes, documents left out of short results |
 | Enter opens exact number, else the highlighted row, never an unrelated first hit (A B14) | done | 1 | measured: "0003" + Enter stays with "choose one" for all 9 roles |
-| Floor search limited to batches, lots, boxes, shelves, orders (A #15) | partly | 1 | noise types out of short-number results for everyone; full role filter not done |
-| Addresses ("pasig") (C #15) | not | — | customer addresses are not searched |
+| Floor search limited to batches, lots, boxes, shelves, orders (A #15) | done | A | ADR-132: operator, checker and warehouse see batches, lots, boxes, shelves, customer and production orders and deliveries only (`FLOOR_RECORD_TYPES`); permissions unchanged |
+| Addresses ("pasig") (C #15) | done | A | customers by any saved address word (street, city, province), suppliers by street and city |
 | `ui.wide_screen_top_bar` = scan still works (ADR-126) | done | 1 | Scan button in the Search box's place at every width |
 
 ### Messages
@@ -76,12 +76,48 @@ Status: **done** = built and tested in that part; **partly** = what is left is n
 | Box check, pick, send-out messages to the warehouse (and manager for box checks), not the operator (A #6) | done | 1 | `only` on pick, dispatch, pack_check, delivery_coming |
 | "they will see it on Packing" → "on their Home" (A #11) | done | 1 | `pack_check.where` |
 | Floor: tap = read, no "Mark read / I'm on it" (A #6) | done | 1 | |
-| Group many messages ("12 lots are ready…") (A #6) | not | — | not done; the auto-clear removes most of the pile |
-| Message wording with names and places instead of codes (B #9) | not | — | message titles unchanged |
+| Group many messages ("12 lots are ready…") (A #6) | done | A | ADR-132: 3+ messages of one kind and screen on one day are one row with "Open the list" and "See each one"; each keeps its own buttons and clears by itself |
+| Message wording with names and places instead of codes (B #9) | done | A | ADR-132: put away, lot and batch checks, weighing and step checks, set aside, get from shelf, box check, send out, production and purchase order approvals (`src/lib/message-titles.ts`); other kinds keep their titles |
 
 ### Owned by parts 2 and 3 (not in part 1)
 
 A: #1–#4, #7–#10, #12–#14, bugs B1–B9, B11–B12, B15–B19 (part 2). B: #2, #3, #6, #7, #8, #11, #12, #13, #15, bugs B1–B4, B6–B8, B10, B11, B14–B17 (parts 2/3). C: #1–#3, #5, #7–#11, #13, #14, bugs B1–B9, B11–B14, B16, B18–B21, B23 (part 3, some QA screens).
+
+## 1a. Round 5 leftovers, part A (ADR-132)
+
+| Item | Status | Notes |
+|---|---|---|
+| "Needs me" badge and Home "Needs you" card disagree (B #1 #2) | done | one function, `needsMeSummary`; unit `needs-me-count`, integration `platform/needs-me` |
+| Group many messages (A #6) | done | `notifications/group.ts`; unit `messages-group` |
+| Message titles lead with names and places (B #9) | done | unit `message-titles`; integration put-away, receipt, production order tests updated |
+| Search: addresses; floor record types (C #15, A #15) | done | integration `scan/search-round5` (+5 tests, negative: no customer view, other site) |
+| One help door per page (C B22) | done | unit `one-help-door` |
+| Saved record opens at the top with its message (C B23) | done | `src/ui/saved-landing.tsx` in the frame; walk found the same on "Save the request", a new bill and a new price offer; unit `saved-landing` |
+| Browser-tab titles (B B6) | done | 43 pages got a title; tab reads "<page> · Bryel's Care"; unit `page-titles` walks every page |
+| Trace "newest first" (C B18) | done | `listLots(order: "newest")` for trace and recall; integration `inventory/lots-newest-first` |
+| Problem report words (C B19) | done | Small / Big / Very serious; "This lot is already stopped by QA"; no "deviation" in messages; unit `problem-report-words` |
+| Hydration-safe keys (ADR-125 known issue) | done | 12 forms use `useClientKey`; actions accept a form sent before the key exists (`formKey`); unit `form-key-hydration`. The old `/production/work-orders` form (redirected) is left |
+| Label and pack previews show layout code and version (A) | done | hidden on screen (still printed); QA and layout editors see them under More details; unit `label-preview-layout` |
+| Walk of the part-3 screens at 390 and 1366 px | done | see §1b |
+
+## 1b. Browser walk of the part-3 screens (production build, lite demo, 390 and 1366 px)
+
+No sideways scroll on any page walked; no frame target under 44 px on phones; every page title now names the page.
+
+| Screen | Found | Fixed |
+|---|---|---|
+| `/procurement/delivery-problems` | clear; empty state in plain words | — |
+| `/procurement/reorder` (What to buy) | "Ask to buy 853.62 kg" fills the request; the amount is not rounded to a pack size (business rule, left) | — |
+| Request → "Make the purchase order" → wizard | the wizard promised "the request's approval covers this order"; the order then went for approval again (step 1 of 2, the same manager) because an order that big needs 2 OKs and the request had 1 | wizard and banner now say so (`requestCoverHint`); **open for the owner:** should the request's OK count as step 1 of the order? |
+| "Save the request", new bill, new price offer, new customer (duplicate) | opened scrolled down, title hidden (C B23) | frame starts new pages at the top |
+| `/finance/bills/[id]/change` | fine; "Fix a mistake" only on a bill in the books (not reached in the lite demo) | — |
+| `/finance/periods` (Month end) | one green button "Close this month", reasons in words | — |
+| `/print/order-confirmation/[id]` | "← Back to …" link 20 px tall (all 8 print pages) | 44 px |
+| Confirmed order: Change how many / Cancel this line | after saving, the form stayed open with a second "Save the new amount" | form closes and says "now 40 (was 48)" |
+| Price offer: Email / Print / I printed it | "Saved as a draft. Send it when it is ready" stayed after Send and after "I printed it" | the line shows only while a draft (also bills, invoices, purchase orders) |
+| Invoice Email / Print | no invoice in the lite demo; not walked | — |
+| Duplicate-customer warning | shows "Already a customer? Isla Spa Supplies …" with the tick box | — |
+| Owner Home and Messages | badge 1 = card 1 ("1 message"); message titles read with names | — |
 
 ## 2. Measurements (part 1, production build, full demo)
 

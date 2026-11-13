@@ -3,8 +3,8 @@ import { useId, useState } from "react";
 import { Button, Field, Input } from "@/ui/core";
 import { ActionForm, FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { decideApprovalAction } from "./actions";
+import { useClientKey } from "@/ui/use-client-key";
 
-const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 /**
  * Approve and Reject / Send back on one row of "To approve" (ADR-075). Approve is two taps inside the
@@ -17,7 +17,7 @@ export function InlineDecision({ kind, entityId, what, rejectLabel, primary = tr
   const [asking, setAsking] = useState(false);
   const [state, dispatch] = useInPlaceAction(decideApprovalAction);
   // One key per row: a double tap or a retry of "Yes, approve" returns the first result (production orders).
-  const [idempotencyKey] = useState(newKey);
+  const idempotencyKey = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const uid = useId();
   const noteId = `note-${entityId}-${uid}`;
   return (
@@ -31,7 +31,7 @@ export function InlineDecision({ kind, entityId, what, rejectLabel, primary = tr
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="entityId" value={entityId} />
           <input type="hidden" name="decision" value="approve" />
-          <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+          {idempotencyKey && <input type="hidden" name="idempotencyKey" value={idempotencyKey} />}
           <p className="text-[14px] font-medium" role="status">
             Approve {what}?
           </p>

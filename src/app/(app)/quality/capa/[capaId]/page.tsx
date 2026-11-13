@@ -13,6 +13,8 @@ import { Forbidden } from "../../../forbidden";
 import { CapaStatusChip } from "../_ui";
 import { ActionStepForm, AddActionForm, CancelCapaForm, CloseCapaForm, EditCapaForm, EffectivenessForm, SubmitCapaForm } from "../forms";
 
+export const metadata = { title: "Fix-and-prevent plan" };
+
 export const dynamic = "force-dynamic";
 
 const ACTION_TONE = { open: "info", done: "appr", verified: "ok", cancelled: "neu" } as const;

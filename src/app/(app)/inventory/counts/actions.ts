@@ -21,6 +21,7 @@ import {
   submitCount,
 } from "@/modules/inventory/counts";
 import { actionError, str } from "../_kit/action-state";
+import { formKey } from "@/lib/form-key";
 
 /** The amount as typed ("24", "24.5 kg"); the unit picker sends qtyUom. The service converts to the base unit. */
 const QTY = z.string().trim().min(1, { message: "Enter how much you counted, e.g. 0, 24 or 12.5." }).max(40);
@@ -98,7 +99,7 @@ export async function recordCountAction(id: string, _p: ActionState, fd: FormDat
     } else if (!unlabelled) {
       return { ok: false, message: "Scan the lot label, or describe the unlabelled item.", fieldErrors: { lotCode: "Scan or type the lot." } };
     }
-    const r = await recordCount(ctx, { countId: id, locationId, lotId, unlabelledDescription: lotId ? null : unlabelled, qty, qtyUom: unitOf(fd), idempotencyKey: str(fd, "idempotencyKey"), lotVia: parseVia(str(fd, "lotVia")) });
+    const r = await recordCount(ctx, { countId: id, locationId, lotId, unlabelledDescription: lotId ? null : unlabelled, qty, qtyUom: unitOf(fd), idempotencyKey: formKey(fd), lotVia: parseVia(str(fd, "lotVia")) });
     return done(id, r.previous ? "Saved. Your new amount replaces your earlier one; the earlier one is kept in the history." : "Saved. Scan the next sack.");
   } catch (e) {
     return actionError(e);

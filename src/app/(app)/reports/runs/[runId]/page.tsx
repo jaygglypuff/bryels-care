@@ -8,6 +8,8 @@ import { Banner, Chip } from "@/ui/status";
 import { PageIntro } from "@/ui/guide";
 import { plainReport } from "../../plain";
 
+export const metadata = { title: "Report sent" };
+
 export const dynamic = "force-dynamic";
 
 const RUN_TONE = { succeeded: "ok", partial: "warn", skipped: "neu", failed: "bad", running: "info" } as const;

@@ -8,6 +8,8 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DueChip } from "../_ui";
 
+export const metadata = { title: "Regular maintenance" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

@@ -1,4 +1,6 @@
 import "server-only";
+import { MessageTitle } from "@/lib/message-titles";
+import { customerOfOrder } from "./message-names";
 import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type DbOrTx, type Tx } from "@/db/client";
@@ -268,7 +270,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     // Hand-off (ADR-110 C9): the order can be taken off the shelf; tell the people who pick, once per order.
     if (result.fullyAllocated) {
       await notifyNextActors(tx, ctx, "pick", { siteId: o.siteId, excludeUserIds: [ctx.userId] }, {
-        title: `Get order ${o.orderNumber} from the shelf`,
+        title: MessageTitle.orderToPick(await customerOfOrder(tx, o.id)),
         body: `${ctx.displayName} set aside all the stock for order ${o.orderNumber}. Take it off the shelf for the second check.`,
         link: "/sales/picking",
         entityType: "sales_order",

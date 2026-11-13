@@ -5,8 +5,8 @@ import { FormMessage } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
 import { useActionForm } from "../../use-action-form";
 import { createCustomerW3dAction, similarCustomersAction } from "../actions";
+import { useClientKey } from "@/ui/use-client-key";
 
-const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 /** Fields folded under "More details" (the form opens it when the server rejects one of them). */
 const MORE_FIELDS = ["contactName", "email", "paymentTermsDays", "segment", "status", "minShelfLifeDays", "defaultLeadTimeDays", "shipTo.label", "shipTo.line2", "shipTo.province", "shipTo.postalCode", "code", "notesInternal"];
@@ -18,7 +18,7 @@ const MORE_FIELDS = ["contactName", "email", "paymentTermsDays", "segment", "sta
  */
 export function CustomerForm({ segments, canSetTerms = false }: { segments: { value: string; label: string }[]; canSetTerms?: boolean }) {
   const { state, pending, onSubmit } = useActionForm(createCustomerW3dAction);
-  const [key] = useState(newKey);
+  const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const [v, setV] = useState<Record<string, string>>({
     code: "",
     name: "",
@@ -50,7 +50,7 @@ export function CustomerForm({ segments, canSetTerms = false }: { segments: { va
   const askDifferent = similar.length > 0 || /^Already a customer\?/.test(fe.name ?? "");
   return (
     <form onSubmit={onSubmit} className="flex max-w-2xl flex-col gap-4">
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Card>
         <div className="grid grid-cols-1 gap-4" onBlur={() => void check()}>
           <Field label="Customer name" htmlFor="name" error={fe.name} hint="The shop or person, as you would say it on the phone">

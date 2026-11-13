@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
  * nothing navigates, so closing it returns to the same step with entered values intact. On a
  * phone it is a bottom sheet; on wider screens a centred panel.
  */
-export function HelpSheet({ title, meta, children, label = "Help for this screen", text }: { title: string; meta: string | null; children: ReactNode; label?: string; text?: string }) {
+export function HelpSheet({ title, meta, children, label = "Help for this screen", text, pageDoor = false }: { title: string; meta: string | null; children: ReactNode; label?: string; text?: string; /** ADR-132 §5: a plain "?" for the whole screen; hidden where the frame's "?" shows (one help door per page). */ pageDoor?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [online, setOnline] = useState(true);
   useEffect(() => {
@@ -26,6 +26,7 @@ export function HelpSheet({ title, meta, children, label = "Help for this screen
         aria-label={label}
         title={label}
         onClick={() => ref.current?.showModal()}
+        data-page-help={pageDoor ? "" : undefined}
         className={`inline-flex ${text ? "min-h-[44px] px-4 gap-1 text-[14px]" : "size-11 text-[15px]"} shrink-0 items-center justify-center rounded-full border border-line bg-surface font-semibold text-primary-text hover:bg-primary-soft focus-visible:outline-2`}
       >
         {/* With a visible text ("Help: weighing") the text says it all; the bare "?" is for icon-only buttons. */}

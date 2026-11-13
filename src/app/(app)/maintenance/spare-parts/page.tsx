@@ -7,6 +7,8 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { RegisterSparePartForm, RemoveSparePartForm } from "../forms";
 
+export const metadata = { title: "Spare parts" };
+
 export const dynamic = "force-dynamic";
 
 /** Spare-parts list (US-6-19): materials kept as spares per site, released stock on hand, below-minimum flag. */

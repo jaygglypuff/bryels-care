@@ -26,7 +26,6 @@ import { getSetting } from "@/lib/settings";
 import { holdReasonOptions, placeHold } from "@/modules/inventory";
 import { notifyRoles } from "@/modules/platform";
 import { assertUuid, isIsoDate, isUuid, optionalText, reasonText, requiredText } from "./shared";
-import { isAre, pluralWord } from "@/lib/plural";
 
 /**
  * Deviations from any step, lot or batch, containment holds and closure with separation of duties
@@ -67,16 +66,16 @@ async function writeTransition(tx: Tx, ctx: AuthContext, d: { id: string; siteId
 }
 
 async function lockDeviation(tx: Tx, ctx: AuthContext, deviationId: string) {
-  assertUuid(deviationId, "Deviation");
+  assertUuid(deviationId, "Problem report");
   const [d] = await tx.select().from(deviations).where(and(eq(deviations.id, deviationId), eq(deviations.organizationId, ctx.organizationId))).for("update").limit(1);
-  if (!d || !ctx.allowedSiteIds.includes(d.siteId)) throw new DomainError("not_found", "Deviation not found in your sites.");
+  if (!d || !ctx.allowedSiteIds.includes(d.siteId)) throw new DomainError("not_found", "Problem report not found in your sites.");
   ctx.requireSite(d.siteId);
   return d;
 }
 
 async function move(tx: Tx, ctx: AuthContext, d: DeviationRow, to: DeviationStatus, reason: string | null, set: Partial<typeof deviations.$inferInsert>) {
   if (!DEVIATION_TRANSITIONS[d.status as DeviationStatus]?.includes(to)) {
-    throw new DomainError("state", `Deviation ${d.deviationNumber} is ${d.status}; it cannot move to ${to}.`);
+    throw new DomainError("state", `Problem report ${d.deviationNumber} is ${({ open: "new", investigating: "being looked into by QA", closed: "closed" } as Record<string, string>)[d.status] ?? d.status}; this cannot be done now.`);
   }
   await tx
     .update(deviations)
@@ -114,8 +113,8 @@ export async function openDeviation(ctx: AuthContext, input: OpenDeviationInput,
   const description = reasonText(input.description, "description", 4000);
   const stepRef = optionalText(input.stepRef, "stepRef", 200);
   const source: DeviationSource = input.source ?? (input.testResultId ? "oos" : "manual");
-  if (!(DEVIATION_SOURCES as readonly string[]).includes(source)) throw new DomainError("validation", "Unknown deviation source.", { field: "source" });
-  if (!input.batchId && !input.lotId) throw new DomainError("validation", "Name the batch or the lot the deviation is about.", { field: "batchId" });
+  if (!(DEVIATION_SOURCES as readonly string[]).includes(source)) throw new DomainError("validation", "Choose where the problem was found.", { field: "source" });
+  if (!input.batchId && !input.lotId) throw new DomainError("validation", "Choose the batch or the lot the problem is about.", { field: "batchId" });
   for (const [k, v] of Object.entries({ batchId: input.batchId, lotId: input.lotId, processStepRecordId: input.processStepRecordId, dispenseRecordId: input.dispenseRecordId, inspectionId: input.inspectionId, testResultId: input.testResultId })) {
     if (v && !isUuid(v)) throw new DomainError("not_found", "A referenced record was not found in your sites.", { field: k });
   }
@@ -247,7 +246,7 @@ export async function startInvestigation(ctx: AuthContext, input: { deviationId:
   return db.transaction(async (tx) => {
     const d = await lockDeviation(tx, ctx, input.deviationId);
     const levels = await severityLevels(tx, ctx);
-    if (!levels.includes(input.severity)) throw new DomainError("validation", "Choose the severity.", { field: "severity" });
+    if (!levels.includes(input.severity)) throw new DomainError("validation", "Choose how serious it is.", { field: "severity" });
     await move(tx, ctx, d, "investigating", investigation, { severity: input.severity, classifiedBy: ctx.userId, classifiedAt: new Date(), investigation, impactAssessment });
     await audit(tx, ctx, { action: "quality.deviation.updated", entityType: "deviation", entityId: d.id, entityNumber: d.deviationNumber, siteId: d.siteId, before: { status: "open", severity: d.severity }, after: { status: "investigating", severity: input.severity, investigation, impactAssessment } });
     return { status: d.status };
@@ -259,10 +258,10 @@ export async function updateInvestigation(ctx: AuthContext, input: { deviationId
   ctx.require("quality.deviation.submit");
   return db.transaction(async (tx) => {
     const d = await lockDeviation(tx, ctx, input.deviationId);
-    if (d.status === "closed") throw new DomainError("state", `Deviation ${d.deviationNumber} is closed; raise a new deviation for new findings.`);
+    if (d.status === "closed") throw new DomainError("state", `Problem report ${d.deviationNumber} is closed. Report a new problem for anything new.`);
     const set: Partial<typeof deviations.$inferInsert> = {};
     if (input.severity) {
-      if (!(await severityLevels(tx, ctx)).includes(input.severity)) throw new DomainError("validation", "Choose the severity.", { field: "severity" });
+      if (!(await severityLevels(tx, ctx)).includes(input.severity)) throw new DomainError("validation", "Choose how serious it is.", { field: "severity" });
       set.severity = input.severity;
       set.classifiedBy = ctx.userId;
       set.classifiedAt = new Date();
@@ -301,15 +300,15 @@ export async function closeDeviation(ctx: AuthContext, input: CloseDeviationInpu
   if (effectivenessCheckOn && !isIsoDate(effectivenessCheckOn)) throw new DomainError("validation", "Enter a valid date.", { field: "effectivenessCheckOn" });
   return db.transaction(async (tx) => {
     const d = await lockDeviation(tx, ctx, input.deviationId);
-    if (d.status === "closed") throw new DomainError("state", `Deviation ${d.deviationNumber} is already closed.`);
-    ctx.assertSeparation(d.raisedBy === ctx.userId, "You raised this deviation, so another QA user must close it (separation of duties).");
-    if (!d.severity) throw new DomainError("state", "Classify the deviation's severity before closing it.", { field: "severity" });
+    if (d.status === "closed") throw new DomainError("state", `Problem report ${d.deviationNumber} is already closed.`);
+    ctx.assertSeparation(d.raisedBy === ctx.userId, "You reported this problem, so another QA person must close it.");
+    if (!d.severity) throw new DomainError("state", "Say how serious it is before you close it.", { field: "severity" });
     const open = await tx
       .select({ n: qualityHolds.holdNumber })
       .from(deviationHolds)
       .innerJoin(qualityHolds, eq(qualityHolds.id, deviationHolds.qualityHoldId))
       .where(and(eq(deviationHolds.deviationId, d.id), inArray(qualityHolds.status, ["open", "investigating"])));
-    if (open.length) throw new DomainError("state", `Containment ${pluralWord(open.length, "hold")} ${open.map((h) => h.n).join(", ")} ${isAre(open.length)} still open. Decide the held stock and lift ${open.length === 1 ? "the hold" : "the holds"} first.`);
+    if (open.length) throw new DomainError("state", `Stock stopped for this report (${open.map((h) => h.n).join(", ")}) is still stopped. Decide on it first.`);
     const now = new Date();
     await move(tx, ctx, d, "closed", resolution, { rootCause, resolution, releasePermitted: input.releasePermitted, effectivenessCheckOn, closedBy: ctx.userId, closedAt: now });
     await audit(tx, ctx, {
@@ -337,7 +336,7 @@ export async function containDeviation(ctx: AuthContext, input: ContainInput) {
   ctx.require("quality.hold.create");
   const reason = reasonText(input.reason);
   const d = await db.transaction((tx) => lockDeviation(tx, ctx, input.deviationId));
-  if (d.status === "closed") throw new DomainError("state", `Deviation ${d.deviationNumber} is closed.`);
+  if (d.status === "closed") throw new DomainError("state", `Problem report ${d.deviationNumber} is closed.`);
   let lotRef = input.lotRef?.trim() || null;
   if (input.scope === "lot" && !lotRef) {
     if (d.lotId) lotRef = d.lotId;
@@ -349,7 +348,7 @@ export async function containDeviation(ctx: AuthContext, input: ContainInput) {
   }
   const holdCodes = await holdReasonOptions(db, ctx.organizationId);
   const reasonCode = input.reasonCode && holdCodes.some((r) => r.code === input.reasonCode) ? input.reasonCode : "investigation";
-  const hold = await placeHold(ctx, { scope: input.scope, lotRef: lotRef ?? undefined, locationId: input.locationId ?? undefined, reasonCode, reason: `Deviation ${d.deviationNumber}: ${reason}`, idempotencyKey: input.idempotencyKey });
+  const hold = await placeHold(ctx, { scope: input.scope, lotRef: lotRef ?? undefined, locationId: input.locationId ?? undefined, reasonCode, reason: `Problem report ${d.deviationNumber}: ${reason}`, idempotencyKey: input.idempotencyKey });
   await db.transaction(async (tx) => {
     const again = await lockDeviation(tx, ctx, d.id);
     const inserted = await tx.insert(deviationHolds).values({ deviationId: again.id, qualityHoldId: hold.holdId, createdBy: ctx.userId }).onConflictDoNothing().returning({ id: deviationHolds.id });
@@ -385,8 +384,8 @@ export async function deviationFacts(q: DbOrTx, subject: { batchId?: string | nu
 /** Human blockers from deviation facts (shared by lot and batch release). */
 export function deviationBlockerMessages(f: DeviationFacts): string[] {
   const out: string[] = [];
-  for (const d of f.open) out.push(`Deviation ${d.number} is ${d.status}; it must be closed before release.`);
-  for (const d of f.notPermitted) out.push(`Deviation ${d.number} was closed with the conclusion that the product may not be released.`);
+  for (const d of f.open) out.push(`Problem report ${d.number} is ${d.status === "investigating" ? "being looked into" : "still open"}; it must be closed before the product may be made OK.`);
+  for (const d of f.notPermitted) out.push(`Problem report ${d.number} was closed with the answer that the product may not be made OK.`);
   return out;
 }
 
@@ -428,7 +427,7 @@ export async function listDeviations(ctx: AuthContext, f: { status?: string } = 
 
 export async function getDeviation(ctx: AuthContext, deviationId: string) {
   ctx.require("quality.deviation.view");
-  assertUuid(deviationId, "Deviation");
+  assertUuid(deviationId, "Problem report");
   const [row] = await db
     .select({ d: deviations, raisedByName: raiser.displayName, closedByName: closer.displayName, classifiedByName: classifier.displayName, batchNumber: batches.batchNumber, batchStatus: batches.status, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus })
     .from(deviations)
@@ -439,7 +438,7 @@ export async function getDeviation(ctx: AuthContext, deviationId: string) {
     .leftJoin(inventoryLots, eq(inventoryLots.id, deviations.lotId))
     .where(and(eq(deviations.id, deviationId), eq(deviations.organizationId, ctx.organizationId)))
     .limit(1);
-  if (!row || !ctx.allowedSiteIds.includes(row.d.siteId)) throw new DomainError("not_found", "Deviation not found in your sites.");
+  if (!row || !ctx.allowedSiteIds.includes(row.d.siteId)) throw new DomainError("not_found", "Problem report not found in your sites.");
   ctx.requireSite(row.d.siteId);
   const d = row.d;
   const holds = await db
@@ -477,11 +476,11 @@ export async function getDeviation(ctx: AuthContext, deviationId: string) {
       closeBlockedReason: !active || !ctx.can("quality.deviation.approve")
         ? null
         : d.raisedBy === ctx.userId
-          ? "You raised this deviation; another QA user must close it."
+          ? "You reported this problem; another QA person must close it."
           : !d.severity
-            ? "Classify the severity first (start the investigation)."
+            ? "Say how serious it is first (Start looking into it)."
             : openHolds.length
-              ? `Lift containment ${pluralWord(openHolds.length, "hold")} ${openHolds.map((h) => h.number).join(", ")} first.`
+              ? `Decide on the stopped stock first (${openHolds.map((h) => h.number).join(", ")}).`
               : null,
     },
   };

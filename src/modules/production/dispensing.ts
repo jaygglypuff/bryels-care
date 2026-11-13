@@ -18,7 +18,8 @@ import { type BatchRow, findStepOfKind, openStep, stepRecord } from "./execution
 import { assertStockCovers, postBatchMovement, postDispenseConsumption } from "./execution-postings";
 import { useEquipment } from "./process";
 import { convertReservations, expectedLots } from "./staging";
-import { type FormulaSnapshot, WEIGHING_STEP_KINDS, idempotent, lockBatch } from "./shared";
+import { type FormulaSnapshot, WEIGHING_STEP_KINDS, idempotent, lockBatch, productNameOf } from "./shared";
+import { MessageTitle } from "@/lib/message-titles";
 import { changeLotInTx, lineForLotChange } from "./material-swaps";
 import { offPlanWarning } from "./pick-plan";
 import { notifyNextActors } from "@/modules/governance";
@@ -435,8 +436,8 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       const needsCheck = !checker && (batch.formulaSnapshot as FormulaSnapshot).lines.find((l) => l.lineNo === bm.lineNo)?.requiresChecker !== false;
       if (needsCheck) {
         await notifyNextActors(tx, ctx, "weighing_check", { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
-          title: `Check a weighing of batch ${batch.batchNumber}`,
-          body: `${ctx.displayName} weighed ${material.name}. Watch the container and the scale, then confirm it on the Weigh screen.`,
+          title: MessageTitle.weighingToCheck(await productNameOf(tx, batch.productId), ctx.displayName.split(/\s+/)[0]),
+          body: `${ctx.displayName} weighed ${material.name} for batch ${batch.batchNumber}. Watch the container and the scale, then confirm it on the Weigh screen.`,
           // ADR-130: the message opens the checker's list, where the check is done (never the operator's screen).
           link: CHECKS_HREF,
           entityType: "batch",

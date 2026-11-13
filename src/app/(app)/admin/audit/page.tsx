@@ -9,6 +9,8 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { actionLabel, actionModule, entityHref, moduleLabel } from "./format";
 
+export const metadata = { title: "History of changes" };
+
 export const dynamic = "force-dynamic";
 
 type SP = { module?: string; q?: string; before?: string };

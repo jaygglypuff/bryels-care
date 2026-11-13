@@ -1,5 +1,6 @@
 import { plural } from "@/lib/plural";
 import "server-only";
+import { MessageTitle } from "@/lib/message-titles";
 import Decimal from "decimal.js";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbOrTx, type Tx } from "@/db/client";
@@ -33,7 +34,7 @@ import { documentsForSourceRead, generateForSource, resolveTemplateVersion, type
 import type { PoReceiptLine, ReceivingPoHooks } from "@/modules/inventory";
 import { toCsv } from "@/modules/masterdata";
 import { notifyRoles } from "@/modules/platform";
-import { notifyNextActors } from "@/modules/governance";
+import { evaluateApprovalRules, notifyNextActors } from "@/modules/governance";
 import { approvalProgress, canDecide, decisionsOf, recordDecision } from "./approvals";
 import { assertAslApproved, moqShortfall, priceFor } from "./asl";
 import { PO_STATUS_LABEL, type PoStatus, logCreation, transitionPo, transitionPr } from "./state";
@@ -352,12 +353,12 @@ export async function submitPurchaseOrder(ctx: AuthContext, input: { purchaseOrd
         siteId: po.siteId,
         after: { status: "approved", total: po.totalAmount, approvedAmount: cover.approvedAmount, requests: cover.requestNumbers, approvedBy: cover.approvedBy },
       });
-      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: `Purchase order ${po.poNumber} approved with request ${cover.requestNumbers.join(", ")}`, body: "Send it to the supplier.", entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: MessageTitle.purchaseOrderToSend(await supplierNameOf(tx, po.supplierId)), body: `Purchase order ${po.poNumber} is approved (request ${cover.requestNumbers.join(", ")}). Send it to the supplier.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
       return { purchaseOrderId: po.id, status: "approved" as const, steps: 0, approvedByRequest: cover.requestNumbers };
     }
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
     const roles = progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"];
-    await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for approval`, body: `${plural(progress.steps.length, "approval step")} to go.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+    await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: MessageTitle.purchaseOrderToApprove(await supplierNameOf(tx, po.supplierId)), body: `Purchase order ${po.poNumber}: ${plural(progress.steps.length, "approval step")} to go.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
     return { purchaseOrderId: po.id, status: "submitted" as const, steps: progress.steps.length, approvedByRequest: null, notCoveredBecause: cover.why };
   });
 }
@@ -387,10 +388,10 @@ export async function decidePurchaseOrder(ctx: AuthContext, input: { purchaseOrd
         // S6 (ADR-077): the goods are already in (source receipt), so the PO is not sent; it is received now.
         const [gr] = await tx.select({ receiptNumber: goodsReceipts.receiptNumber }).from(goodsReceipts).where(eq(goodsReceipts.id, po.sourceGoodsReceiptId!));
         await transitionPo(tx, ctx, po, "received", { reason: `Made after the goods arrived on receipt ${gr?.receiptNumber ?? ""}`.trim() });
-      } else await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: `Purchase order ${po.poNumber} approved`, body: "Send it to the supplier.", entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+      } else await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: MessageTitle.purchaseOrderToSend(await supplierNameOf(tx, po.supplierId)), body: `Purchase order ${po.poNumber} is approved. Send it to the supplier.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
     } else if (decision === "approved" && r.nextStep) {
       const roles = r.nextStep.roleCodes.length ? r.nextStep.roleCodes : ["owner_director"];
-      await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for step ${r.nextStep.step}`, body: r.nextStep.label, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+      await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: MessageTitle.purchaseOrderToApprove(await supplierNameOf(tx, po.supplierId)), body: `Purchase order ${po.poNumber}, step ${r.nextStep.step}: ${r.nextStep.label}`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
     } else if (decision === "returned") {
       await transitionPo(tx, ctx, po, "draft", { reason: input.note });
     }
@@ -1013,4 +1014,26 @@ export async function deletePurchaseOrderDraft(ctx: AuthContext, input: { purcha
     });
     return { deleted: po.poNumber };
   });
+}
+
+/**
+ * ADR-132 §12 (browser walk): what the purchase order wizard may promise before saving. The request's OKs carry over
+ * only when they are at least as many as an order of that amount needs (`requestApprovalCover`, "approval_steps");
+ * the wizard said "covers this order" from the amount alone and the order then went for approval again. Read only;
+ * the caller's site is checked; the save re-checks everything.
+ */
+export async function requestCoverHint(ctx: AuthContext, requestId: string, amount: string): Promise<{ requestSteps: number; orderSteps: number } | null> {
+  ctx.require("procurement.purchase_order.create");
+  if (!/^[0-9a-f-]{36}$/i.test(requestId) || !/^\d+(\.\d+)?$/.test(amount)) return null;
+  const [pr] = await db.select().from(purchaseRequests).where(and(eq(purchaseRequests.id, requestId), eq(purchaseRequests.organizationId, ctx.organizationId))).limit(1);
+  if (!pr || !ctx.allowedSiteIds.includes(pr.siteId)) return null;
+  const req = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: { amount: pr.estimatedTotalAmount ?? "unbounded" } });
+  const order = await evaluateApprovalRules(db, ctx.organizationId, { documentType: "purchase_order", siteId: pr.siteId, basis: { amount } });
+  return { requestSteps: req.steps.filter((s) => s.done).length, orderSteps: Math.max(order.steps.length, 1) };
+}
+
+/** The supplier's name for message titles (ADR-132 §3: names before codes). */
+async function supplierNameOf(q: DbOrTx, supplierId: string): Promise<string> {
+  const [r] = await q.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, supplierId)).limit(1);
+  return r?.name ?? "the supplier";
 }

@@ -7,6 +7,8 @@ import { Forbidden } from "../../../forbidden";
 import { OpenRecallForm } from "../forms";
 import { isAre, plural } from "@/lib/plural";
 
+export const metadata = { title: "Start a product recall" };
+
 export const dynamic = "force-dynamic";
 
 /**

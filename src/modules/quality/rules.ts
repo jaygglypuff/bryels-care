@@ -116,7 +116,7 @@ export function batchReleaseBlockers(f: BatchReleaseFacts): { code: "state" | "s
   if (f.failedTests.length) {
     out.push({
       code: "state",
-      message: `Failed ${pluralWord(f.failedTests.length, "test")}: ${f.failedTests.join(", ")}. A failed result blocks release unless an OOS deviation on that result is closed with the conclusion that release may proceed; otherwise reject the batch.`,
+      message: `Failed ${pluralWord(f.failedTests.length, "test")}: ${f.failedTests.join(", ")}. A failed result stops the product from being made OK unless a problem report on that result is closed with the answer that it may be; otherwise reject the batch.`,
     });
   }
   for (const m of f.extraBlockers ?? []) out.push({ code: "state", message: m });

@@ -7,6 +7,7 @@ import { listMyNotifications } from "@/modules/platform";
 import { Card, EmptyState, LinkButton, PageHeader, buttonClass, cx } from "@/ui/core";
 import { Chip } from "@/ui/status";
 import { acknowledgeAction, markAllReadAction, markReadAction } from "./actions";
+import { groupMessages } from "./group";
 
 import { codeLast } from "@/lib/code-last";
 import { isFloor, navPersona } from "../nav";
@@ -53,54 +54,82 @@ export default async function NotificationsPage({ searchParams }: { searchParams
           </EmptyState>
         ) : (
           <ul className="divide-y divide-line">
-            {items.map((n) => {
-              const sev = SEVERITY[n.severity as keyof typeof SEVERITY] ?? SEVERITY.info;
-              return (
-                <li key={n.id} className={cx("flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between", !n.readAt && "font-medium")}>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Chip tone={sev.tone}>{sev.label}</Chip>
-                      {n.resolvedAt ? (
-                        <span className="text-[11px] font-semibold uppercase text-[var(--ok-fg)]">Done</span>
-                      ) : (
-                        !n.readAt && <span className="text-[11px] font-semibold uppercase text-primary-text">New</span>
-                      )}
-                      <span className="text-[12px] text-muted">{fmtDateTime(n.createdAt)}</span>
-                    </div>
-                    {/* ADR-075: every notification opens its record (plain <a>: opening marks it read, so no prefetch). */}
-                    <p className="mt-1 text-[14px] text-fg">
-                      <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{codeLast(plainDatesIn(n.title)).text}</a>
-                      {codeLast(n.title).codes.length > 0 && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{codeLast(n.title).codes.join(" · ")}</span>}
+            {groupMessages(items).map((r) =>
+              r.type === "one" ? (
+                <MessageItem key={r.message.id} n={r.message} floor={floor} />
+              ) : (
+                <li key={r.key} className="py-3" data-testid="message-group">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className={cx("min-w-0 text-[15px] text-fg", r.unread > 0 && "font-medium")}>
+                      {r.title}
+                      {r.unread > 0 && <span className="ml-2 text-[11px] font-semibold uppercase text-primary-text">{r.unread} new</span>}
+                      {r.newest && <span className="block text-[13px] font-normal text-muted">Newest: {codeLast(plainDatesIn(r.newest)).text}</span>}
                     </p>
-                    <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{plainDatesIn(n.body)}</p>
-                    {n.resolvedAt && <p className="mt-0.5 text-[12px] text-muted">Done · {fmtDateTime(n.resolvedAt)}: the work this message asked for is finished.</p>}
-                    {n.acknowledgedAt && !n.resolvedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}
+                    <Link href={r.list} className={buttonClass("primary", "sm")}>Open the list</Link>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <a href={`/notifications/open/${n.id}`} className={buttonClass("primary", "sm")} aria-label={`Open: ${n.title}`}>
-                      Open
-                    </a>
-                  {!n.acknowledgedAt && !n.resolvedAt && !floor && (
-                    <div className="flex shrink-0 gap-2">
-                      {!n.readAt && (
-                        <form action={markReadAction}>
-                          <input type="hidden" name="id" value={n.id} />
-                          <button className={buttonClass("ghost", "sm")}>Mark read</button>
-                        </form>
-                      )}
-                      <form action={acknowledgeAction}>
-                        <input type="hidden" name="id" value={n.id} />
-                        <button className={buttonClass("secondary", "sm")}>I&apos;m on it</button>
-                      </form>
-                    </div>
-                  )}
-                  </div>
+                  <details className="mt-1">
+                    <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">See each one ({r.messages.length})</summary>
+                    <ul className="mt-1 divide-y divide-line border-l-2 border-line pl-3">
+                      {r.messages.map((n) => (
+                        <MessageItem key={n.id} n={n} floor={floor} />
+                      ))}
+                    </ul>
+                  </details>
                 </li>
-              );
-            })}
+              ),
+            )}
           </ul>
         )}
       </Card>
     </div>
+  );
+}
+
+type Message = Awaited<ReturnType<typeof listMyNotifications>>[number];
+
+/** One message: open it (marks it read), and for office roles "Mark read" and "I'm on it" (per message, ADR-129). */
+function MessageItem({ n, floor }: { n: Message; floor: boolean }) {
+  const sev = SEVERITY[n.severity as keyof typeof SEVERITY] ?? SEVERITY.info;
+  return (
+    <li className={cx("flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between", !n.readAt && "font-medium")}>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip tone={sev.tone}>{sev.label}</Chip>
+          {n.resolvedAt ? (
+            <span className="text-[11px] font-semibold uppercase text-[var(--ok-fg)]">Done</span>
+          ) : (
+            !n.readAt && <span className="text-[11px] font-semibold uppercase text-primary-text">New</span>
+          )}
+          <span className="text-[12px] text-muted">{fmtDateTime(n.createdAt)}</span>
+        </div>
+        {/* ADR-075: every notification opens its record (plain <a>: opening marks it read, so no prefetch). */}
+        <p className="mt-1 text-[14px] text-fg">
+          <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{codeLast(plainDatesIn(n.title)).text}</a>
+          {codeLast(n.title).codes.length > 0 && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{codeLast(n.title).codes.join(" · ")}</span>}
+        </p>
+        <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{plainDatesIn(n.body)}</p>
+        {n.resolvedAt && <p className="mt-0.5 text-[12px] text-muted">Done · {fmtDateTime(n.resolvedAt)}: the work this message asked for is finished.</p>}
+        {n.acknowledgedAt && !n.resolvedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <a href={`/notifications/open/${n.id}`} className={buttonClass("primary", "sm")} aria-label={`Open: ${n.title}`}>
+          Open
+        </a>
+      {!n.acknowledgedAt && !n.resolvedAt && !floor && (
+        <div className="flex shrink-0 gap-2">
+          {!n.readAt && (
+            <form action={markReadAction}>
+              <input type="hidden" name="id" value={n.id} />
+              <button className={buttonClass("ghost", "sm")}>Mark read</button>
+            </form>
+          )}
+          <form action={acknowledgeAction}>
+            <input type="hidden" name="id" value={n.id} />
+            <button className={buttonClass("secondary", "sm")}>I&apos;m on it</button>
+          </form>
+        </div>
+      )}
+      </div>
+    </li>
   );
 }

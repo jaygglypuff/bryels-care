@@ -150,7 +150,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
               <CardTitle>Box labels</CardTitle>
               {v.labelTemplate ? (
                 <div className="flex flex-col gap-3" data-testid="box-labels">
-                  {preview && <LabelPreview kind="box" data={preview.face} sentence={`${LABEL_KIND_WORDS.box.stick} Each box gets its own label: product, lot, use-by date, pieces in the box, box 3 of ${live.length} and the square code.`} />}
+                  {preview && <LabelPreview kind="box" data={preview.face} layout={previewData?.showLayout ? preview.layout : null} sentence={`${LABEL_KIND_WORDS.box.stick} Each box gets its own label: product, lot, use-by date, pieces in the box, box 3 of ${live.length} and the square code.`} />}
                   {labelsToPrint > 0 ? (
                     ctx.can("inventory.label_job.create") ? (
                       <Cmd action={packLabelsAction} fields={{ packId: p.id }} label={`Print ${labelCountWords(labelsToPrint)}`} pending="Making the labels…" variant={boxing ? "secondary" : "cta"} size="lg">

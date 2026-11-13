@@ -13,6 +13,7 @@ import {
   startInvestigationAction,
   updateComplaintAction,
 } from "./actions";
+import { severityWords } from "@/lib/severity-words";
 
 type Opt = { code: string; label: string };
 
@@ -115,7 +116,7 @@ function SeverityField({ levels, fe, required }: { levels: string[]; fe: Record<
         </option>
         {levels.map((l) => (
           <option key={l} value={l}>
-            {l}
+            {severityWords(l)}
           </option>
         ))}
       </Select>

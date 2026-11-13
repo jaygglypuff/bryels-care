@@ -10,6 +10,8 @@ import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { VerifyScanForm } from "../w2c-forms";
 
+export const metadata = { title: "Check the labels in an area" };
+
 export const dynamic = "force-dynamic";
 
 /** US-2-24: scan every newly labelled box or loose lot in a zone and watch the remaining list shrink (MC-06). */

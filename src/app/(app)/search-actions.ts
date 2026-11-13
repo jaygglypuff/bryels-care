@@ -1,8 +1,9 @@
 "use server";
 import { requireContext } from "@/lib/auth/context";
 import { limitScanLookup } from "@/lib/rate-limit";
-import { masterSearch, MAX_QUERY_LENGTH, SEARCH_NEEDS_STOCK_ACCESS, searchAllowed, type MasterGroup } from "@/modules/scan";
+import { FLOOR_RECORD_TYPES, masterSearch, MAX_QUERY_LENGTH, SEARCH_NEEDS_STOCK_ACCESS, searchAllowed, type MasterGroup } from "@/modules/scan";
 import { commonScreens, searchActions, searchScreens, type ScreenHit } from "./search-screens";
+import { isFloor, navPersona } from "./nav";
 
 export type MasterSearchResponse = {
   query: string;
@@ -36,7 +37,9 @@ export async function masterSearchAction(input: string): Promise<MasterSearchRes
   const screens = [...searchActions(query, can), ...searchScreens(query, can, ctx.roleCodes)];
   if (!(await limitScanLookup(ctx.organizationId, ctx.userId)).allowed) return { query, screens, groups: [], exactHref: null, common: [], error: SEARCH_RATE_LIMITED };
   try {
-    const r = await masterSearch(ctx, query);
+    // ADR-132 §4: floor people (operator, checker, warehouse) get batches, lots, boxes, shelves, orders and deliveries.
+    const floor = isFloor(navPersona(can, ctx.roleCodes));
+    const r = await masterSearch(ctx, query, floor ? { onlyTypes: FLOOR_RECORD_TYPES } : {});
     return { query, screens, groups: r.groups, exactHref: r.exactHref, common: [] };
   } catch (e) {
     console.error(e);

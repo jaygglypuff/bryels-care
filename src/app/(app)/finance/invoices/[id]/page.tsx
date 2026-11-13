@@ -115,7 +115,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         }
       />
       <PageIntro>This screen is for one invoice: what the customer must pay us, by when, and what is already paid.</PageIntro>
-      {created && (
+      {created && i.status === "draft" && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title="Invoice made from the delivery.">Check the items and tax, then send it for approval.</Banner>
         </div>

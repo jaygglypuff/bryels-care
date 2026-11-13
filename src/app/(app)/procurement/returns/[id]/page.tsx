@@ -18,6 +18,8 @@ import { waitingFor } from "../../../waiting-for";
 import { addReturnLineAction, cancelReturnAction, decideReturnAction, postReturnAction, removeReturnLineAction, submitReturnAction } from "../../actions";
 import { Amount, History, SrChip, Steps, SubNav, fmtBase, money } from "../../_ui";
 
+export const metadata = { title: "Sent back to supplier" };
+
 export const dynamic = "force-dynamic";
 
 /** One return to a supplier: lots going back, the next step by state (add lots, approve, send back), cancel in ⋯ More. */

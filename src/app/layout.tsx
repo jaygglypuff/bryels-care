@@ -6,7 +6,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const poppins = Poppins({ subsets: ["latin"], weight: ["500", "600", "700"], style: ["normal", "italic"], variable: "--font-poppins", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Bryel's Care ERP", template: "%s · Bryel's Care ERP" },
+  // ADR-132 §7: every page sets its own title; the tab reads "<page> · Bryel's Care".
+  title: { default: "Bryel's Care", template: "%s · Bryel's Care" },
   description: "Manufacturing ERP + CRM for Bryel's Care Corporation",
   // W4D (US-7-01): installable app; the manifest comes from src/app/manifest.ts.
   appleWebApp: { capable: true, title: "Bryel's Care", statusBarStyle: "default" },

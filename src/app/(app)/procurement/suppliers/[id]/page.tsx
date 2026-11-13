@@ -14,6 +14,8 @@ import { waitingFor } from "../../../waiting-for";
 import { decideChangeAction, packAction, proposeChangeAction, proposePairAction, termsAction, withdrawChangeAction } from "../../actions";
 import { SubNav, SupplierChip, money } from "../../_ui";
 
+export const metadata = { title: "Supplier" };
+
 export const dynamic = "force-dynamic";
 
 const summaryCls = "inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text";

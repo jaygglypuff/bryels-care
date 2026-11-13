@@ -14,6 +14,8 @@ import { Forbidden } from "../../../forbidden";
 import { EQUIPMENT_WORD, KIND_WORD, PriorityChip, WoStatusChip, woWord } from "../../_ui";
 import { AssignForm, CompleteForm, IssuePartForm, TransitionForm } from "../../forms";
 
+export const metadata = { title: "Repair job" };
+
 export const dynamic = "force-dynamic";
 
 /** Maintenance work order: state machine actions, equipment availability, spare parts issued, history. */

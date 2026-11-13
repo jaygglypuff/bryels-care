@@ -10,6 +10,8 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../forbidden";
 import { DueChip, EQUIPMENT_WORD, PriorityChip, WoStatusChip } from "./_ui";
 
+export const metadata = { title: "Maintenance" };
+
 export const dynamic = "force-dynamic";
 
 /** Maintenance overview (US-6-19): PM plans due or overdue, live work orders, spare parts below minimum. */

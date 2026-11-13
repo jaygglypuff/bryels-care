@@ -11,6 +11,8 @@ import { Forbidden } from "../../forbidden";
 import { InspectionStatusChip } from "../_ui";
 import { StartInspectionButton } from "../w2c-forms";
 
+export const metadata = { title: "Quality tests" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

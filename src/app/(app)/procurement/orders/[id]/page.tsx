@@ -108,7 +108,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       {sp.sent === "1" && <Banner tone="ok" title="Saved and sent for approval">{next ? <NextApprover next={next} inline /> : waiting}</Banner>}
       {sp.sent === "approved" && <Banner tone="ok" title="Saved and approved with its request to buy">No second OK is needed. Next: send it to the supplier.</Banner>}
       {sp.sent === "0" && <Banner tone="warn" title="Saved as a draft">It could not be sent for approval yet. Tap “Send for approval” below to see why.</Banner>}
-      {sp.saved && <Banner tone="ok" title="Order saved as a draft">Send it for approval when it is ready.</Banner>}
+      {sp.saved && po.status === "draft" && <Banner tone="ok" title="Order saved as a draft">Send it for approval when it is ready.</Banner>}
       {(sp.sent || sp.saved) && <div className="mb-4" />}
 
       {can.receive ? (

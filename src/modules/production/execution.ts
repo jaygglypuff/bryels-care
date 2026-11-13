@@ -8,7 +8,8 @@ import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { getSetting } from "@/lib/settings";
 import { executionHooks } from "./execution-hooks";
-import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
+import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch, productNameOf } from "./shared";
+import { MessageTitle } from "@/lib/message-titles";
 import { transitionBatch } from "./state";
 import { syncWorkOrderProgress } from "./work-orders";
 import { notifyNextActors } from "@/modules/governance";
@@ -273,8 +274,8 @@ export async function finishStep(
     // Hand-off (docs/NEXT_APPROVER.md): the people who can check this step (never the doer) are told once per step cycle.
     const kind = step.stepKind === "line_clearance" ? "start_check" : "step_check";
     await notifyNextActors(tx, ctx, kind, { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
-      title: `Check ${step.name.toLowerCase()} of batch ${batch.batchNumber}`,
-      body: `${ctx.displayName} did step ${step.stepNo} (${step.name}). Check it on the step screen, or send it back with what to correct.`,
+      title: MessageTitle.stepToCheck(step.name, await productNameOf(tx, batch.productId)),
+      body: `${ctx.displayName} did step ${step.stepNo} (${step.name}) of batch ${batch.batchNumber}. Check it on the step screen, or send it back with what to correct.`,
       link: CHECKS_HREF, // ADR-130: the checker's list "Waiting for you to check"
       entityType: "batch",
       entityId: batch.id,
