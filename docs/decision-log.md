@@ -2888,3 +2888,18 @@ Status: Accepted (round 5 audits A, B and C, leftovers of ADR-129/130/131; part 
 Consequences: no migration; no permission change. "Needs me" now runs the checker queue and open action messages on each page load for floor roles.
 
 Open: whether a request's OK should count as step 1 of the order's approval (owner); rounding "Ask to buy" to pack sizes (owner); names-first titles for QA review, CAPA and recall messages; walk "Fix a mistake" and invoice Email/Print on the full demo.
+
+## ADR-133 Round 5 leftovers, part B: flows and documents (2026-11-13)
+Status: Accepted (UX leftovers of ADR-124, ADR-126, ADR-130 and ADR-131). QA to confirm A-FIN-CHK-01 and to approve the delivery receipt v2 layout version.
+1. **Finish check on the checker's own phone.** When the move-to-QA step needs a checker, Finish offers "Send the counts to be checked" (always; the only way while `production.sign_off.same_device` is off). Sending runs every Finish rule as a rolled-back dry run and stores the form and a summary in `batch_finish_checks` (migration 0042; state machine waiting → confirmed | returned | withdrawn; one waiting check per batch; the decider is never the sender). The checker's "Looks right" on `/production/checks` runs Finish in one transaction with the sender as doer (permissions re-checked) and the checker signing on their own session; it is idempotent (`finish_key`). "Not right" takes a tapped reason and messages the sender. The same-device password route is unchanged.
+2. **Proof-of-delivery Save after a refusal works.** The signature or photo is read at tap time and sent without a form action, so React's form reset can no longer drop it.
+3. **The "Other ways" weigh form sends `lotVia`.** A typed lot is refused while `scan.typed_code_counts_as_check` is off; a tapped lot is confirmed like the main Weigh.
+4. **The no-signal weighing is built by `queuedWeighCommand`** and tested through the phone outbox and the server replay.
+5. **The trace export lists the orders a lot waits for** (`direction = waiting`), only at the viewer's sites.
+6. **`sales.show_invoice_stage_without_invoice_access` off** also turns "Billed" into "Sent out" on the order chip, list, board, customer history, counts and "What happened", and removes invoice events from Home activity.
+7. **The duplicate-customer check runs in the customer import:** possible duplicates are flagged for the person running the import; a twin row in one file is not loaded and the report says why. Every app create path passes `duplicateCheck`.
+8. **New production order:** a single "Make it one batch" when the split is one batch.
+9. **Recipe wizard copy** keeps the source's counting mode and asks about packaging and steps that name another piece size.
+10. **Delivery receipt renderer v2** prints the product name first. v1 stays registered, so issued receipts re-render to their checksum and reprint with v1. A template moves to v2 only through a new version QA approves ("Start a new version with the newer layout"); the demo seed approves it as demo data (`DEMO_SEED_VERSION` 2026-11-13.1).
+
+Consequences: one migration (0042), no new permission strings, no new settings. New assumptions A-FIN-CHK-01, A-LOTVIA-OTHER-01, A-RPT-DR2-01, A-RCP-COPY-01. Risk: QA people hold the step-check permission, so they can confirm production counts (flagged in A-FIN-CHK-01).
