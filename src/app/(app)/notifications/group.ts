@@ -45,7 +45,7 @@ export type GroupableMessage = { id: string; kind: string; title: string; link: 
 
 export type MessageRow<M extends GroupableMessage> =
   | { type: "one"; message: M }
-  | { type: "group"; key: string; title: string; list: string; unread: number; messages: M[] };
+  | { type: "group"; key: string; title: string; list: string; unread: number; messages: M[]; /** Kinds without their own sentence: the newest message's title, so the row says what it is about. */ newest: string | null };
 
 const manilaDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 const stateOf = (m: GroupableMessage) => (m.resolvedAt ? "done" : m.acknowledgedAt ? "taken" : "open");
@@ -82,6 +82,7 @@ export function groupMessages<M extends GroupableMessage>(messages: readonly M[]
       list: f ? f.list : screen || "/notifications",
       unread: b.filter((x) => !x.readAt && !x.resolvedAt).length,
       messages: b,
+      newest: f ? null : b[0].title,
     });
   }
   return out;

@@ -63,6 +63,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                     <p className={cx("min-w-0 text-[15px] text-fg", r.unread > 0 && "font-medium")}>
                       {r.title}
                       {r.unread > 0 && <span className="ml-2 text-[11px] font-semibold uppercase text-primary-text">{r.unread} new</span>}
+                      {r.newest && <span className="block text-[13px] font-normal text-muted">Newest: {codeLast(plainDatesIn(r.newest)).text}</span>}
                     </p>
                     <Link href={r.list} className={buttonClass("primary", "sm")}>Open the list</Link>
                   </div>

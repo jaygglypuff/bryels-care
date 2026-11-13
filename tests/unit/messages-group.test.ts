@@ -66,6 +66,7 @@ describe("groupMessages", () => {
     if (rows[1].type === "group") {
       expect(rows[1].list).toBe("/quality/capa");
       expect(rows[1].title).toBe("3 messages like this");
+      expect(rows[1].newest).toMatch(/^quality.capa.assigned /);
     }
   });
 
