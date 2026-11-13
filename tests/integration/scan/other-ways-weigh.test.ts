@@ -88,10 +88,10 @@ describe('"Other ways" weigh form sends how the lot was given', () => {
     const typed = await dispenseAction(null as never, otherWaysForm(w.batchId, w.coconut.id, w.coconutLot, "typed", "3723.2"));
     expect(typed).toMatchObject({ ok: false, message: TYPING_IS_OFF });
     const tapped = await dispenseAction(null as never, otherWaysForm(w.batchId, w.coconut.id, w.coconutLot, "tap", "3723.2"));
-    expect(tapped.ok).toBe(false);
-    expect(tapped.message).toMatch(/Tapping the list does not confirm the lot/);
+    expect(tapped?.ok).toBe(false);
+    expect(tapped?.message).toMatch(/Tapping the list does not confirm the lot/);
     const noVia = await dispenseAction(null as never, otherWaysForm(w.batchId, w.coconut.id, w.coconutLot, null, "3723.2"));
-    expect(noVia.ok).toBe(false);
+    expect(noVia?.ok).toBe(false);
     expect(await db.select().from(dispenseRecords).where(eq(dispenseRecords.batchMaterialId, w.coconut.id))).toHaveLength(0);
     const scanned = await dispenseAction(null as never, otherWaysForm(w.batchId, w.coconut.id, `BC:LOT:${w.coconutLot}`, "scan", "3723.2"));
     expect(scanned, JSON.stringify(scanned)).toMatchObject({ ok: true });
