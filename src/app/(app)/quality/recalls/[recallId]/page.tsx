@@ -26,6 +26,8 @@ import {
 } from "../forms";
 import { isAre, plural } from "@/lib/plural";
 
+export const metadata = { title: "Product recall" };
+
 export const dynamic = "force-dynamic";
 
 const OUTCOME = { pending: ["Not stopped yet", "appr"], recalled: ["Recalled", "bad"], already_recalled: ["Was already recalled", "bad"], not_marked: ["Not marked", "neu"] } as const;

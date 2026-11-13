@@ -18,6 +18,8 @@ import { ConditionalDecideForm, ConditionalRequestForm, StartInspectionButton } 
 import { TestResultForm } from "./test-form";
 import { Help } from "@/ui/help/help";
 
+export const metadata = { title: "Batch QA record" };
+
 export const dynamic = "force-dynamic";
 
 export default async function BatchReleasePage({ params }: { params: Promise<{ batchId: string }> }) {

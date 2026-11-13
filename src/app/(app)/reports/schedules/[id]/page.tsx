@@ -12,6 +12,8 @@ import { Banner, Chip } from "@/ui/status";
 import { PauseForm, ScheduleForm } from "../forms";
 import { formParams } from "../shared";
 
+export const metadata = { title: "Report sent by itself" };
+
 export const dynamic = "force-dynamic";
 
 const RUN_TONE = { succeeded: "ok", partial: "warn", skipped: "neu", failed: "bad", running: "info" } as const;

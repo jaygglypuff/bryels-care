@@ -14,6 +14,8 @@ import { ComplaintStatusChip, TraceMatchChip } from "../_ui";
 import { ClassifyForm, CloseForm, RaiseDeviationForm, ReopenForm, ResolveForm, StartInvestigationForm, UpdateComplaintForm } from "../forms";
 import { Help } from "@/ui/help/help";
 
+export const metadata = { title: "Customer complaint" };
+
 export const dynamic = "force-dynamic";
 
 const RETURN_WORD: Record<string, string> = { draft: "Draft", submitted: "Waiting for approval", approved: "Approved", received: "Received – waiting for QA check", inspected: "QA decided", closed: "Closed", cancelled: "Cancelled" };

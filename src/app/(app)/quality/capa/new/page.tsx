@@ -5,6 +5,8 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { OpenCapaForm } from "../forms";
 
+export const metadata = { title: "Start a fix-and-prevent plan" };
+
 export const dynamic = "force-dynamic";
 
 /** Open a CAPA (W07-04), pre-filled from the deviation or complaint it comes from. */

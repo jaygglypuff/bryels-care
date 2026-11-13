@@ -8,6 +8,8 @@ import { Forbidden } from "../../forbidden";
 import { RecallStatusChip } from "../capa/_ui";
 import { plural } from "@/lib/plural";
 
+export const metadata = { title: "Product recalls" };
+
 const KIND_WORD: Record<string, string> = { recall: "Product recall", withdrawal: "Take off the shelves (withdrawal)", mock: "Practice recall (drill)" };
 
 

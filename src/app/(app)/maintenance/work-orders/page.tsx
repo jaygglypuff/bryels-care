@@ -8,6 +8,8 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { KIND_WORD, PriorityChip, WoStatusChip } from "../_ui";
 
+export const metadata = { title: "Repair jobs" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

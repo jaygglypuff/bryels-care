@@ -10,6 +10,8 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { ComplaintStatusChip, TraceMatchChip } from "./_ui";
 
+export const metadata = { title: "Customer complaints" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

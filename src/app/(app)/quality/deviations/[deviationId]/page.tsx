@@ -14,6 +14,8 @@ import { DeviationStatusChip, QaStatusChip, Timeline } from "../../_ui";
 import { CapaStatusChip } from "../../capa/_ui";
 import { CloseDeviationForm, ContainForm, InvestigateForm, UpdateInvestigationForm } from "../../w2c-forms";
 
+export const metadata = { title: "Problem report" };
+
 export const dynamic = "force-dynamic";
 
 export default async function DeviationPage({ params, searchParams }: { params: Promise<{ deviationId: string }>; searchParams: Promise<{ opened?: string }> }) {

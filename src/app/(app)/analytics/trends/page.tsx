@@ -12,6 +12,8 @@ import { StaleNotice, ValueLabelChip, plainKpi, rangeText } from "../kpi-ui";
 import { PageIntro } from "@/ui/guide";
 import { DeleteViewForm, SaveViewForm } from "./forms";
 
+export const metadata = { title: "Trends" };
+
 export const dynamic = "force-dynamic";
 
 const GRAINS: Grain[] = ["day", "week", "month"];

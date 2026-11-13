@@ -11,6 +11,8 @@ import { fmtKpi } from "@/ui/charts/format";
 import { BreakdownChart, DailyChart } from "../charts";
 import { KpiCard, RecordList, ScopePeriodBar, StaleNotice } from "../kpi-ui";
 
+export const metadata = { title: "Report" };
+
 export const dynamic = "force-dynamic";
 
 /** Plain titles and the one-sentence "what is this for" (ADR-088). */

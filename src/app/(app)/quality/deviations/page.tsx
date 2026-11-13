@@ -9,6 +9,8 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DeviationStatusChip } from "../_ui";
 
+export const metadata = { title: "Problem reports" };
+
 export const dynamic = "force-dynamic";
 
 const FILTERS = [

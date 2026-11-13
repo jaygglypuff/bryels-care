@@ -5,6 +5,8 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { CreatePlanForm } from "../../forms";
 
+export const metadata = { title: "Plan new regular maintenance" };
+
 export const dynamic = "force-dynamic";
 
 /** New PM plan (W13-01 "preventive maintenance plan"), optionally for one piece of equipment (?equipmentId=). */

@@ -14,6 +14,8 @@ import { QaStatusChip, fmtLotQty } from "../_ui";
 import { isAre, plural } from "@/lib/plural";
 import { plainDate } from "@/lib/plain-date";
 
+export const metadata = { title: "Where it came from and where it went" };
+
 export const dynamic = "force-dynamic";
 
 const ROLE_LABEL = { consumed: "used", produced: "made", shipped: "shipped", on_order: "on order", relotted: "given a new lot number (transfer or customer return)" } as const;

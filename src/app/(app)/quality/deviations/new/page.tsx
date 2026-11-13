@@ -5,6 +5,8 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { DeviationForm } from "../../w2c-forms";
 
+export const metadata = { title: "Report a problem" };
+
 export const dynamic = "force-dynamic";
 
 /** Raise sheet pre-filled from the page the user came from (batch, lot, inspection result). */

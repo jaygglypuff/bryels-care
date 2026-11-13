@@ -16,6 +16,8 @@ import { StepUpGate } from "../step-up-gate";
 import { UserStatusChip } from "../user-status";
 import { CommandForm } from "./command-form";
 
+export const metadata = { title: "Person" };
+
 export const dynamic = "force-dynamic";
 
 /** User detail (US-1-16): profile, status actions, assignments (US-1-18, US-2-29), sessions (US-1-12), MFA (US-1-28), audit. */

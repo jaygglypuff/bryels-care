@@ -14,6 +14,8 @@ import { LotPickerNav } from "../lot-picker-nav";
 import { QaStatusChip, fmtLotQty } from "../_ui";
 import { isAre, plural } from "@/lib/plural";
 
+export const metadata = { title: "Who received it" };
+
 export const dynamic = "force-dynamic";
 
 const RELATION_WORD = { subject: "The one you chose", source: "Made it", downstream: "Used it", sibling: "Used the same material lot" } as const;

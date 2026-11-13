@@ -5,6 +5,8 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { CreateChangeForm } from "../forms";
 
+export const metadata = { title: "Ask for a change" };
+
 export const dynamic = "force-dynamic";
 
 /** Propose a change (US-6-18); may come from a CAPA (?capaId=) or a revision page (?entityType=&entityId=). */

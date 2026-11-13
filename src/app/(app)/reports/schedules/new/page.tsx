@@ -7,6 +7,8 @@ import { Forbidden } from "../../../forbidden";
 import { ScheduleForm } from "../forms";
 import { formParams } from "../shared";
 
+export const metadata = { title: "Send a report by itself" };
+
 export const dynamic = "force-dynamic";
 
 /** New schedule for one report (?report=CODE, filters prefilled from the report page). */

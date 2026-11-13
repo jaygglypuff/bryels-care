@@ -12,6 +12,8 @@ import { Forbidden } from "../../../forbidden";
 import { DueChip, WoStatusChip } from "../../_ui";
 import { EditPlanForm, PlanStatusForm, PlanWorkOrderForm } from "../../forms";
 
+export const metadata = { title: "Regular maintenance plan" };
+
 export const dynamic = "force-dynamic";
 
 /** PM plan detail: due state, the live work order, history of completed PM, edit, pause / retire. */
