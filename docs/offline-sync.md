@@ -1,6 +1,6 @@
 # Offline and sync strategy
 
-Owner: `principal-architect` with `frontend-engineer` and `security-engineer`. Status (W4D): built for counting, weighing and stock moves; see §11 "As built". Original status:
+Owner: `principal-architect` with `frontend-engineer` and `security-engineer`. Status (W4D): built for counting, weighing and stock moves; see §11 "As built". ADR-134: printing the paper batch record with no internet, typing it in later, and the floor audit of what stops: §12. Original status:
 Proposed (ADR-018). Implementation phase: 7 (PWA hardening), with the command API designed
 for replay from Phase 2.
 
@@ -276,3 +276,89 @@ have no capture screen and no online "how" field, so they carry nothing. Tests:
 - `sessions.device_registration_id` (data-model §3.1): sessions are not linked to devices.
 - Background Sync API (iOS has none); flushing happens while the app is open.
 - Help guides in the offline cache (§7 row "Help guides").
+
+## 12. Paper batch record and what stops without internet (ADR-134, owner 2026-11-13)
+
+Plain language: the owner wants the floor to keep working when the internet stops. Before the batch starts, the system
+makes a **paper batch record** (one page per step, each with its own DOC number and QR code). Every phone or tablet that
+opens the batch, or opens **My jobs**, keeps a copy, so **Print the paper record** works with no internet. People write on
+the paper. When the internet is back they choose **Enter from the paper record** and type each line with the time
+written on the paper. Another person checks the typing against the scan of the page before the batch can pass QA.
+
+### 12.1 Printing with no internet
+
+| Piece | Where | Rule |
+|---|---|---|
+| Make the pack (online) | `issuePaperPack` (`src/modules/production/paper-pack.ts`); batch page card **Get the paper record ready** | `production.batch.edit` + `documents.generated_document.create`, site-scoped; batch `planned`, `materials_staged`, `in_process` or `rework_approved`. One page per routing step through the existing paper page service (`issuePageInTx` in `bmr-paper.ts`): reference `<batch>-Pnn`, a `bmr_paper_page` generated document (DOC number, QR `BC:DOC:…`, checksum), `batch_paper_records.pack_id`. The weighing page lists every ingredient (material, target, allowed range, planned lot) with blank lot, weight, time, done by and checked by boxes; the last page lists the finish counts; every page says what to do with no internet. One pack per batch: asking again returns the same pages. Audit `production.paper_pack.issued` |
+| Device copy | `GET /api/v1/production/paper-packs` (today's and the next batches: in process / staged, or planned within `PACK_DAYS_AHEAD` = 2 days, at the person's sites, max 12) and `GET /api/v1/production/paper-packs/[batchId]` (`paperPackForDevice`) | `production.batch.view` + `documents.generated_document.view` at the batch's site; every page is re-rendered from its frozen dataset and must match its checksum (same check as the print pages); `Cache-Control: no-store`; rate-limited like `/api/v1/sync/*` |
+| Where the copy lives | IndexedDB table `paperPacks` (`src/lib/offline/store.ts` v2, `src/lib/offline/paper-packs.ts`) | The person's own offline store: removed by `wipe` at a change of person, and the whole database is deleted at sign-out. The service worker still caches no signed-in page (§11.3 decision 1). Copies not listed any more are dropped after 2 days; when the list cannot be fetched nothing is dropped |
+| When it is saved | Batch page (`PaperPackPrint`) and My jobs (`PaperPackPrefetch`), again on the `online` event | Only while online; the hint says **Ready to print without internet ✓** when the device copy matches the server's version |
+| Printing | `printPackHtml`: the stored HTML in a hidden `srcdoc` frame (`sandbox="allow-same-origin allow-modals"`, no script) and Chrome's print dialog | Works on the open batch page with no internet, and in the precached `/offline` workspace (tab **Paper records**, `/offline#paper`) |
+| Unused pages | **The paper record was not used** (`voidUnusedPackPages`) | Pack pages still `issued` with no typed line are voided with the person's reason; pages with typed lines are kept. Unreviewed pages keep blocking the QA decision as before (`paperRecordBlockers`) |
+
+### 12.2 Enter from the paper record
+
+`/production/[batchId]/from-paper` (`paperEntryView`, `enterWeighingFromPaper`, `enterStepFromPaper` in
+`src/modules/production/paper-entry.ts`):
+
+1. The person types each line in the order of the paper: the page (DOC number), the time written on the paper, who did it,
+   who checked it (or nobody: then the check is done in the system later), and the values.
+2. **Records:** the normal records, through the normal services. `dispense_records` and `process_step_records` get
+   `entry_source = 'paper'`, `paper_record_id`, `occurred_at` (the paper's time), `entered_by` (the typist) and
+   `outage_reason` (migration `0043_paper_pack_entries`). The person who did it is `operator_id` / `conducted_by`; the
+   checker named on the paper is `checker_id` / `checked_by` with `checked_at` = the paper's time (audit `signedOn:
+   "paper"`). Every audit row carries `fromPaper`, `paperReference`, `occurredAt`, `doneBy`, `checkedBy`, `outageReason`.
+3. **Stock:** dispensing still posts through `postMovement`. The ledger has **one** time (`stock_movements.posted_at` =
+   when it was typed; there is no effective-time column), so the paper's time is kept in the movement's `meta`
+   (`fromPaper`, `occurredAt`, `paperReference`, `paperRecordId`) and on the dispense record. Stock cards still sort by
+   posted time (A-PAPER-04).
+4. **Checks on the server:** the page belongs to the batch and to that step and is `issued` or `returned`; the time is not
+   later than now and not before the page was printed (5 minutes allowed for clock differences, A-PAPER-07); the person
+   who did it holds the step's permission at the site; the checker is another person who holds the check permission; the
+   typist needs the step's own permission (production roles); tolerance and limits still apply (outside: recorded as
+   written, a deviation is opened for QA, never accepted silently); a lot that is not released or was expired at the
+   paper's time is refused and a deviation tells QA; idempotency keys make a double tap harmless.
+5. **Steps that are never "paper only"** (`NEVER_PAPER_ONLY_STEP_KINDS`: dispensing, transfer, reconciliation): they may
+   be done on paper during an outage and typed in later **only** with a reason (`No internet at the time`, `The system was
+   not working`, `The phone or tablet was not working`, or Other with words) and while
+   `production.paper.outage_entry_allowed` is on (default on, a change needs a second person's approval; QA confirms,
+   A-PAPER-01). The routing's record mode is unchanged: the step stays `electronic`.
+6. **Review:** the scan of each written page is attached and a different person reviews it. ADR-134 adds: anyone who typed
+   a line from the page is a transcriber too and cannot review it. A page with typed lines cannot be voided.
+7. **Not typed on this screen:** the move to the hold area (transfer) and the finish counts are typed on the Finish
+   screen; they are recorded with the time they are typed, not the paper's time, and are not marked "from paper"
+   (known gap, A-PAPER-05).
+
+### 12.3 What stops without internet on the floor (audit 2026-11-13)
+
+| Floor action (who) | Works with no internet today? | What happens otherwise | Answer (ADR-134) |
+|---|---|---|---|
+| Weigh (operator) | **Yes** on a registered device with the `dispensing` workflow and downloaded data: the Weigh card and the offline workspace queue it in the outbox (A-OFF-WGH-01, §11) | Not registered: the card keeps the typed values and says to save again when there is signal. Another lot than the one taken is not queued | Unregistered device or long outage: write it on the paper weighing page, type it in later with the reason |
+| Check a weighing or a step (checker) | No: the checker signs in their own session or with their own password, which the server checks (§11.3 decision 7) | Plain message, nothing saved | The checker signs the paper; it is typed in as "Checked by" (A-PAPER-02), or checked in the system later |
+| Step done: line clearance, readings, process steps (operator) | No: the `process_steps` workflow has no offline capture yet (§11.4) | Before: an error page. **Now:** "No internet. Nothing was saved. … write it on the paper batch record now and type it in later" | Paper page of the step; Enter from the paper record |
+| Scan a label (anyone) | Only inside the offline workspace (count and weighing, against the downloaded lots) | Other screens need the server; a page opened with no internet shows the offline workspace | Write the lot number printed on the label on the paper |
+| Put away (warehouse) | No (online form; the server accepts queued stock moves but there is no offline capture screen) | **Now:** the plain message instead of an error page | Put the goods on the shelf, write the shelf on the delivery paper, confirm the put-away when the internet is back. Until then the system shows the goods at Receiving |
+| Move stock (warehouse) | No capture screen offline (the replay command exists) | Plain message | Write it down; move in the system when the internet is back |
+| Count (warehouse) | **Yes** on registered devices (outbox, §11) | — | — |
+| Pick and the second check (warehouse) | No (`pick_pack` not built) | Plain message | Unsafe to post offline (a box could be given to two orders). Pick with the printed pick list; scan the picks and do the second check in the system before anything leaves. Nothing is sent out without the system |
+| Print box and piece labels (operator) | No: labels are rendered and recorded on the server | Plain message | Keep the pieces and boxes together in the packing area with the paper record; print the labels when the internet is back. Do not hand-write product labels (labelling rules are QA's, A-PAPER-06) |
+| Finish: counts and move to the hold area (operator) | No | Plain message | Write the counts on the last page of the paper record; type them on the Finish screen later (A-PAPER-05) |
+| Print the batch record (operator) | **Yes (new)**: the device copy of the paper batch record | "Not saved on this device yet" when the copy is missing | Open My jobs or the batch once a day while the internet works |
+
+The plain message comes from `src/lib/offline/words.ts` (`NO_INTERNET_SAVE`) and is shown by every form built on the
+shared `ActionForm` / `useInPlaceAction` (step cards, Finish, production forms), the inventory kit forms, put-away and
+the sales/fulfilment forms (`withNoInternet`). The key of the form is kept, so "try again" repeats the same save. Forms
+with their own `useActionState` elsewhere (quality, admin, closure) still show the error page with no internet.
+
+### 12.4 Assumptions (also in docs/PRD.md)
+
+| Id | Assumption | Default | Needs |
+|---|---|---|---|
+| A-PAPER-01 | Weighing, transfer and reconciliation may be done on paper during an outage and typed in later with the reason | on (`production.paper.outage_entry_allowed`) | QA |
+| A-PAPER-02 | The checker's name and wet signature on the paper count as the second-person check when typed in; the transcription review against the scan is the electronic confirmation | yes | QA |
+| A-PAPER-03 | A saved pack can be printed more than once with no internet; copies are not counted offline | "Print once; write copy on a reprint" (help) | QA |
+| A-PAPER-04 | The ledger keeps one time; the paper's time is in the movement's `meta` and on the record | as built | owner / accountant |
+| A-PAPER-05 | Finish counts and the move to the hold area are typed on the Finish screen with the typing time | as built | QA |
+| A-PAPER-06 | No labels with no internet; product labels are never hand-written | as built | QA |
+| A-PAPER-07 | The paper's time may be up to 5 minutes before the page was printed and up to 5 minutes after now (clock differences) | 5 min | QA |
+| A-PAPER-08 | Which batches a device saves: in process, materials ready, or planned to start within 2 days, at the person's sites (max 12) | 2 days | site managers |

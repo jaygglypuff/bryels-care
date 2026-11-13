@@ -14,7 +14,8 @@ import { getSetting } from "@/lib/settings";
 import { assertLotUsable } from "@/modules/inventory/ledger";
 import { assertLocationNotHeld, resolveLotRef } from "@/modules/inventory/holds";
 import { DEVIATION_UNAVAILABLE, executionHooks } from "./execution-hooks";
-import { type BatchRow, findStepOfKind, openStep, stepRecord } from "./execution";
+import { type BatchRow, type PaperStepFacts, type SnapshotStep, findStepOfKind, openStep, paperAuditFields, stepRecord } from "./execution";
+import type { Tx } from "@/db/client";
 import { assertStockCovers, postBatchMovement, postDispenseConsumption } from "./execution-postings";
 import { useEquipment } from "./process";
 import { convertReservations, expectedLots } from "./staging";
@@ -91,7 +92,19 @@ export type DispenseInput = {
   offPlanReasonCode?: string | null;
   offPlanNote?: string | null;
   idempotencyKey?: string | null;
+  /**
+   * ADR-134 "Enter from the paper record": the weighing happened on paper (time, who weighed, who checked, page). Set
+   * only by paper-entry.ts after it validated the page, the time and the people. The row is marked `entry_source =
+   * paper`; an out-of-tolerance total is recorded as an exception with a deviation for QA instead of being refused.
+   */
+  paper?: PaperResolver | null;
 };
+
+/**
+ * ADR-134: resolves and checks the paper facts inside the weighing's transaction (page locked, time, people). A
+ * function, so it can never arrive in a JSON payload (offline replay spreads its payload into DispenseInput).
+ */
+export type PaperResolver = (tx: Tx, batch: BatchRow, step: SnapshotStep) => Promise<PaperStepFacts>;
 
 const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
@@ -197,7 +210,8 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       }
       const step = findStepOfKind(batch, WEIGHING_STEP_KINDS);
       if (!step) throw new DomainError("state", "This batch's routing has no weighing step.");
-      const rec = await openStep(tx, ctx, batch, step);
+      const paper = typeof input.paper === "function" ? await input.paper(tx, batch, step) : null;
+      const rec = await openStep(tx, ctx, batch, step, paper ? { conductedBy: paper.doneBy.id, startedAt: paper.occurredAt } : {});
 
       const [row] = await tx
         .select({ bm: batchMaterials, material: materials })
@@ -261,12 +275,13 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         reserved = await reservedLotsFor(tx, batch.id, bm.materialId);
         woReserved = !reserved.length && batch.workOrderId ? await expectedLots(tx, batch.workOrderId, bm.materialId) : [];
       }
-      assertLotUsable(lot);
+      // ADR-134: a weighing from paper is judged at the time written on the paper (expiry); status is checked now.
+      assertLotUsable(lot, paper ? paper.occurredAt : undefined);
       const lotConfirmMode = await getSetting(tx, ctx.organizationId, "production.weighing.lot_confirm", batch.siteId);
       // ADR-126: a typed lot number counts only while `scan.typed_code_counts_as_check` is on (read inside the idempotent
       // block, so a weighing already recorded still answers with its stored result).
       const typedAllowed = await typedChecksAllowed(tx, ctx.organizationId);
-      const lotConfirmedBy = !input.lotPreselected && input.lotVia ? checkEntryMode(input.lotVia, "lotRef", typedAllowed) : confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia, typedAllowed);
+      const lotConfirmedBy = paper ? "paper" : !input.lotPreselected && input.lotVia ? checkEntryMode(input.lotVia, "lotRef", typedAllowed) : confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia, typedAllowed);
       const loc = await resolveSourceLocation(tx, ctx, batch.siteId, lot.id, lot.lotNumber, input.locationRef);
       await assertLocationNotHeld(tx, loc);
       await assertStockCovers(tx, lot, loc, net);
@@ -303,13 +318,30 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       const range = `${min.toDecimalPlaces(3).toString()}–${max.toDecimalPlaces(3).toString()} ${material.baseUom}`;
       let within: boolean;
       let exception: { approver: AuthContext; reason: string; deviationId: string } | null = null;
+      let paperDeviationId: string | null = null;
       if (input.partial) {
         if (total.gte(min) && total.lte(max)) throw new DomainError("validation", `This weighing brings ${material.name} to ${total.toString()} ${material.baseUom}, within ${range}: untick "another lot follows" to complete the line.`, { field: "partial" });
         if (total.gt(max)) throw new DomainError("out_of_tolerance", `The line total ${total.toString()} ${material.baseUom} would be above ${range}. Re-weigh.`, { rule: "V-TOL", min: min.toString(), max: max.toString(), actual: total.toString() });
         within = true;
       } else {
         within = total.gte(min) && total.lte(max);
-        if (!within) {
+        if (!within && paper) {
+          // ADR-134: the weighing already happened on paper. It is recorded as it was written, never accepted: a
+          // deviation goes to QA and the line stays an exception until QA decides (docs/offline-sync.md §3).
+          if (!ctx.can("quality.deviation.create")) throw new DomainError("forbidden", "This weight is outside the allowed range. Ask your supervisor or QA to type it in: it opens a problem report for QA.");
+          const opener = executionHooks().openDeviation;
+          if (!opener) throw new DomainError("state", DEVIATION_UNAVAILABLE, { rule: "CX-TOL" });
+          const { deviationId } = await opener(tx, ctx, {
+            kind: "out_of_tolerance",
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            siteId: batch.siteId,
+            lotId: lot.id,
+            description: `From the paper record ${paper.paperReference} (${paper.occurredAt.toISOString()}): ${material.name} weighed ${total.toString()} ${material.baseUom} by ${paper.doneBy.name}, allowed ${range}. Typed in by ${ctx.displayName}. QA decides.`,
+            approvedBy: ctx.userId,
+          });
+          paperDeviationId = deviationId;
+        } else if (!within) {
           const approver = signers.exceptionApprover ?? null;
           const reason = input.exceptionReason?.trim() ?? "";
           if (!approver) {
@@ -338,7 +370,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         }
       }
 
-      const checker = signers.checker ?? null;
+      const checker = paper ? null : (signers.checker ?? null);
       if (checker) {
         ctx.assertSeparation(checker.userId === ctx.userId, "The checker must be a different person from the operator.", { rule: "V-SOD" });
         checker.require("production.dispense_record.approve");
@@ -347,6 +379,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
 
       const seq = live.reduce((m, r) => Math.max(m, r.sequence), 0) + 1;
       const now = new Date();
+      const paperChecker = paper?.checkedBy ?? null;
       const [rec2] = await tx
         .insert(dispenseRecords)
         .values({
@@ -363,17 +396,18 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           isWithinTolerance: within,
           scaleCode,
           equipmentId,
-          operatorId: ctx.userId,
-          checkerId: checker?.userId ?? null,
-          checkedAt: checker ? now : null,
+          operatorId: paper ? paper.doneBy.id : ctx.userId,
+          checkerId: checker?.userId ?? paperChecker?.id ?? null,
+          checkedAt: checker ? now : paperChecker ? paper!.occurredAt : null,
           exceptionApprovedBy: exception?.approver.userId ?? null,
           exceptionReason: exception?.reason ?? null,
-          deviationId: exception?.deviationId ?? null,
+          deviationId: exception?.deviationId ?? paperDeviationId,
+          ...(paper ? { entrySource: "paper", paperRecordId: paper.paperRecordId, occurredAt: paper.occurredAt, enteredBy: ctx.userId, outageReason: paper.outageReason } : {}),
           supersedesId,
           correctionReason: supersedesId ? input.correctionReason!.trim() : null,
         })
         .returning();
-      const status = input.partial ? "partial" : exception ? "exception" : "dispensed";
+      const status = input.partial ? "partial" : exception || paperDeviationId ? "exception" : "dispensed";
       await tx.update(batchMaterials).set({ dispensedQtyG: total.toString(), status }).where(eq(batchMaterials.id, bm.id));
 
       const atDispense = await getSetting(tx, ctx.organizationId, "production.post_consumption_at_dispense", batch.siteId);
@@ -408,8 +442,19 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           postedNow: atDispense,
           supersedes: supersedesId,
           lotConfirmed: lotConfirmedBy,
+          ...(paper ? { ...paperAuditFields(paper), deviationId: paperDeviationId } : {}),
         },
       });
+      if (paperChecker) {
+        await audit(tx, ctx, {
+          action: "production.dispense_record.checked",
+          entityType: "dispense_record",
+          entityId: rec2.id,
+          entityNumber: batch.batchNumber,
+          siteId: batch.siteId,
+          after: { material: material.code, lot: lot.lotNumber, actualQtyG: net.toString(), ...paperAuditFields(paper!), operator: paper!.doneBy.name, checkedBy: paperChecker.name, signedOn: "paper" },
+        });
+      }
       if (exception) {
         await audit(tx, exception.approver, {
           action: "production.dispense_record.over_tolerance_approved",
@@ -433,9 +478,9 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       }
       // Hand-off (docs/NEXT_APPROVER.md): a weighing that needs a second person tells the people who can check it, once
       // per batch weighing step (never the weigher); the checker's Home lists "Check a weighing" (floor-tasks.ts).
-      const needsCheck = !checker && (batch.formulaSnapshot as FormulaSnapshot).lines.find((l) => l.lineNo === bm.lineNo)?.requiresChecker !== false;
+      const needsCheck = !checker && !paperChecker && (batch.formulaSnapshot as FormulaSnapshot).lines.find((l) => l.lineNo === bm.lineNo)?.requiresChecker !== false;
       if (needsCheck) {
-        await notifyNextActors(tx, ctx, "weighing_check", { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
+        await notifyNextActors(tx, ctx, "weighing_check", { siteId: batch.siteId, excludeUserIds: [...new Set([ctx.userId, paper?.doneBy.id ?? ctx.userId])] }, {
           title: MessageTitle.weighingToCheck(await productNameOf(tx, batch.productId), ctx.displayName.split(/\s+/)[0]),
           body: `${ctx.displayName} weighed ${material.name} for batch ${batch.batchNumber}. Watch the container and the scale, then confirm it on the Weigh screen.`,
           // ADR-130: the message opens the checker's list, where the check is done (never the operator's screen).
@@ -445,7 +490,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           dedupeKey: `handoff.weighing_check:${batch.id}:${rec.id}`,
         });
       }
-      return { dispenseRecordId: rec2.id, materialName: material.name, withinTolerance: within, status, lineTotalG: total.toString(), checked: !!checker, needsCheck, siteId: batch.siteId };
+      return { dispenseRecordId: rec2.id, materialName: material.name, withinTolerance: within, status, lineTotalG: total.toString(), checked: !!checker || !!paperChecker, needsCheck, siteId: batch.siteId, deviationId: paperDeviationId };
     });
     return result;
   });

@@ -38,6 +38,28 @@ export type OutboxEntry = {
   updatedAt: string;
 };
 
+/**
+ * ADR-134: a printable paper batch record pack kept on the device for printing with no internet. The server only sends
+ * packs the signed-in person may see (batch and documents, at their sites); the store is deleted at sign-out and at a
+ * change of person, like everything else here.
+ */
+export type CachedPaperPack = {
+  batchId: string;
+  siteId: string;
+  batchNumber: string;
+  productName: string;
+  status: string;
+  plannedStartOn: string | null;
+  packId: string;
+  version: string;
+  madeAtText: string;
+  pages: { reference: string; documentNumber: string | null; stepNo: number; stepName: string; status: string }[];
+  html: string;
+  /** Who the copy was downloaded for (the person signed in). */
+  userId: string;
+  savedAt: string;
+};
+
 export type MetaRow = { key: string; value: unknown };
 export type SyncLogRow = { id?: number; at: string; kind: "flush" | "refresh" | "discard" | "reset" | "error"; detail: string };
 
@@ -50,6 +72,7 @@ export class OfflineDb extends Dexie {
   counts!: Table<ReferenceCount, string>;
   batches!: Table<ReferenceBatch, string>;
   syncLog!: Table<SyncLogRow, number>;
+  paperPacks!: Table<CachedPaperPack, string>;
 
   constructor(name = OFFLINE_DB_NAME, deps?: { indexedDB: IDBFactory; IDBKeyRange: typeof IDBKeyRange }) {
     super(name, deps);
@@ -63,6 +86,8 @@ export class OfflineDb extends Dexie {
       batches: "id, siteId",
       syncLog: "++id, at",
     });
+    // ADR-134: printable paper batch records.
+    this.version(2).stores({ paperPacks: "batchId, siteId, userId" });
   }
 }
 
@@ -94,7 +119,7 @@ export async function log(db: OfflineDb, kind: SyncLogRow["kind"], detail: strin
 
 /** Removes every business table of the device (sign-out, change of person, device removed). */
 export async function wipe(db: OfflineDb) {
-  await db.transaction("rw", [db.outbox, db.meta, db.materials, db.locations, db.lots, db.counts, db.batches, db.syncLog], async () => {
-    await Promise.all([db.outbox.clear(), db.meta.clear(), db.materials.clear(), db.locations.clear(), db.lots.clear(), db.counts.clear(), db.batches.clear(), db.syncLog.clear()]);
+  await db.transaction("rw", [db.outbox, db.meta, db.materials, db.locations, db.lots, db.counts, db.batches, db.syncLog, db.paperPacks], async () => {
+    await Promise.all([db.outbox.clear(), db.meta.clear(), db.materials.clear(), db.locations.clear(), db.lots.clear(), db.counts.clear(), db.batches.clear(), db.syncLog.clear(), db.paperPacks.clear()]);
   });
 }

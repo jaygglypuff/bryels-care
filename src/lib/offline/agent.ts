@@ -11,6 +11,7 @@
 import { deviceIdentity, nextSequence, resetDeviceIdentity } from "./device";
 import { type EnqueueInput, OfflineRefused, enqueue, flush, outboxStats, pruneSynced, recoverInterrupted, resetForSyncNow, restartSchedule, unsentCommands } from "./outbox";
 import type { OutboxStats } from "./outbox";
+import { cachedPaperPack, cachedPaperPacks, httpPackFetcher, refreshPaperPacks, savePaperPack } from "./paper-packs";
 import { isReferenceStale } from "./policy";
 import type { AuthSnapshot } from "./protocol";
 import { referenceTimes, saveReference } from "./reference-cache";
@@ -293,6 +294,32 @@ class SyncAgent {
     }
     this.state = { ...INITIAL, ready: true, deviceKey: this.deviceKey };
     for (const l of this.listeners) l();
+  }
+
+  /**
+   * ADR-134: paper batch record packs of today's and the next batches, saved for printing with no internet. `userId` is
+   * the person signed in (the server's answer on app pages, the stored snapshot on the offline page).
+   */
+  async refreshPaperPacks(userId: string) {
+    await this.start(userId);
+    return refreshPaperPacks(this.store(), userId, httpPackFetcher);
+  }
+
+  /** Downloads and saves the pack of one batch (the batch page). Null when the batch has no pack yet. */
+  async savePaperPackOf(userId: string, batchId: string) {
+    await this.start(userId);
+    const p = await httpPackFetcher.pack(batchId);
+    return p ? savePaperPack(this.store(), userId, p) : null;
+  }
+
+  async paperPack(userId: string, batchId: string) {
+    await this.start(userId);
+    return cachedPaperPack(this.store(), userId, batchId);
+  }
+
+  async paperPacks(userId: string) {
+    await this.start(userId);
+    return cachedPaperPacks(this.store(), userId);
   }
 
   /** Cached reference rows for capture screens. */

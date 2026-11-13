@@ -224,7 +224,7 @@ export async function recordReadingInTx(
   batch: BatchRow,
   step: SnapshotStep,
   rec: StepRecord,
-  input: { parameterId: string; value: string; correctionReason?: string | null; equipmentRef?: string | null },
+  input: { parameterId: string; value: string; correctionReason?: string | null; equipmentRef?: string | null; auditExtra?: Record<string, unknown> },
 ) {
   {
     {
@@ -271,7 +271,7 @@ export async function recordReadingInTx(
         siteId: batch.siteId,
         reason: current ? correction : null,
         before: current ? { value: current.valueNumeric ?? current.valueText ?? current.valueBoolean, isWithinLimits: current.isWithinLimits } : null,
-        after: { stepNo: step.stepNo, parameter: p.code, value: shown, uom: p.uom, min: p.minValue, max: p.maxValue, isWithinLimits: ev.within },
+        after: { ...(input.auditExtra ?? {}), stepNo: step.stepNo, parameter: p.code, value: shown, uom: p.uom, min: p.minValue, max: p.maxValue, isWithinLimits: ev.within },
       });
       const limitText = limitsLabel(p);
       if (!ev.within) {

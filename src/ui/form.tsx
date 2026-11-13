@@ -2,6 +2,7 @@
 import { useFormStatus } from "react-dom";
 import { useActionState, useEffect, useRef, useState, type ComponentProps, type MouseEvent, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
+import { browserOnline, isNoConnection, noInternetState } from "@/lib/offline/words";
 import { Button, cx, type ButtonVariant } from "./core";
 import { WhoCanHelp } from "./who-can-help";
 import { NextApprover } from "./next-approver";
@@ -76,7 +77,14 @@ export function useInPlaceAction<S extends ActionState>(action: FormAction<S>, i
     const payload = JSON.stringify([...fd.entries()].map(([k, v]) => [k, typeof v === "string" ? v : `${v.name}:${v.size}`]));
     if (!last.current || last.current.payload !== payload) last.current = { payload, key: newKey() };
     fd.set("idempotencyKey", last.current.key);
-    const r = await action(prev, fd);
+    let r: S;
+    try {
+      r = await action(prev, fd);
+    } catch (e) {
+      // ADR-134 item 3: no internet is a plain message, never an error page. The key is kept, so "try again" is the same save.
+      if (isNoConnection(e, browserOnline())) return noInternetState() as S;
+      throw e;
+    }
     if (r?.ok) last.current = null;
     return r;
   }, initial);

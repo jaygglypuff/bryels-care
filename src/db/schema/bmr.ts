@@ -181,10 +181,13 @@ export const batchPaperRecords = pgTable(
     issuedBy: uuid("issued_by").notNull().references(() => users.id),
     issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
     idempotencyKey: text("idempotency_key"),
+    /** ADR-134: pages issued together as one paper batch record pack (one per routing step); null for single pages. */
+    packId: uuid("pack_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
+    index("batch_paper_records_pack_idx").on(t.packId).where(sql`${t.packId} is not null`),
     uniqueIndex("batch_paper_records_batch_page_uq").on(t.batchId, t.pageNo),
     uniqueIndex("batch_paper_records_org_idem_uq").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
     index("batch_paper_records_batch_idx").on(t.batchId, t.status),

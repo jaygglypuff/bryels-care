@@ -33,6 +33,7 @@ import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DecideScrapForm, ReasonForm } from "./exec-forms";
+import { PaperRecordCard } from "./paper-card";
 import { registerAppHooks } from "@/modules/wiring";
 import { whoCanDo } from "@/modules/identity";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
@@ -96,6 +97,12 @@ function SignLine({ step }: { step: ExecStep }) {
         </span>
       )}
       {r.notes && <span className="block">Notes: {r.notes}</span>}
+      {r.fromPaper && (
+        <span className="block" data-testid="from-paper">
+          <Chip tone="neu">From paper</Chip> done {r.occurredAt ? fmtDateTime(r.occurredAt) : ""} as written on the paper · typed in by {r.enteredBy ?? "unknown"}
+          {r.outageReason ? ` · ${r.outageReason}` : ""}
+        </span>
+      )}
     </p>
   );
 }
@@ -302,6 +309,9 @@ export default async function BatchRecordPage({ params }: Params) {
       ) : null}
       {next.disabledReason && <p className="-mt-2 text-[14px] text-muted">{next.disabledReason}</p>}
 
+      {/* ADR-134: print the batch record with no internet, type it in later. */}
+      <PaperRecordCard ctx={ctx} batchId={batch.id} />
+
       {batch.status === "awaiting_qc" && (
         <Banner tone="appr" title="Waiting for the quality check">
           Output lot {rec.outputLot?.lotNumber} ({fmtQty(batch.actualUnits, "pcs", 0)}) is in the hold area. QA checks the record and passes or fails the batch.
@@ -498,7 +508,10 @@ export default async function BatchRecordPage({ params }: Params) {
                   <Td className="whitespace-nowrap">{r.operator}</Td>
                   <Td className="whitespace-nowrap">{r.checker ?? "—"}</Td>
                   <Td className="whitespace-nowrap">{r.scaleCode ?? "—"}</Td>
-                  <Td className="whitespace-nowrap">{fmtDateTime(r.recordedAt)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {fmtDateTime(r.fromPaper && r.occurredAt ? r.occurredAt : r.recordedAt)}
+                    {r.fromPaper && <span className="block text-[12px] text-muted">from paper · typed by {r.enteredBy}</span>}
+                  </Td>
                 </tr>
               )),
             )}
@@ -528,6 +541,7 @@ function WeighingList({ ex }: { ex: BatchExecution }) {
               {fmtQty(w.qtyG, "g", 1)} · lot {w.lotNumber} · {w.locationCode} · {w.scale ?? "no scale"} · by {w.operator} · {w.checker ? `checked by ${w.checker}` : "not checked"}
               {w.exceptionApprovedBy ? ` · approved by ${w.exceptionApprovedBy}: ${w.exceptionReason}` : ""}
               {w.voided ? ` · undone by ${w.voidedBy}: ${w.voidReason}` : ""}
+              {w.fromPaper ? ` · from paper (${w.occurredAt ? fmtDateTime(w.occurredAt) : ""}, typed by ${w.enteredBy})` : ""}
             </p>
           ))}
         </li>

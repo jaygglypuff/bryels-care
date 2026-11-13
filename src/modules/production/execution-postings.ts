@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import type { DbOrTx, Tx } from "@/db/client";
-import { batchMaterials, batches, dispenseRecords, inventoryBalances, inventoryLots, packagingReconciliations, productionPostings } from "@/db/schema";
+import { batchMaterials, batchPaperRecords, batches, dispenseRecords, inventoryBalances, inventoryLots, packagingReconciliations, productionPostings } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { postMovement } from "@/modules/inventory/ledger";
@@ -81,10 +81,18 @@ export async function postDispenseConsumption(tx: Tx, ctx: AuthContext, batch: B
     reason: `Dispensed ${materialName} for batch ${batch.batchNumber}`,
     idempotencyKey: `dispense:${rec.id}`,
     links: { batchMaterialId: rec.batchMaterialId, dispenseRecordId: rec.id },
-    meta: { dispenseRecordId: rec.id },
+    // ADR-134: the ledger has one time (posted_at = when it was typed); a weighing typed from paper keeps the time
+    // written on the paper here, so stock cards and the batch record can show when it really happened.
+    meta: rec.entrySource === "paper" ? { dispenseRecordId: rec.id, fromPaper: true, occurredAt: rec.occurredAt?.toISOString() ?? null, paperRecordId: rec.paperRecordId, paperReference: await paperReferenceOf(tx, rec.paperRecordId) } : { dispenseRecordId: rec.id },
   });
   await tx.update(dispenseRecords).set({ productionPostingId: posting.id }).where(eq(dispenseRecords.id, rec.id));
   return posting;
+}
+
+async function paperReferenceOf(tx: Tx, id: string | null) {
+  if (!id) return null;
+  const [p] = await tx.select({ r: batchPaperRecords.paperReference }).from(batchPaperRecords).where(eq(batchPaperRecords.id, id)).limit(1);
+  return p?.r ?? null;
 }
 
 /** Consumed quantity of a counted packaging component: issued − returned (used, damaged and any unexplained variance). */

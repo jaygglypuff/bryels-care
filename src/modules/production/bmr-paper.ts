@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, max } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { db, type DbOrTx, type Tx } from "@/db/client";
-import { batchPaperRecords, batches, fileAttachments, routingSteps, users } from "@/db/schema";
+import { batchPaperRecords, batches, dispenseRecords, fileAttachments, processStepRecords, routingSteps, users } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -70,6 +70,28 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
     const snap = b.formulaSnapshot as FormulaSnapshot;
     const step = snap.steps.find((s) => s.stepNo === Number(input.stepNo));
     if (!step) throw new DomainError("validation", "Choose a step of this batch's routing.", { field: "stepNo" });
+    const r = await issuePageInTx(tx, ctx, b, step, { idempotencyKey: key, documentKey: `paper-doc:${input.idempotencyKey}` });
+    return { paperRecordId: r.paperRecordId, reference: r.reference, documentId: r.documentId, replayed: false };
+  });
+}
+
+/** What a page of the paper batch record pack carries beyond a single page (ADR-134). */
+export type PaperPageExtras = Pick<BmrPaperPageData["page"], "weighings" | "finishCounts" | "outageNote">;
+
+/**
+ * Issues one page in the caller's transaction (the caller locked the batch, checked permissions and the batch state):
+ * page number, reference `<batch>-Pnn`, the generated document (DOC number, QR, checksum), the row and its audit.
+ */
+export async function issuePageInTx(
+  tx: Tx,
+  ctx: AuthContext,
+  b: typeof batches.$inferSelect,
+  step: FormulaSnapshot["steps"][number],
+  opts: { idempotencyKey: string; documentKey: string; packId?: string | null; extras?: PaperPageExtras },
+) {
+  const snap = b.formulaSnapshot as FormulaSnapshot;
+  {
+    const key = opts.idempotencyKey;
     const [rs] = await tx.select({ mode: routingSteps.recordMode }).from(routingSteps).where(eq(routingSteps.id, step.routingStepId)).limit(1);
     const mode = rs?.mode ?? "electronic";
     const [m] = await tx.select({ n: max(batchPaperRecords.pageNo) }).from(batchPaperRecords).where(eq(batchPaperRecords.batchId, b.id));
@@ -112,6 +134,9 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
         checklist: (step.checklistItems ?? []).map((c) => ({ itemNo: c.itemNo, text: c.text })),
         issuedBy: ctx.displayName,
         issuedAt: fmtDateTime(new Date()),
+        ...(opts.extras?.weighings?.length ? { weighings: opts.extras.weighings } : {}),
+        ...(opts.extras?.finishCounts?.length ? { finishCounts: opts.extras.finishCounts } : {}),
+        ...(opts.extras?.outageNote ? { outageNote: opts.extras.outageNote } : {}),
       },
       notice: "Limits and procedure text are configuration to be verified by authorized personnel before production use.",
     };
@@ -122,8 +147,8 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
       siteId: b.siteId,
       data,
       watermark: null,
-      idempotencyKey: `paper-doc:${input.idempotencyKey}`,
-      parameters: { paperRecordId: id, reference },
+      idempotencyKey: opts.documentKey,
+      parameters: { paperRecordId: id, reference, ...(opts.packId ? { packId: opts.packId } : {}) },
       supersedePrevious: false,
     });
     await tx.insert(batchPaperRecords).values({
@@ -141,6 +166,7 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
       generatedDocumentId: doc.id,
       issuedBy: ctx.userId,
       idempotencyKey: key,
+      packId: opts.packId ?? null,
     });
     await audit(tx, ctx, {
       action: "production.batch_paper_record.issued",
@@ -148,10 +174,10 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
       entityId: id,
       entityNumber: b.batchNumber,
       siteId: b.siteId,
-      after: { reference, stepNo: step.stepNo, step: step.name, recordMode: mode, documentNumber: doc.documentNumber },
+      after: { reference, stepNo: step.stepNo, step: step.name, recordMode: mode, documentNumber: doc.documentNumber, ...(opts.packId ? { packId: opts.packId } : {}) },
     });
-    return { paperRecordId: id, reference, documentId: doc.id, replayed: false };
-  });
+    return { paperRecordId: id, reference, documentId: doc.id, documentNumber: doc.documentNumber, stepNo: step.stepNo, stepName: step.name };
+  }
 }
 
 export type AttachPaperInput = { paperRecordId: string; fileName: string; declaredType: string; bytes: Uint8Array; transcriptionNote?: string | null; idempotencyKey: string };
@@ -236,6 +262,8 @@ export async function reviewPaperRecord(ctx: AuthContext, input: { paperRecordId
     const to = input.decision === "confirm" ? "reviewed" : "returned";
     assertPaperTransition(p.status, to, p.paperReference);
     ctx.assertSeparation(p.transcribedBy === ctx.userId, "You transcribed this page, so another person must review it.");
+    // ADR-134: a person who typed any line of this page from paper is a transcriber too.
+    ctx.assertSeparation((await paperEntryPeople(tx, p.id)).includes(ctx.userId), "You typed lines of this page into the system, so another person must review it.");
     const now = new Date();
     await tx
       .update(batchPaperRecords)
@@ -265,11 +293,28 @@ export async function voidPaperPage(ctx: AuthContext, input: { paperRecordId: st
     const p = await loadPaper(tx, ctx, input.paperRecordId, true);
     ctx.requireSite(p.siteId);
     assertPaperTransition(p.status, "void", p.paperReference);
+    if ((await paperEntryCount(tx, p.id)) > 0) {
+      throw new DomainError("state", `Page ${p.paperReference} has lines typed into the system from it. Keep it: scan it and attach it, so another person can check it.`);
+    }
     const now = new Date();
     await tx.update(batchPaperRecords).set({ status: "void", voidedBy: ctx.userId, voidedAt: now, voidReason: reason, updatedAt: now }).where(eq(batchPaperRecords.id, p.id));
     const [b] = await tx.select({ number: batches.batchNumber }).from(batches).where(eq(batches.id, p.batchId)).limit(1);
     await audit(tx, ctx, { action: "production.batch_paper_record.voided", entityType: "batch_paper_record", entityId: p.id, entityNumber: b.number, siteId: p.siteId, reason, before: { status: p.status }, after: { status: "void" } });
   });
+}
+
+/** People who typed lines of a page into the system (ADR-134 "Enter from the paper record"). */
+export async function paperEntryPeople(q: DbOrTx, paperRecordId: string): Promise<string[]> {
+  const a = await q.selectDistinct({ id: dispenseRecords.enteredBy }).from(dispenseRecords).where(eq(dispenseRecords.paperRecordId, paperRecordId));
+  const b = await q.selectDistinct({ id: processStepRecords.enteredBy }).from(processStepRecords).where(eq(processStepRecords.paperRecordId, paperRecordId));
+  return [...new Set([...a, ...b].map((r) => r.id).filter((x): x is string => !!x))];
+}
+
+/** Lines typed from a page (weighings and steps). */
+export async function paperEntryCount(q: DbOrTx, paperRecordId: string): Promise<number> {
+  const a = await q.select({ id: dispenseRecords.id }).from(dispenseRecords).where(eq(dispenseRecords.paperRecordId, paperRecordId));
+  const b = await q.select({ id: processStepRecords.id }).from(processStepRecords).where(eq(processStepRecords.paperRecordId, paperRecordId));
+  return a.length + b.length;
 }
 
 export type PaperBlocker = { code: "paper_unreviewed" | "paper_missing"; message: string };

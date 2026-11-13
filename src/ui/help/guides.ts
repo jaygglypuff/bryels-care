@@ -46,6 +46,8 @@ export const GUIDE_FILES: Record<string, string> = {
   "production.finish": "finish.md",
   "quality.check": "check-quality.md",
   "production.bmr": "bmr.md",
+  // ADR-134: print the batch record with no internet, type it in later
+  "production.paper_record": "paper-record.md",
   "sales.order": "order.md",
   // ADR-131: buying from shortage to delivery problem; invoices, payments, bills and month end
   "procurement.buying": "buying.md",

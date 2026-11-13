@@ -7,6 +7,7 @@ import { equipment, inspectionPlanTests, inspectionPlans, routingRevisions, rout
 import { inventoryLots } from "./inventory";
 import { inspections } from "./quality-ext";
 import { workOrders } from "./planning";
+import { batchPaperRecords } from "./bmr";
 
 /**
  * Batch = execution record with a BMR.
@@ -180,6 +181,16 @@ export const dispenseRecords = pgTable(
     /** Set when the consumption movement for this weighing is posted (production_postings). */
     productionPostingId: uuid("production_posting_id"),
     recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * ADR-134: `paper` = typed in later from the paper batch record. `occurred_at` is the time written on the paper
+     * (when it really happened); `entered_by` the person who typed it; `paper_record_id` the issued page (DOC number);
+     * `outage_reason` why a step that is never "paper only" was done on paper (e.g. no internet at the time).
+     */
+    entrySource: text("entry_source").notNull().default("system"),
+    paperRecordId: uuid("paper_record_id").references((): AnyPgColumn => batchPaperRecords.id),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }),
+    enteredBy: uuid("entered_by").references(() => users.id),
+    outageReason: text("outage_reason"),
   },
   (t) => [
     uniqueIndex("dispense_records_line_seq_uq").on(t.batchMaterialId, t.sequence),
@@ -188,6 +199,9 @@ export const dispenseRecords = pgTable(
     check("dispense_records_exception_reason_ck", sql`${t.exceptionApprovedBy} is null or ${t.exceptionReason} is not null`),
     check("dispense_records_correction_ck", sql`${t.supersedesId} is null or ${t.correctionReason} is not null`),
     check("dispense_records_void_ck", sql`${t.voidedAt} is null or (${t.voidedBy} is not null and ${t.voidReason} is not null)`),
+    check("dispense_records_entry_source_ck", sql`${t.entrySource} in ('system', 'paper')`),
+    check("dispense_records_paper_ck", sql`${t.entrySource} <> 'paper' or (${t.paperRecordId} is not null and ${t.occurredAt} is not null and ${t.enteredBy} is not null)`),
+    index("dispense_records_paper_idx").on(t.paperRecordId).where(sql`${t.paperRecordId} is not null`),
   ],
 );
 
@@ -229,12 +243,25 @@ export const processStepRecords = pgTable(
     exceptionApprovedBy: uuid("exception_approved_by").references(() => users.id),
     exceptionReason: text("exception_reason"),
     deviationId: uuid("deviation_id"),
+    /**
+     * ADR-134: `paper` = typed in later from the paper batch record. `occurred_at` is the time written on the paper
+     * (when it really happened); `entered_by` the person who typed it; `paper_record_id` the issued page (DOC number);
+     * `outage_reason` why a step that is never "paper only" was done on paper (e.g. no internet at the time).
+     */
+    entrySource: text("entry_source").notNull().default("system"),
+    paperRecordId: uuid("paper_record_id").references((): AnyPgColumn => batchPaperRecords.id),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }),
+    enteredBy: uuid("entered_by").references(() => users.id),
+    outageReason: text("outage_reason"),
   },
   (t) => [
     uniqueIndex("process_step_records_batch_step_uq").on(t.batchId, t.stepNo),
     check("process_step_records_status_ck", sql`${t.status} in ('pending', 'in_progress', 'awaiting_check', 'completed', 'skipped')`),
     check("process_step_records_completed_ck", sql`${t.status} <> 'completed' or ${t.completedAt} is not null`),
     check("process_step_records_exception_ck", sql`${t.exceptionApprovedBy} is null or (${t.exceptionApprovedBy} <> ${t.conductedBy} and ${t.exceptionReason} is not null)`),
+    check("process_step_records_entry_source_ck", sql`${t.entrySource} in ('system', 'paper')`),
+    check("process_step_records_paper_ck", sql`${t.entrySource} <> 'paper' or (${t.paperRecordId} is not null and ${t.occurredAt} is not null and ${t.enteredBy} is not null)`),
+    index("process_step_records_paper_idx").on(t.paperRecordId).where(sql`${t.paperRecordId} is not null`),
   ],
 );
 

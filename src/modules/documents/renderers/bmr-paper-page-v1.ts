@@ -15,6 +15,11 @@ import type { Renderer } from "./types";
  * conducted-by and checked-by signature boxes, and the transcription block (who transcribed, who
  * reviewed). The completed page is scanned and attached to the batch; a different person confirms
  * the transcription. Rendered from frozen data only.
+ *
+ * ADR-134 (paper batch record pack): optional `weighings` (one row per ingredient with blank lot, weight, time, done by
+ * and checked by boxes), `finishCounts` and `outageNote`. They print when present unless the template switches the
+ * `weighings` / `finish_counts` section off; pages issued before ADR-134 carry none of them, so they re-render to the
+ * same text and checksum.
  */
 
 export const BMR_PAPER_DATASETS = ["bmr_paper_page/v1"] as const;
@@ -28,8 +33,10 @@ export function defaultBmrPaperPageDefinition(): TemplateDefinition {
     header: { show_logo: true, title: "BMR PAPER RECORD PAGE", identity_fields: ["batch_number", "product_name"] },
     footer: { show_qr: true, uncontrolled_copy_text: "Attach the completed page to the batch record; keep the original with the batch file.", show_hash: true },
     sections: [
+      { id: "weighings", enabled: true },
       { id: "parameters", enabled: true },
       { id: "checklist", enabled: true },
+      { id: "finish_counts", enabled: true },
       { id: "notes", enabled: true, handwritten_lines: true },
       { id: "signatures", enabled: true },
     ],
@@ -45,7 +52,7 @@ export const bmrPaperPageRendererV1: Renderer = {
   title: "BMR hybrid paper page (blank, for handwritten steps)",
   defaultDefinition: () => defaultBmrPaperPageDefinition(),
   validateDefinition(def) {
-    const known = ["parameters", "checklist", "notes", "signatures"];
+    const known = ["weighings", "parameters", "checklist", "finish_counts", "notes", "signatures"];
     const errors = def.sections.filter((s) => !known.includes(s.id)).map((s) => `sections: "${s.id}" is not a paper page section (use ${known.join(", ")}).`);
     if (!def.sections.some((s) => s.id === "signatures" && s.enabled)) errors.push('sections: "signatures" is required on a paper record page.');
     return errors;
@@ -59,6 +66,10 @@ export const bmrPaperPageRendererV1: Renderer = {
     const meta = input.meta;
     const p = d.page;
     const on = new Set(def.sections.filter((s) => s.enabled).map((s) => s.id));
+    // ADR-134 sections print unless the template lists them switched off (templates approved earlier do not list them).
+    const off = new Set(def.sections.filter((s) => !s.enabled).map((s) => s.id));
+    const weighings = !off.has("weighings") && p.weighings?.length ? p.weighings : null;
+    const finishCounts = !off.has("finish_counts") && p.finishCounts?.length ? p.finishCounts : null;
     const m = def.page.margin_mm;
     const ident = `Batch ${d.batch.number} · ${p.reference} · ${meta.documentNumber}`;
     const css = `
@@ -85,7 +96,14 @@ export const bmrPaperPageRendererV1: Renderer = {
 .bpp .cell { height: 9mm; }
 .bpp .muted { color: #555; font-size: 7.5pt; }
 .bpp .wm { position: absolute; top: 40%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg); font: 800 40pt/1 ${FONT_STACK}; color: rgba(0,0,0,.08); white-space: nowrap; pointer-events: none; }
-@media print { .bpp-screen { width: auto; margin: 0; padding: 0; box-shadow: none; } .bpp .wm { position: fixed; } }`;
+@media print { .bpp-screen { width: auto; margin: 0; padding: 0; box-shadow: none; } .bpp .wm { position: fixed; } }${
+      weighings || finishCounts || p.outageNote
+        ? `
+.bpp table.wl th, .bpp table.wl td { font-size: 8pt; padding: 3px 4px; }
+.bpp table.wl td.w { height: 9mm; }
+.bpp .note { border: 1px solid #222; padding: 4px 6px; margin: 6px 0; font-weight: 600; }`
+        : ""
+    }`;
     const payload = `BC:DOC:${meta.documentNumber}`;
     const watermark = def.options?.watermarks === "none" ? null : meta.watermark;
     const body = html`<div class="bpp bpp-screen" data-testid="document" data-document-number="${meta.documentNumber}">
@@ -108,7 +126,14 @@ export const bmrPaperPageRendererV1: Renderer = {
       <td>${def.footer?.show_qr !== false ? html`<div class="qr" data-payload="${payload}">${qrSvg(payload, `QR code ${payload}`)}</div>` : ""}<span class="muted">${meta.documentNumber}</span></td>
     </tr>
   </tbody></table>
-  ${
+  ${p.outageNote ? html`<p class="note">${p.outageNote}</p>` : ""}${
+    weighings
+      ? html`<h2>Weighing</h2><table class="wl" data-testid="paper-weighings"><thead><tr><th style="width:4%">#</th><th>Ingredient</th><th style="width:11%">Target</th><th style="width:15%">Allowed range</th><th style="width:13%">Lot number</th><th style="width:10%">Weight</th><th style="width:7%">Time</th><th style="width:9%">Done by</th><th style="width:9%">Checked by</th></tr></thead><tbody>${weighings.map(
+          (w) =>
+            html`<tr><td>${w.lineNo}</td><td>${w.materialName} <span class="muted">(${w.materialCode})</span>${w.lotHint ? html`<span class="muted" style="display:block">Planned lot ${w.lotHint}</span>` : ""}</td><td>${w.targetText}</td><td>${w.rangeText}<span class="muted" style="display:block">${w.toleranceText}</span></td><td class="w"></td><td></td><td></td><td></td><td>${w.needsCheck ? "" : html`<span class="muted">no check needed</span>`}</td></tr>`,
+        )}</tbody></table><span class="lbl" style="margin-top:4px">Scale used (code on the scale):</span><div class="line"></div>`
+      : ""
+  }${
     on.has("parameters")
       ? html`<h2>Readings</h2><table><thead><tr><th>Parameter</th><th>Limits</th><th style="width:22%">Actual</th><th style="width:12%">Time</th><th style="width:16%">Initials</th></tr></thead><tbody>${
           p.parameters.length
@@ -120,6 +145,12 @@ export const bmrPaperPageRendererV1: Renderer = {
   ${
     on.has("checklist") && p.checklist.length
       ? html`<h2>Checklist</h2><table><tbody>${p.checklist.map((c) => html`<tr><td style="width:6%">${c.itemNo}</td><td>${c.text}</td><td style="width:34%">Yes<span class="box"></span> No<span class="box"></span> N/A<span class="box"></span></td></tr>`)}</tbody></table>`
+      : ""
+  }${
+    finishCounts
+      ? html`<h2>Finish counts</h2><table class="wl" data-testid="paper-finish-counts"><thead><tr><th>Count</th><th style="width:20%">Number</th><th style="width:12%">Time</th><th style="width:16%">Counted by</th><th style="width:16%">Checked by</th></tr></thead><tbody>${finishCounts.map(
+          (c) => html`<tr><td>${c.label}${c.uom ? html` <span class="muted">(${c.uom})</span>` : ""}</td><td class="w"></td><td></td><td></td><td></td></tr>`,
+        )}</tbody></table>`
       : ""
   }
   ${on.has("notes") ? html`<h2>Notes</h2>${[0, 1, 2, 3, 4].map(() => html`<div class="line"></div>`)}` : ""}

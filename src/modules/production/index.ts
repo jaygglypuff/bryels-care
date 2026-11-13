@@ -69,6 +69,9 @@ export {
   PAPER_STATUS_TRANSITIONS,
   NEVER_PAPER_ONLY_STEP_KINDS,
 } from "./bmr-paper";
+// ADR-134: the paper batch record pack (print with no internet) and "Enter from the paper record".
+export { issuePaperPack, paperPackForDevice, upcomingPaperPacks, paperPackSummary, voidUnusedPackPages, PACK_DAYS_AHEAD, PAPER_OUTAGE_NOTE, type PaperPackForDevice, type UpcomingPaperPack } from "./paper-pack";
+export { enterWeighingFromPaper, enterStepFromPaper, paperEntryView, OUTAGE_REASONS, type PaperEntryView, type PaperFactsInput } from "./paper-entry";
 export { bmrLineClearanceChecks, bmrProcessReadings, bmrEquipmentUses, bmrYieldRecord, bmrBatchOutputs, bmrInspections, bmrDeviations, openDeviationNumbers } from "./bmr-sources";
 // Wave 2 W2A: work orders, batch creation from work orders, staging by scan (US-3-05..08)
 export {

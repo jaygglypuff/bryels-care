@@ -227,6 +227,9 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
         correctionReason: d.d.correctionReason,
         posted: !!d.d.productionPostingId,
         recordedAt: d.d.recordedAt,
+        fromPaper: d.d.entrySource === "paper",
+        occurredAt: d.d.occurredAt,
+        enteredBy: n(d.d.enteredBy),
       })),
   }));
 
@@ -284,6 +287,11 @@ function recordView(rec: StepRecord, n: (id: string | null | undefined) => strin
     exceptionApprovedBy: n(rec.exceptionApprovedBy),
     exceptionReason: rec.exceptionReason,
     deviationId: rec.deviationId,
+    // ADR-134: typed in later from the paper batch record.
+    fromPaper: rec.entrySource === "paper",
+    occurredAt: rec.occurredAt,
+    enteredBy: n(rec.enteredBy),
+    outageReason: rec.outageReason,
   };
 }
 

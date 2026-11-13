@@ -3242,6 +3242,15 @@ returned), `finish_key` (unique: the idempotency key of the Finish run at confir
 (unique per organization). One waiting check per batch (partial unique index `batch_finish_checks_one_waiting_uq`). No
 custom SQL. `pnpm -s drizzle-kit generate` reports no changes. The next generated file must be renamed to
 `0043_<description>` (snapshot `0043_snapshot.json`).
+Done that way for the paper batch record (ADR-134): `0043_paper_pack_entries` (idx 42, snapshot `0043_snapshot.json`;
+`0042_snapshot.json` restored after drizzle-kit overwrote it). It adds `batch_paper_records.pack_id` (the pages issued
+together as one paper batch record pack; partial index `batch_paper_records_pack_idx`) and, on `dispense_records` and
+`process_step_records`, `entry_source` (`system` | `paper`, default `system`, CHECK `*_entry_source_ck`),
+`paper_record_id` (FK `batch_paper_records`), `occurred_at` (the time written on the paper), `entered_by` (FK `users`,
+who typed it) and `outage_reason` (why a never-paper-only step was done on paper). CHECK `*_paper_ck`: a `paper` row has
+its page, time and typist. Partial indexes `*_paper_idx` on `paper_record_id`. The existing same-person triggers still
+apply (operator ≠ checker, conductor ≠ checker). No custom SQL. `pnpm -s drizzle-kit generate` reports no changes. The
+next generated file must be renamed to `0044_<description>` (snapshot `0044_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

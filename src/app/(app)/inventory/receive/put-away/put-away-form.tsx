@@ -1,6 +1,7 @@
 "use client";
 import { useActionState, useState } from "react";
 import type { ActionState } from "@/lib/errors";
+import { withNoInternet } from "@/lib/offline/words";
 import { Field, Input, Select } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
@@ -38,7 +39,7 @@ export function PutAwayForm({
   fromTask: boolean;
 }) {
   const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
-  const [state, dispatch] = useActionState<ActionState, FormData>(putAwayAction, null);
+  const [state, dispatch] = useActionState<ActionState, FormData>(withNoInternet(putAwayAction), null); // ADR-134: no internet in words
   const [to, setTo] = useState<PickCandidate | null>(() => {
     const d = destinations.find((x) => x.id === defaultTo);
     return d ? { value: d.id, title: d.name, code: d.code } : null;

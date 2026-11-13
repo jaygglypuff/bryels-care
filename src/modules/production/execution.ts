@@ -140,7 +140,7 @@ function assertBatchExecutable(batch: BatchRow, step: SnapshotStep) {
  * started. Refuses a completed step, a step waiting for its checker and a step whose earlier steps
  * are open. Caller holds the batch lock.
  */
-export async function openStep(tx: Tx, ctx: AuthContext, batch: BatchRow, step: SnapshotStep): Promise<StepRecord> {
+export async function openStep(tx: Tx, ctx: AuthContext, batch: BatchRow, step: SnapshotStep, opts: { conductedBy?: string; startedAt?: Date } = {}): Promise<StepRecord> {
   assertBatchExecutable(batch, step);
   const existing = await stepRecord(tx, batch.id, step.stepNo);
   if (existing) {
@@ -153,7 +153,8 @@ export async function openStep(tx: Tx, ctx: AuthContext, batch: BatchRow, step: 
     throw new DomainError("state", `Complete ${stepLabel(missing[0])} first. Steps are completed in order.`, { rule: "V-STATE", stepNo: missing[0].stepNo });
   }
   const details = await routingStepDetails(tx, step.routingStepId);
-  const now = new Date();
+  // ADR-134: a step typed from paper started when the paper says, by the person the paper names.
+  const now = opts.startedAt ?? new Date();
   const earliest = (HOLD_STEP_KINDS as readonly string[]).includes(step.stepKind) && details.minDurationMinutes ? new Date(now.getTime() + details.minDurationMinutes * 60_000) : null;
   const [rec] = await tx
     .insert(processStepRecords)
@@ -165,7 +166,7 @@ export async function openStep(tx: Tx, ctx: AuthContext, batch: BatchRow, step: 
       stepKind: step.stepKind,
       area: step.area ?? null,
       status: "in_progress",
-      conductedBy: ctx.userId,
+      conductedBy: opts.conductedBy ?? ctx.userId,
       startedAt: now,
       earliestCompletionAt: earliest,
       completedAt: null,
@@ -230,23 +231,29 @@ export async function finishStep(
   batch: BatchRow,
   step: SnapshotStep,
   rec: StepRecord,
-  opts: { checker?: AuthContext | null; notes?: string | null } = {},
+  opts: { checker?: AuthContext | null; notes?: string | null; paper?: PaperStepFacts | null } = {},
 ): Promise<{ status: StepStatus }> {
   if (rec.status !== "in_progress") throw new DomainError("state", `${capital(stepLabel(step))} is ${rec.status.replace(/_/g, " ")}.`);
   const checker = opts.checker ?? null;
+  const paper = opts.paper ?? null;
   if (checker) assertCheckerFor(checker, ctx.userId, step.stepKind, batch.siteId);
-  const now = new Date();
-  const to: StepStatus = !step.requiresChecker || checker ? "completed" : "awaiting_check";
+  // ADR-134: typed from paper — the people and the time written on the page (validated by paper-entry.ts).
+  const now = paper ? paper.occurredAt : new Date();
+  const conductor = paper ? paper.doneBy : { id: ctx.userId, name: ctx.displayName };
+  const paperChecker = paper?.checkedBy ?? null;
+  const to: StepStatus = !step.requiresChecker || checker || paperChecker ? "completed" : "awaiting_check";
   await tx
     .update(processStepRecords)
     .set({
       status: to,
-      conductedBy: ctx.userId,
+      conductedBy: conductor.id,
       performedAt: now,
       blockedReason: null,
       notes: opts.notes?.trim() || rec.notes,
       ...(to === "completed" ? { completedAt: now } : {}),
       ...(checker ? { checkedBy: checker.userId, checkedAt: now } : {}),
+      ...(paperChecker ? { checkedBy: paperChecker.id, checkedAt: now } : {}),
+      ...(paper ? { entrySource: "paper", paperRecordId: paper.paperRecordId, occurredAt: paper.occurredAt, enteredBy: ctx.userId, outageReason: paper.outageReason } : {}),
     })
     .where(eq(processStepRecords.id, rec.id));
   await endEquipmentUses(tx, ctx, batch, rec);
@@ -257,8 +264,26 @@ export async function finishStep(
     entityNumber: batch.batchNumber,
     siteId: batch.siteId,
     before: { status: rec.status },
-    after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, status: to, checker: checker?.displayName ?? null, notes: opts.notes ?? null },
+    after: {
+      batchId: batch.id,
+      stepNo: step.stepNo,
+      name: step.name,
+      status: to,
+      checker: checker?.displayName ?? paperChecker?.name ?? null,
+      notes: opts.notes ?? null,
+      ...(paper ? paperAuditFields(paper) : {}),
+    },
   });
+  if (paperChecker) {
+    await audit(tx, ctx, {
+      action: "production.process_step_record.checked",
+      entityType: "process_step_record",
+      entityId: rec.id,
+      entityNumber: batch.batchNumber,
+      siteId: batch.siteId,
+      after: { batchId: batch.id, stepNo: step.stepNo, name: step.name, ...paperAuditFields(paper!), conductedBy: conductor.name, checkedBy: paperChecker.name, signedOn: "paper" },
+    });
+  }
   if (checker) {
     await audit(tx, checker, {
       action: "production.process_step_record.checked",
@@ -273,9 +298,9 @@ export async function finishStep(
   else {
     // Hand-off (docs/NEXT_APPROVER.md): the people who can check this step (never the doer) are told once per step cycle.
     const kind = step.stepKind === "line_clearance" ? "start_check" : "step_check";
-    await notifyNextActors(tx, ctx, kind, { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
+    await notifyNextActors(tx, ctx, kind, { siteId: batch.siteId, excludeUserIds: [...new Set([ctx.userId, conductor.id])] }, {
       title: MessageTitle.stepToCheck(step.name, await productNameOf(tx, batch.productId)),
-      body: `${ctx.displayName} did step ${step.stepNo} (${step.name}) of batch ${batch.batchNumber}. Check it on the step screen, or send it back with what to correct.`,
+      body: `${conductor.name} did step ${step.stepNo} (${step.name}) of batch ${batch.batchNumber}. Check it on the step screen, or send it back with what to correct.`,
       link: CHECKS_HREF, // ADR-130: the checker's list "Waiting for you to check"
       entityType: "batch",
       entityId: batch.id,
@@ -283,6 +308,24 @@ export async function finishStep(
     });
   }
   return { status: to };
+}
+
+/**
+ * ADR-134: a step typed in later from the paper batch record. `doneBy` / `checkedBy` are the people written on the page
+ * (checked by paper-entry.ts: active, allowed at the site, not the same person), `occurredAt` the time on the page.
+ */
+export type PaperStepFacts = {
+  paperRecordId: string;
+  paperReference: string;
+  occurredAt: Date;
+  doneBy: { id: string; name: string };
+  checkedBy: { id: string; name: string } | null;
+  outageReason: string | null;
+};
+
+/** The audit fields every "from paper" record carries. */
+export function paperAuditFields(p: PaperStepFacts) {
+  return { fromPaper: true, paperReference: p.paperReference, paperRecordId: p.paperRecordId, occurredAt: p.occurredAt.toISOString(), doneBy: p.doneBy.name, checkedBy: p.checkedBy?.name ?? null, outageReason: p.outageReason };
 }
 
 /** materials_staged → in_process on the first completed (signed) line clearance (W05-06, §6.2). */
