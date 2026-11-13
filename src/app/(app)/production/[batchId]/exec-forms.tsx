@@ -132,6 +132,8 @@ export function WeighForm({
         kind="lot"
         name="lotRef"
         submit="code"
+        // ADR-133 item 3: how the lot was given (scan, typed, tap) is sent, so the main Weigh's lot rules apply here.
+        viaName="lotVia"
         label="1. Which lot? Scan the label on the container, or tap it"
         hint={lots.length === 0 ? "No usable lot of this material at this site. Receive it (and have it approved) first." : "Oldest expiry first; lots already brought to production are at the top."}
         candidatesLabel="Usable lots"
@@ -142,7 +144,7 @@ export function WeighForm({
           setLoc(c?.places?.length === 1 ? (c.places[0].code ?? "") : "");
         }}
         required
-        error={fe.lot ?? null}
+        error={fe.lot ?? fe.lotRef ?? fe.lotConfirm ?? null}
       />
       {lot && (
         <ScanOrPick

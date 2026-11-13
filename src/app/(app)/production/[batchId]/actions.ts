@@ -6,6 +6,7 @@ import { coSign } from "@/lib/auth/co-sign";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { approveYield, checkDispense, checkStep, decideScrapRework, recordDispense, returnStep, startStep, voidDispense, batchSiteId } from "@/modules/production";
+import { parseVia } from "@/lib/scan/pick";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
@@ -50,12 +51,20 @@ export async function dispenseAction(_: ActionState, fd: FormData): Promise<Acti
     const batchId = uuid.parse(str(fd, "batchId"));
     const checker = await signer(ctx, fd, "checker", "production.dispense_record.approve", batchId);
     const approver = await signer(ctx, fd, "approver", "production.over_tolerance_dispense.approve", batchId);
+    // ADR-133 item 3 (ADR-126 open): the "Other ways" form says how the lot was given, so the rules of the main Weigh
+    // apply here too. A scanned or typed lot is the lot confirmation (typed only while scan.typed_code_counts_as_check
+    // is on; recordDispense → checkEntryMode). A lot tapped in the list is a chosen lot: it is confirmed as on the main
+    // Weigh (production.weighing.lot_confirm), so a tap alone is refused unless that setting is "none".
+    // A form that does not say how (an old page) is treated as a tap.
+    const lotVia = parseVia(opt(fd, "lotVia")) ?? "tap";
+    const how = lotVia === "tap" ? { lotPreselected: true, lotConfirm: null, lotConfirmVia: "tap" as const } : { lotVia };
     const r = await recordDispense(
       ctx,
       {
         batchId,
         batchMaterialId: uuid.parse(str(fd, "batchMaterialId")),
         lotRef: z.string().trim().min(1, "Scan the lot label on the container.").max(200).parse(str(fd, "lotRef") ?? ""),
+        ...how,
         locationRef: opt(fd, "locationRef"),
         qty: opt(fd, "qty"),
         uom: opt(fd, "uom") ?? undefined,
