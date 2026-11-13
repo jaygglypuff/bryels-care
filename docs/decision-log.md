@@ -2903,3 +2903,16 @@ Status: Accepted (UX leftovers of ADR-124, ADR-126, ADR-130 and ADR-131). QA to 
 10. **Delivery receipt renderer v2** prints the product name first. v1 stays registered, so issued receipts re-render to their checksum and reprint with v1. A template moves to v2 only through a new version QA approves ("Start a new version with the newer layout"); the demo seed approves it as demo data (`DEMO_SEED_VERSION` 2026-11-13.1).
 
 Consequences: one migration (0042), no new permission strings, no new settings. New assumptions A-FIN-CHK-01, A-LOTVIA-OTHER-01, A-RPT-DR2-01, A-RCP-COPY-01. Risk: QA people hold the step-check permission, so they can confirm production counts (flagged in A-FIN-CHK-01).
+
+## ADR-135 Type numbers with a keyboard; a calm floor TV (owner 2026-11-13)
+Status: Accepted (owner delegated the decisions). Extends ADR-084, ADR-119 and ADR-126; amends ux-system component 5.25.
+
+Owner: (a) "Can you change the weighing or other that requires touching the phone with keypad and the native keypad is disabled if they can type it with a keyboard instead." (b) "Also fix the TV display. It is very ugly."
+
+1. **Every keypad field takes typing.** `KeypadField` (`src/ui/keypad.tsx`) is a real input on Weigh and Step. It accepts a physical keyboard and keyboard-wedge devices (USB scales, scanners that type a number and press Enter) with the keypad's rules, kept as pure functions in `src/ui/keypad-keys.ts`: digits, one ".", "," read as ".", Backspace, Delete or Esc to clear, Enter as the ✓ action, A–F and "-" only in lot fields. Values stay strings and become decimal.js on submit. Enter on Weigh saves only when Save is allowed. On Step, Enter goes to the next number and then to Step done, so finishing a step stays deliberate.
+2. **Two modes.** Big keypad: read-only input with `inputMode="none"` (no phone keyboard), a live region announces the value. Own keyboard: a normal input with `inputMode="decimal"`/`"numeric"`, keypad hidden. Mode = the person's choice on the device ("Use my keyboard" / "Use the big keypad", localStorage `bc.numberEntry`), else the organisation setting `ui.number_entry` ("How screens look"; `auto` default = keypad on touch-only devices, typing otherwise; `keypad`; `keyboard`). No permission change.
+3. **Cursor.** The field takes the cursor so a scale's keystrokes land in it: on Weigh once the lot is confirmed; on Step the first number unless the step has a scan box or is done.
+4. **Floor TV redesign** (`src/app/floor`, `floor.css`). One size unit so 720p, 1080p and 4K look the same with no scrollbars; header with a connection label ("Live · updated hh:mm" / "No internet — showing hh:mm data"); a "Needs attention" strip only when something is wrong (at most 3); batch cards with status word, icon and colour, progress bar, step and who is on it; Next up, Waiting and Today; "No batches today"; pages turn every 12 s when more fits than 3 cards / 3 orders; `?theme=dark`. The read model `getFloorDisplay`, its permissions and limits are unchanged.
+5. No migration, no new dependency. Assumptions A-UI-KEYS-01 and A-TV-01 in `docs/PRD.md`.
+
+Open: the owner confirms the TV pacing, per-page counts and dark option on the real TV, and whether a tablet with a keyboard should default to typing. The Step Enter flow has no browser test yet; the iPad accessory bar in keypad mode is unverified on hardware.
