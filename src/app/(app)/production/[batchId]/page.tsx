@@ -33,6 +33,7 @@ import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DecideScrapForm, ReasonForm } from "./exec-forms";
+import { PaperRecordCard } from "./paper-card";
 import { registerAppHooks } from "@/modules/wiring";
 import { whoCanDo } from "@/modules/identity";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
@@ -301,6 +302,9 @@ export default async function BatchRecordPage({ params }: Params) {
         <NextStep text={beingMade ? `This batch is being made. Next: ${next.label}.` : `Next: ${next.label}.`} waitingFor={`${whoActs} can do this.`} />
       ) : null}
       {next.disabledReason && <p className="-mt-2 text-[14px] text-muted">{next.disabledReason}</p>}
+
+      {/* ADR-134: print the batch record with no internet, type it in later. */}
+      <PaperRecordCard ctx={ctx} batchId={batch.id} />
 
       {batch.status === "awaiting_qc" && (
         <Banner tone="appr" title="Waiting for the quality check">

@@ -12,11 +12,12 @@ import { Banner } from "@/ui/status";
 import { FreshnessBadge, OutboxChip, SyncNowButton, syncLabel, useSync } from "@/ui/sync-status";
 import { CountCapture } from "./count-capture";
 import { WeighCapture } from "./weigh-capture";
+import { PaperRecords } from "./paper-records";
 
 export type Ref = { materials: ReferenceMaterial[]; locations: ReferenceLocation[]; lots: ReferenceLot[]; counts: ReferenceCount[]; batches: ReferenceBatch[] };
 const EMPTY: Ref = { materials: [], locations: [], lots: [], counts: [], batches: [] };
 
-type Tab = "count" | "weigh" | "queue";
+type Tab = "count" | "weigh" | "queue" | "paper";
 
 /**
  * Counting and weighing without signal (US-7-04). Only the approved offline workflows appear;
@@ -34,6 +35,11 @@ export function OfflineWorkspace() {
   const reload = useCallback(async () => {
     setRef(await syncAgent().reference());
     setQueue(await syncAgent().listQueue());
+  }, []);
+
+  useEffect(() => {
+    // ADR-134: "/offline#paper" opens the printable paper batch records.
+    if (window.location.hash === "#paper") setTab("paper");
   }, []);
 
   useEffect(() => {
@@ -121,6 +127,7 @@ export function OfflineWorkspace() {
                   ["count", "Count"],
                   ["weigh", "Weighing"],
                   ["queue", `Queue · ${s.stats.pending + s.stats.syncing + s.stats.failed + s.stats.conflict}`],
+                  ["paper", "Paper records"],
                 ] as const
               ).map(([k, l]) => (
                 <button key={k} type="button" onClick={() => setTab(k)} aria-current={tab === k ? "page" : undefined} className={cx("min-h-[44px] rounded-full border px-4 text-[14px]", tab === k ? "border-transparent bg-cta font-medium text-white" : "border-line bg-surface")}>
@@ -141,6 +148,7 @@ export function OfflineWorkspace() {
               ) : (
                 <WeighCapture siteId={siteId} data={siteRef} queue={queue} onQueued={reload} />
               ))}
+            {tab === "paper" && <PaperRecords userId={snap.userId} siteId={siteId} />}
             {tab === "queue" && (
               <Card>
                 <CardTitle>Queued on this device</CardTitle>

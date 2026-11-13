@@ -13,6 +13,7 @@ import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
 import { homeHref, isFloor, navPersona } from "../nav";
 import { OperatorHome, TasksToday } from "./operator-home";
+import { PaperPackPrefetch } from "@/ui/paper-pack";
 import { OwnerHomePage } from "./owner-home";
 import { PROCUREMENT_LINES, WAREHOUSE_LINES, WorkList } from "./work-list";
 import { putAwaySentence } from "./home-next";
@@ -66,6 +67,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         {boxChecks.length > 0 && <BoxChecks checks={boxChecks} />}
         {buyer && <WorkList title="Your buying work" lines={PROCUREMENT_LINES} counts={buying} testId="procurement-work" />}
         {warehouse && <WorkList title="Orders to send out" lines={WAREHOUSE_LINES} counts={dispatch} testId="warehouse-work" />}
+        {floor && ctx.can("production.batch.view") && ctx.can("documents.generated_document.view") && <PaperPackPrefetch userId={ctx.userId} />}
         {floor ? (
           <TasksToday
             tasks={tasks}

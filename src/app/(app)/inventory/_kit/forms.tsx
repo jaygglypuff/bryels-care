@@ -1,6 +1,7 @@
 "use client";
 import { startTransition, useActionState, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
+import { withNoInternet } from "@/lib/offline/words";
 import { Button, Field, Input, type ButtonVariant } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
 
@@ -10,7 +11,7 @@ import { FormMessage } from "@/ui/form";
  * browser pop-ups): render `confirmBox` where the submit button is. Going back sends nothing.
  */
 export function useActionForm(action: (prev: ActionState, fd: FormData) => Promise<ActionState>, confirmText?: string, confirmLabel = "Yes, continue") {
-  const [state, dispatch, pending] = useActionState(action, null);
+  const [state, dispatch, pending] = useActionState(withNoInternet(action), null); // ADR-134: no internet in words
   const held = useRef<FormData | null>(null);
   const [asking, setAsking] = useState(false);
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {

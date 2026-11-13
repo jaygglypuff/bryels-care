@@ -261,7 +261,15 @@ export async function paperPackSummary(ctx: AuthContext, batchId: string) {
   const rows = await openPackPages(db, b.id);
   const pages = [];
   for (const r of rows) pages.push({ ...pageRef(r), entries: await paperEntryCount(db, r.p.id) });
-  return { batchId: b.id, status: b.status, packId: rows[0]?.p.packId ?? null, pages, canMake: (PACK_OPEN_STATES as readonly string[]).includes(b.status) };
+  return {
+    batchId: b.id,
+    status: b.status,
+    packId: rows[0]?.p.packId ?? null,
+    version: rows.length ? `${rows[0].p.packId}:${rows.map((r) => r.p.id.slice(-6)).join(".")}` : null,
+    pages,
+    unused: pages.filter((p) => p.status === "issued" && p.entries === 0).length,
+    canMake: (PACK_OPEN_STATES as readonly string[]).includes(b.status),
+  };
 }
 
 /**
