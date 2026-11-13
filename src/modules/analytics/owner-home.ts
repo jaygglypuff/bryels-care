@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { batches, inventoryBalances, inventoryLots, materials, organizations, products } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { getSetting } from "@/lib/settings";
 import { lowStockItems, type LowStockItem } from "@/modules/inventory";
 import { NEAR_EXPIRY_WINDOW_DAYS, addDays, listRecentActivity, resolveScope, type ActivityRow, type DashboardScope } from "./dashboard";
 import { getKpiTile } from "./kpis";
@@ -299,6 +300,21 @@ export async function getOwnerHome(ctx: AuthContext, opts: { all?: boolean; now?
     production,
     stock: alerts ? stockAlertCounts(alerts) : null,
     salesWeek,
-    activity,
+    activity: activity ? await withoutHiddenInvoices(ctx, activity) : null,
   };
+}
+
+/**
+ * ADR-133 item 6 (ADR-126 setting 4): with `sales.show_invoice_stage_without_invoice_access` off, a viewer who may not
+ * open invoices at a row's site does not read invoice events (an invoice made or saved to the books) in Recent activity.
+ */
+export async function withoutHiddenInvoices<T extends { action: string; siteCode: string | null }>(ctx: AuthContext, rows: T[]): Promise<T[]> {
+  if (!rows.some((r) => r.action.startsWith("finance.invoice."))) return rows;
+  if (await getSetting(db, ctx.organizationId, "sales.show_invoice_stage_without_invoice_access")) return rows;
+  const siteOf = new Map(ctx.allowedSites.map((x) => [x.code, x.id]));
+  return rows.filter((r) => {
+    if (!r.action.startsWith("finance.invoice.")) return true;
+    const siteId = r.siteCode ? siteOf.get(r.siteCode) : null;
+    return siteId ? ctx.canAt("finance.invoice.view", siteId) : ctx.can("finance.invoice.view");
+  });
 }

@@ -8,9 +8,10 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { invoices, settings } from "@/db/schema";
+import { invoices, salesOrders, settings } from "@/db/schema";
 import { getSetting } from "@/lib/settings";
-import { getWorkFlowItems } from "@/modules/analytics";
+import { getOwnerHome, getWorkFlowItems } from "@/modules/analytics";
+import { getOrder, listCustomerOrders, listOrders, orderBoard, orderCounts } from "@/modules/sales";
 import { approveInvoice, billingStepOfOrder, billingStepOfShipment, issueInvoice, submitInvoice } from "@/modules/finance";
 import { billingStepWords } from "@/lib/billing-step-words";
 import { resetTestDatabase } from "../../support/db";
@@ -131,5 +132,46 @@ describe("ADR-126 setting sales.show_invoice_stage_without_invoice_access", () =
     // Scoping is unchanged: without delivery or invoice permission it is still refused.
     const nobody = withPermissions(w.warehouse, ["inventory.lot.view"], w.warehouse.roleCodes, [w.nfd]);
     await expectCode(billingStepOfShipment(nobody, shipmentId), "forbidden");
+  });
+
+  /** ADR-133 item 6: the setting also covers the order status chip "Billed", the order counts and Home activity. */
+  it("off: a sales person without invoice access sees the billed order as Sent out everywhere; on: as Billed", async () => {
+    const noInvoices = [...bundle("sales_cs").filter((p) => !p.startsWith("finance.invoice.")), "platform.audit.view", "analytics.dashboard.view"];
+    const viewer = withPermissions(w.sales, noInvoices, w.sales.roleCodes, [w.nfd]);
+    const withInvoices = withPermissions(w.sales, [...noInvoices, "finance.invoice.view"], w.sales.roleCodes, [w.nfd]);
+    expect((await getOrder(withInvoices, orderId)).order.status).toBe("invoiced");
+    // On (default): the stage shows.
+    expect((await getOrder(viewer, orderId)).order.status).toBe("invoiced");
+    expect((await orderCounts(viewer)).invoiced ?? 0).toBeGreaterThanOrEqual(1);
+
+    await setOrgSetting(w.orgId, KEY, false);
+    // Order page: the chip and "What happened".
+    const o = await getOrder(viewer, orderId);
+    expect(o.order.status).toBe("shipped");
+    expect(o.transitions.some((t) => t.toState === "invoiced" || t.fromState === "invoiced")).toBe(false);
+    expect(o.transitions.some((t) => t.toState === "shipped")).toBe(true);
+    // Order list, its counts and the "Sent out" filter.
+    const all = await listOrders(viewer);
+    expect(all.find((r) => r.id === orderId)?.status).toBe("shipped");
+    expect(all.some((r) => r.status === "invoiced")).toBe(false);
+    expect((await listOrders(viewer, "shipped")).some((r) => r.id === orderId)).toBe(true);
+    const counts = await orderCounts(viewer);
+    expect(counts.invoiced ?? 0).toBe(0);
+    expect(counts.shipped).toBeGreaterThanOrEqual(1);
+    // Board: no "Billed" column; the card sits under "Sent out".
+    const board = await orderBoard(viewer);
+    expect(board.columns.some((c) => c.key === "invoiced")).toBe(false);
+    expect(board.columns.find((c) => c.key === "shipped")?.cards.some((c) => c.id === orderId)).toBe(true);
+    // The customer's order history.
+    const [cust] = await db.select({ customerId: salesOrders.customerId }).from(salesOrders).where(eq(salesOrders.id, orderId));
+    expect((await listCustomerOrders(viewer, cust.customerId)).find((r) => r.id === orderId)?.status).toBe("shipped");
+    // Home "Recent activity": no invoice events for the viewer; finance access keeps them.
+    const home = await getOwnerHome(viewer);
+    expect((home.activity ?? []).some((a) => a.action.startsWith("finance.invoice."))).toBe(false);
+    const homeF = await getOwnerHome(withInvoices);
+    expect((homeF.activity ?? []).some((a) => a.action.startsWith("finance.invoice."))).toBe(true);
+    // People who may open invoices still see Billed.
+    expect((await getOrder(withInvoices, orderId)).order.status).toBe("invoiced");
+    expect((await orderCounts(withInvoices)).invoiced).toBeGreaterThanOrEqual(1);
   });
 });

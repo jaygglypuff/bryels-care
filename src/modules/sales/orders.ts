@@ -35,6 +35,7 @@ import { addDaysIso, businessDate, canSeePrices, discountPct, formatAddress, ide
 import { evaluateCredit } from "./credit";
 import { resolvePrice } from "./price-lists";
 import { itemCodeMap, requirementSnapshot, type RequirementSnapshot } from "./requirements";
+import { invoiceStageHidden, shownOrderStatus, shownTransitions } from "./invoice-stage";
 
 /**
  * Sales order state machine (docs/data-model.md §6.5, docs/process-maps.md W09-02..04, W09-12).
@@ -198,7 +199,9 @@ export async function listOrders(ctx: AuthContext, status?: string, limit?: numb
   ctx.require("sales.sales_order.view");
   ctx.requireSite(ctx.currentSiteId);
   const where = [eq(salesOrders.siteId, ctx.currentSiteId)];
-  if (status && isOrderStatus(status)) where.push(eq(salesOrders.status, status));
+  // ADR-133 item 6: without invoice access (setting off) billed orders are shown, counted and found as "Sent out".
+  const hideBilled = await invoiceStageHidden(ctx, ctx.currentSiteId);
+  if (status && isOrderStatus(status)) where.push(hideBilled && (status === "shipped" || status === "invoiced") ? inArray(salesOrders.status, ["shipped", "invoiced"]) : eq(salesOrders.status, status));
   for (const w of orderSearchWords(opts.q)) where.push(orderWordMatches(w));
   const orders = await db
     .select({
@@ -231,7 +234,7 @@ export async function listOrders(ctx: AuthContext, status?: string, limit?: numb
   const prices = canSeePrices(ctx);
   return orders.map((o) => {
     const ls = byOrder.get(o.id) ?? [];
-    const base = { ...o, lines: ls.map((l) => ({ sku: l.sku, productName: l.productName, qty: l.qty })) };
+    const base = { ...o, status: shownOrderStatus(o.status, hideBilled), lines: ls.map((l) => ({ sku: l.sku, productName: l.productName, qty: l.qty })) };
     if (!prices) return { ...base, value: undefined as string | undefined, _masked: ["value"] as string[] | undefined };
     return { ...base, value: ls.reduce((s, l) => s.plus(D(l.qty).times(l.price)), new Decimal(0)).toString() as string | undefined, _masked: undefined as string[] | undefined };
   });
@@ -246,8 +249,10 @@ export async function orderCounts(ctx: AuthContext) {
     .where(eq(salesOrders.siteId, ctx.currentSiteId))
     .groupBy(salesOrders.status);
   const out: Record<string, number> = { all: 0 };
+  const hideBilled = await invoiceStageHidden(ctx, ctx.currentSiteId);
   for (const r of rows) {
-    out[r.status] = r.n;
+    const shown = shownOrderStatus(r.status, hideBilled);
+    out[shown] = (out[shown] ?? 0) + r.n;
     out.all += r.n;
   }
   return out;
@@ -337,7 +342,10 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
     return { ...base, unitPrice: line.unitPrice, listUnitPrice: line.listUnitPrice, discountPct: line.discountPct, priceSource: line.priceSource, value: D(line.qtyUnits).times(line.unitPrice).toString() };
   });
   const { subtotalAmount, taxAmount, totalAmount, approvalBasis, ...orderRest } = o.order;
-  const order = prices ? { ...orderRest, subtotalAmount, taxAmount, totalAmount } : { ...orderRest, _masked: ["subtotalAmount", "taxAmount", "totalAmount"] as string[] };
+  // ADR-133 item 6: the status chip and "What happened" follow sales.show_invoice_stage_without_invoice_access.
+  const hideBilled = await invoiceStageHidden(ctx, o.order.siteId);
+  const shownRest = { ...orderRest, status: shownOrderStatus(orderRest.status, hideBilled) };
+  const order = prices ? { ...shownRest, subtotalAmount, taxAmount, totalAmount } : { ...shownRest, _masked: ["subtotalAmount", "taxAmount", "totalAmount"] as string[] };
   void approvalBasis;
   const { creditLimitAmount, paymentTermsDays, taxIdentifier, ...customerRest } = o.customer;
   const customer = ctx.can("finance.credit_terms.view") ? { ...customerRest, creditLimitAmount, paymentTermsDays, taxIdentifier } : { ...customerRest, _masked: ["creditLimitAmount", "paymentTermsDays", "taxIdentifier"] as string[] };
@@ -351,7 +359,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
       return { ...a, sku: line?.sku ?? "", productName: line?.productName ?? "" };
     }),
     shipments: shipmentRows,
-    transitions: transitions.map((t) => ({ ...t.t, actorName: t.actorName })),
+    transitions: shownTransitions(transitions.map((t) => ({ ...t.t, actorName: t.actorName })), hideBilled),
     // ADR-131: line changes of a confirmed order (who, when, why, from → to), shown in "What happened".
     lineChanges: (
       await db
@@ -910,6 +918,10 @@ export async function listCustomerOrders(ctx: AuthContext, customerId: string) {
         .where(inArray(salesOrderLines.salesOrderId, orders.map((o) => o.id)))
     : [];
   const prices = canSeePrices(ctx);
+  // ADR-133 item 6: per order site, as the order page.
+  const hiddenAt = new Map<string, boolean>();
+  for (const siteId of new Set(orders.map((o) => o.siteId))) hiddenAt.set(siteId, await invoiceStageHidden(ctx, siteId));
+  for (const o of orders) o.status = shownOrderStatus(o.status, hiddenAt.get(o.siteId) ?? false);
   return orders.map((o) =>
     prices
       ? { ...o, value: lines.filter((l) => l.orderId === o.id).reduce((s, l) => s.plus(D(l.qty).times(l.price)), new Decimal(0)).toString() as string | undefined }
