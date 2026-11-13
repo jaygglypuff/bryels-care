@@ -25,6 +25,7 @@ import {
   createBatch,
   enterStepFromPaper,
   enterWeighingFromPaper,
+  getBatchExecution,
   issuePaperPack,
   paperEntryView,
   paperPackForDevice,
@@ -213,6 +214,9 @@ describe("ADR-134 slice 2: enter from the paper record", () => {
     expect((await db.select().from(batches).where(eq(batches.id, w.batchId)))[0].status).toBe("in_process");
     const [au] = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, rec.id), eq(auditEvents.action, "production.process_step_record.completed")));
     expect(au.after).toMatchObject({ fromPaper: true, paperReference: w.pack.pages[0].reference, occurredAt, doneBy: operator.displayName, checkedBy: checker.displayName });
+    // The batch record shows it as from paper, with the paper's time and who typed it.
+    const ex = await getBatchExecution(operator, w.batchId);
+    expect(ex.steps.find((x) => x.stepNo === s1.stepNo)?.record).toMatchObject({ fromPaper: true, enteredBy: checker.displayName, conductedBy: operator.displayName });
   });
 
   it("weighing on paper needs the outage reason and the setting; the stock move keeps the paper time", async () => {

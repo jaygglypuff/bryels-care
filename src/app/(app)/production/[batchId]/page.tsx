@@ -97,6 +97,12 @@ function SignLine({ step }: { step: ExecStep }) {
         </span>
       )}
       {r.notes && <span className="block">Notes: {r.notes}</span>}
+      {r.fromPaper && (
+        <span className="block" data-testid="from-paper">
+          <Chip tone="neu">From paper</Chip> done {r.occurredAt ? fmtDateTime(r.occurredAt) : ""} as written on the paper · typed in by {r.enteredBy ?? "unknown"}
+          {r.outageReason ? ` · ${r.outageReason}` : ""}
+        </span>
+      )}
     </p>
   );
 }
@@ -502,7 +508,10 @@ export default async function BatchRecordPage({ params }: Params) {
                   <Td className="whitespace-nowrap">{r.operator}</Td>
                   <Td className="whitespace-nowrap">{r.checker ?? "—"}</Td>
                   <Td className="whitespace-nowrap">{r.scaleCode ?? "—"}</Td>
-                  <Td className="whitespace-nowrap">{fmtDateTime(r.recordedAt)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {fmtDateTime(r.fromPaper && r.occurredAt ? r.occurredAt : r.recordedAt)}
+                    {r.fromPaper && <span className="block text-[12px] text-muted">from paper · typed by {r.enteredBy}</span>}
+                  </Td>
                 </tr>
               )),
             )}
@@ -532,6 +541,7 @@ function WeighingList({ ex }: { ex: BatchExecution }) {
               {fmtQty(w.qtyG, "g", 1)} · lot {w.lotNumber} · {w.locationCode} · {w.scale ?? "no scale"} · by {w.operator} · {w.checker ? `checked by ${w.checker}` : "not checked"}
               {w.exceptionApprovedBy ? ` · approved by ${w.exceptionApprovedBy}: ${w.exceptionReason}` : ""}
               {w.voided ? ` · undone by ${w.voidedBy}: ${w.voidReason}` : ""}
+              {w.fromPaper ? ` · from paper (${w.occurredAt ? fmtDateTime(w.occurredAt) : ""}, typed by ${w.enteredBy})` : ""}
             </p>
           ))}
         </li>

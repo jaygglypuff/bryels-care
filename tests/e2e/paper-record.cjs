@@ -174,7 +174,11 @@ async function printedFrame(page) {
       await card.locator('select[name=checkedById]').last().selectOption(ck.id);
       for (const r of await card.locator('input[name^="reading-"]').all()) await r.fill('50');
       await card.getByRole('button', { name: `Save step ${stepNo} as done` }).click();
-      await dev.getByText(`Step ${stepNo} typed in from paper.`).waitFor({ timeout: 30000 });
+      // The page re-renders with the step typed in: its card says so (the form is gone).
+      await card.getByText('Typed in ✓').waitFor({ timeout: 30000 }).catch(async (e) => {
+        await dev.screenshot({ path: path.join(OUT, 'oa-from-paper-fail.png'), fullPage: true });
+        throw e;
+      });
       const [rec] = await sql`select entry_source, status, conducted_by, checked_by, occurred_at from process_step_records where batch_id = ${run.id} and step_no = ${stepNo}`;
       if (rec.entry_source !== 'paper' || rec.conducted_by !== op.id || rec.checked_by !== ck.id) throw new Error(`record ${JSON.stringify(rec)}`);
       if (Math.abs(new Date(rec.occurred_at).getTime() - (Date.now() - 60_000)) > 120_000) throw new Error(`paper time ${rec.occurred_at}`);

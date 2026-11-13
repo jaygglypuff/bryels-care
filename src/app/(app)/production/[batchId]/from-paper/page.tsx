@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { type PaperEntryView, paperEntryView } from "@/modules/production";
+import { type PaperEntryView, batchStateWord, paperEntryView } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 import { Card, EmptyState, LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
@@ -22,7 +22,7 @@ function pageChip(p: PaperEntryView["pages"][number]) {
   if (p.status === "reviewed") return <Chip tone="ok">Checked against the scan</Chip>;
   if (p.status === "attached") return <Chip tone="appr">Scan attached, waiting for its check</Chip>;
   if (p.status === "returned") return <Chip tone="warn">Sent back: correct and attach again</Chip>;
-  if (p.stepStatus === "completed") return <Chip tone="ok">Typed in ✓</Chip>;
+  if (p.stepStatus === "completed") return p.stepFromPaper ? <Chip tone="ok">Typed in ✓</Chip> : <Chip tone="ok">Done in the system</Chip>;
   if (p.stepStatus === "awaiting_check") return <Chip tone="appr">Waiting for the checker</Chip>;
   return <Chip tone="neu">To type</Chip>;
 }
@@ -54,7 +54,7 @@ export default async function FromPaperPage({ params }: { params: Promise<{ batc
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <RecordHeader back={{ href: `/production/${v.batch.id}`, label: "Batch record" }} typeLabel="Enter from the paper record" reference={v.batch.number} title={v.batch.productName} status={v.batch.status} statusLabel={v.batch.status.replace(/_/g, " ")} meta={[v.batch.siteCode]} />
+        <RecordHeader back={{ href: `/production/${v.batch.id}`, label: "Batch record" }} typeLabel="Enter from the paper record" reference={v.batch.number} title={v.batch.productName} status={v.batch.status} statusLabel={batchStateWord(v.batch.status)} meta={[v.batch.siteCode]} />
         <PageIntro>Type each line as it is written on the paper, in the same order. Use the time written on the paper, not the time now. Every line is marked &quot;from paper&quot;.</PageIntro>
       </div>
       {!v.canEnter && <Banner tone="info" title="You can read this page">Typing lines in needs a production role at this site.</Banner>}

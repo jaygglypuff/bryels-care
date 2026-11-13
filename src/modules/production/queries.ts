@@ -164,6 +164,10 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
           isPartial: d.rec.isPartial,
           checkedAt: d.rec.checkedAt,
           recordedAt: d.rec.recordedAt,
+          // ADR-134: typed in later from the paper batch record (the time written on the paper, who typed it).
+          fromPaper: d.rec.entrySource === "paper",
+          occurredAt: d.rec.occurredAt,
+          enteredBy: nm(d.rec.enteredBy),
         })),
     };
   });
