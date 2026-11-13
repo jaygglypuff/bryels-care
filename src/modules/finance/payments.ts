@@ -10,7 +10,7 @@ import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
 import { requireReauthentication } from "@/modules/governance";
 import { claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
-import { approvalProgress, assertPosterAllowed, canDecide, decisionsOf, evaluateAtSubmit, notifyNextStep, recordDecision, type Progress } from "./approvals";
+import { approvalProgress, assertPosterAllowed, canDecide, decisionsOf, evaluateAtSubmit, notifyNextStep, oneStepBelow, oneStepReason, recordDecision, type Progress } from "./approvals";
 import { billOpenAmount } from "./bills";
 import { openAmountOf } from "./invoices";
 import { D, DATE_RE, businessDate, isUuid, logTransition, m4, money, namesOf, parseAmount, postFinancial, postingsOf, requireReason, reverseDocumentPosting, settlementState, transitionsOf } from "./shared";
@@ -222,16 +222,18 @@ export async function submitPayment(ctx: AuthContext, id: string) {
     if (p.status !== "draft") throw new DomainError("state", `${label(p)} is ${PAYMENT_STATUS_LABEL[p.status].toLowerCase()}; only a draft can be submitted.`);
     const ev = await evaluateAtSubmit(tx, ctx, { recordType: "payment_record", recordId: p.id, recordNumber: p.paymentNumber, siteId: p.siteId, basis: { amount: p.amount } });
     const now = new Date();
-    if (!ev.steps.length) {
+    // ADR-131: below the owner's one-step amount no separate approver is needed (A-FIN-1STEP-01).
+    const oneStep = ev.steps.length ? await oneStepBelow(tx, ctx.organizationId, "payment", p.amount) : null;
+    if (!ev.steps.length || oneStep !== null) {
       await tx.update(paymentRecords).set({ status: "approved", submittedBy: ctx.userId, submittedAt: now, approvedAt: now, updatedAt: now }).where(eq(paymentRecords.id, p.id));
-      await logTransition(tx, ctx, doc(p), "draft", "approved", "No approval rule applies");
+      await logTransition(tx, ctx, doc(p), "draft", "approved", oneStep !== null ? oneStepReason(oneStep) : "No approval rule applies");
     } else {
       await tx.update(paymentRecords).set({ status: "submitted", submittedBy: ctx.userId, submittedAt: now, updatedAt: now }).where(eq(paymentRecords.id, p.id));
       await logTransition(tx, ctx, doc(p), "draft", "submitted");
       await notifyNextStep(tx, ctx, ev.steps[0], { siteId: p.siteId, kind: "finance.payment_record.approval", title: `Payment ${p.paymentNumber} to approve`, body: `${money(p.amount)} ${p.currency} ${p.direction === "inbound" ? "received" : "paid"}.`, entityType: "payment_record", entityId: p.id, link: `/finance/payments/${p.id}` });
     }
-    await audit(tx, ctx, { action: "finance.payment_record.submitted", entityType: "payment_record", entityId: p.id, entityNumber: p.paymentNumber, siteId: p.siteId, after: { steps: ev.steps.length } });
-    return { status: ev.steps.length ? "submitted" : "approved" };
+    await audit(tx, ctx, { action: "finance.payment_record.submitted", entityType: "payment_record", entityId: p.id, entityNumber: p.paymentNumber, siteId: p.siteId, after: { steps: oneStep !== null ? 0 : ev.steps.length, ...(oneStep !== null ? { oneStepBelow: oneStep } : {}) } });
+    return { status: ev.steps.length && oneStep === null ? "submitted" : "approved" };
   });
 }
 
@@ -289,6 +291,30 @@ async function settle(tx: Tx, ctx: AuthContext, type: TargetType, id: string, de
     await tx.update(expenseClaims).set({ paidAmount: m4(paid), status: to, updatedAt: now }).where(eq(expenseClaims.id, c.id));
     if (to !== c.status) await logTransition(tx, ctx, { type: "expense_claim", id: c.id, siteId: c.siteId, label: `Expense claim ${c.claimNumber}` }, c.status, to, reason);
   }
+}
+
+/**
+ * ADR-131 (C-office problem 9): "Save to the books" straight from the draft when the payment is below the owner's
+ * one-step amount: one finance person (create and post at the payment's site), with their password. Above it the
+ * way forward is "Send for approval". Idempotent on the key through `recordPayment`.
+ */
+export async function recordPaymentInOneStep(ctx: AuthContext, id: string, input: { password?: string | null; idempotencyKey?: string | null } = {}) {
+  ctx.require("finance.payment_record.create");
+  ctx.require("finance.payment_record.post");
+  await requireReauthentication(ctx, input.password, "finance.payment_record.post");
+  const p = await db.transaction(async (tx) => {
+    const row = await lockPayment(tx, ctx, id);
+    can(ctx, "finance.payment_record.create", row.siteId);
+    can(ctx, "finance.payment_record.post", row.siteId);
+    return row;
+  });
+  if (p.status === "draft") {
+    if ((await oneStepBelow(db, ctx.organizationId, "payment", p.amount)) === null) throw new DomainError("state", "This payment is at or above the one-step amount in Settings, so another person approves it first. Send it for approval.");
+    await submitPayment(ctx, id);
+  } else if (p.status !== "approved") {
+    throw new DomainError("state", `${label(p)} is ${PAYMENT_STATUS_LABEL[p.status].toLowerCase()}; only a draft or an approved payment can be saved to the books.`);
+  }
+  return recordPayment(ctx, id, { password: input.password, idempotencyKey: input.idempotencyKey });
 }
 
 /**

@@ -41,7 +41,6 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
   // ADR-110 C15: the order made from this request keeps its supplier (when the request named one).
   const open = v.lines.filter((l) => !l.convertedPoLineId);
   const supplierIds = [...new Set(open.map((l) => l.suggestedSupplierId).filter((x): x is string => !!x))];
-  const oneApproval = supplierIds.length === 1 && open.every((l) => l.suggestedSupplierId && l.estimatedUnitAmount !== null);
   const title = v.lines.length ? v.lines.map((l) => l.materialName).slice(0, 3).join(", ") + (v.lines.length > 3 ? ` and ${v.lines.length - 3} more` : "") : "Request to buy";
   return (
     <>
@@ -70,7 +69,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       ) : v.can.decide ? (
         <NextStepBox text="Next: approve this request, send it back, or say no.">
           <div className="grid gap-4 sm:grid-cols-3">
-            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "approve" }} submit="Approve" variant="cta">
+            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "approve" }} submit="Approve" variant="cta" confirm="Approve this request to buy? Next, purchasing makes the purchase order.">
               <Input name="note" placeholder="Note (you can skip this)" aria-label="Note" />
             </ActionForm>
             <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "return" }} submit="Send back to change" variant="secondary">
@@ -86,9 +85,10 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
           text={`Next: approved. Make the purchase order${supplierIds.length === 1 ? ` to ${v.lines.find((l) => l.suggestedSupplierId)?.supplierName ?? "the supplier"}` : ""}.`}
           action={{ label: "Make the purchase order", href: `/procurement/orders/new?request=${r.id}${supplierIds.length === 1 ? `&supplier=${supplierIds[0]}` : ""}` }}
           waitingFor={
-            oneApproval && r.estimatedTotalAmount
-              ? `It needs no second approval while it stays with this supplier, these items and up to ${money(r.estimatedTotalAmount, r.currency)}.`
-              : "No supplier or price was named on the request, so the order goes to the manager for approval."
+            // ADR-131 (bug B3): the same rule as the order (one approval per purchase), in words that match it.
+            v.can.hasEstimate
+              ? `It needs no second OK while it stays ${supplierIds.length === 1 ? "with this supplier, " : ""}with these items and ${r.estimatedTotalAmount ? `up to ${money(r.estimatedTotalAmount, r.currency)}` : "within the approved amount"}.`
+              : "The request had no price, so the purchase order needs an OK of its own."
           }
         />
       ) : r.status === "draft" ? (

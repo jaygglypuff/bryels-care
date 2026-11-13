@@ -76,7 +76,9 @@ export const NUMBERING_DEFAULTS = {
   MAT: masterCode("MAT"),
   PRD: masterCode("PRD"),
   SUP: masterCode("SUP"),
-  CUS: masterCode("CUS"),
+  // ADR-131 (round 5 bugs C-B1, B-B8): customer numbers keep the 3-digit shape of the existing customers (CUS-001,
+  // CUS-002 …), so a new customer continues as CUS-003 instead of CUS-0001 next to CUS-001. Codes already used are skipped.
+  CUS: { ...masterCode("CUS"), sequenceWidth: 3 },
   LOC: masterCode("LOC"),
   EQP: masterCode("EQP"),
   // ADR-088 (grade-5 standard): every set-up record is numbered by the system

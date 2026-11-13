@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
-import { getQuote, manilaToday } from "@/modules/sales";
+import { customerEmailReady, getQuote, manilaToday } from "@/modules/sales";
 import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
@@ -39,6 +39,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const open = ["draft", "pending_approval", "sent", "accepted"].includes(q.status);
   const canVoid = open && ctx.can("sales.quote.void");
   const canDelete = q.status === "draft" && (canEdit || ctx.can("sales.quote.create"));
+  const email = customerEmailReady();
 
   const next =
     q.status === "draft" ? (
@@ -63,12 +64,33 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
           waitingFor={<NextApprover next={await salesNextActors(ctx, "quote", q.id)} inline />}
         />
       )
+    ) : q.status === "sent" && !q.givenVia && ctx.can("sales.quote.submit") && !d.expiredByDate ? (
+      // ADR-131 "Send really sends": the offer is ready; it is "Sent" only once it is emailed or printed and given.
+      <DoNext text={`Ready. Next: give the price offer to ${d.customer.name}.`}>
+        <div className="flex flex-col gap-2" data-testid="give-quote">
+          {d.customer.email && email.ready ? (
+            <QuoteCommand quoteId={q.id} command="email" label={`Email to ${d.customer.email}`} variant="cta" />
+          ) : (
+            <p className="text-[14px] text-fg-2">{!d.customer.email ? `${d.customer.name} has no email address, so print it.` : "Email is not set up, so print it and give it to the customer."}</p>
+          )}
+          <LinkButton href={`/print/quotation/${q.id}`} target="_blank" variant={d.customer.email && email.ready ? "secondary" : "cta"}>
+            Print
+          </LinkButton>
+          <QuoteCommand quoteId={q.id} command="given" label="I printed it and gave it to the customer" />
+          {canConvert && canEdit && (
+            <details className="mt-1">
+              <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">The customer already said yes: make a draft order</summary>
+              <ConvertQuoteForm quoteId={q.id} today={today} />
+            </details>
+          )}
+        </div>
+      </DoNext>
     ) : (q.status === "sent" || q.status === "accepted") && canConvert && (q.status === "accepted" || canEdit) ? (
-      <DoNext text="Next: when the customer says yes, make it an order.">
+      <DoNext text="Next: when the customer says yes, make a draft order from it. You confirm the order on the next screen.">
         <ConvertQuoteForm quoteId={q.id} today={today} />
       </DoNext>
     ) : q.status === "sent" || q.status === "accepted" ? (
-      <DoNext text={d.expiredByDate ? `This offer was good until ${fmtDate(q.validUntil)}. Make a new one.` : "Sent to the customer."} waitingFor={d.expiredByDate ? undefined : "Waiting for the customer's answer."} />
+      <DoNext text={d.expiredByDate ? `This offer was good until ${fmtDate(q.validUntil)}. Make a new one.` : q.givenVia ? `Given to the customer on ${fmtDate(q.givenToCustomerAt)}.` : "Ready to give the customer."} waitingFor={d.expiredByDate ? undefined : "Waiting for the customer's answer."} />
     ) : q.status === "converted" && d.order ? (
       <DoNext text="This offer is now an order." action={{ label: "Open the order", href: `/sales/${d.order.id}` }} />
     ) : (
@@ -82,7 +104,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         typeLabel="Price offer"
         reference={q.quoteNumber}
         title={d.customer.name}
-        chip={<SalesStatus status={q.status} />}
+        chip={<SalesStatus status={q.status === "sent" && q.givenVia ? "sent_given" : q.status} />}
         secondary={
           ["sent", "accepted", "converted"].includes(q.status) ? (
             <LinkButton href={`/print/quotation/${q.id}`} target="_blank" variant="secondary" size="sm">

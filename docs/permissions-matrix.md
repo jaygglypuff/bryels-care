@@ -626,6 +626,30 @@ differences) is held by `system_admin` and `site_manager` (A-PM-19).
 | reorder_suggestion | v* | – | v | v | – | – | – | v a | – | – | – | v* | – |
 | supplier_performance | v* | – | v | – | – | – | v | v | – | v | – | v* | – |
 
+### 3.4.R5 Round 5 office commands (ADR-131, 2026-11-08): no new permission strings
+
+Every new command reuses an existing string, checked at the record's site in the service:
+
+| Command | Needs | Negative tests |
+|---|---|---|
+| `changeOrderLine` / `cancelOrderLine` | `sales.sales_order.edit` | other site (not_found), QA and warehouse (forbidden): `tests/integration/sales/r5-order-changes.test.ts` |
+| `emailOrderConfirmation`, `emailQuoteToCustomer`, `markQuoteGiven` | `sales.sales_order.submit` / `sales.quote.submit` | covered by the record lookups (other site = not_found) |
+| `orderCanShipFrom`, `earlierOrdersNeedingSameStock` | `sales.sales_order.view` | other site (not_found) |
+| `findSimilarCustomers` / `createCustomer({ duplicateCheck })` | `masterdata.customer.view` / `.create` | warehouse (forbidden) |
+| `lastPurchasePrices` | `procurement.purchase_order.create`; empty without `masterdata.supplier_price.view` | warehouse (forbidden) |
+| `whatToBuy` | `procurement.purchase_request.create` or `procurement.reorder_suggestion.view` | finance (forbidden): `tests/integration/procurement/r5-purchasing.test.ts` |
+| `listDeliveryProblems` / `decideDeliveryProblem` | `procurement.purchase_order.view` / `.edit` | warehouse (forbidden), other site (not_found) |
+| `bookInvoiceInOneStep` | `finance.invoice.submit` + `finance.invoice.post` (password) | warehouse and sales (forbidden): `tests/integration/finance/r5-one-step.test.ts` |
+| `recordPaymentInOneStep` | `finance.payment_record.create` + `.post` (password) | other site (not_found) |
+| `emailInvoiceToCustomer`, `markInvoiceGiven` | `finance.invoice.post` | sales (forbidden) |
+| `changeSupplierBillLines` | `finance.supplier_bill.edit` | warehouse (forbidden): `tests/integration/finance/r5-money.test.ts` |
+| `fixPostedSupplierBill` | `finance.supplier_bill.void` + `.create` (password) | warehouse (forbidden) |
+| `monthEndChecklist` | `finance.period_lock.view` | warehouse (forbidden) |
+
+KPI `KPI-SAL-01V` (order value confirmed) now needs `sales.sales_order.view` + `sales.price_list.view` only (not
+`analytics.financial_kpi.view`): it is the order book at order prices, which the same people already see on the order
+list (round 5 bug C-B20).
+
 ### 3.4.0 Site manager and purchasing (UX audit round 2 part 2, 2026-11-01)
 
 The audit found the site manager refused on "New purchase order" / "Send back to supplier" and told to "ask your site

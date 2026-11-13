@@ -26,7 +26,7 @@ const formInput = (name: string, extra: Record<string, unknown> = {}) =>
 describe("new customer: name, phone, address; the system gives the number", () => {
   it("creates the customer with the next CUS number and no contact row when no contact person is given", async () => {
     const c = await createCustomer(w.sales, formInput("Fictional Sari-Sari Store Uno"));
-    expect(c.code).toMatch(/^CUS-\d{4,}$/);
+    expect(c.code).toMatch(/^CUS-\d{3,}$/); // ADR-131: the CUS-nnn shape of the existing customers
     expect(c.minShelfLifeDays).toBe(180);
     expect(c.phone).toBe("0917 555 0101");
     expect(c.shipToAddress).toContain("Calamba");

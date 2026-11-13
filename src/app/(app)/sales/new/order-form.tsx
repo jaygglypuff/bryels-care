@@ -124,6 +124,8 @@ export function NewOrderForm({
       lines.forEach((l, i) => {
         if (!l.productId) e[`lines.${i}.productId`] = "Choose a product.";
         if (!/^[1-9]\d*$/.test(l.qtyUnits.trim())) e[`lines.${i}.qtyUnits`] = "Enter how many pieces (a whole number).";
+        // ADR-131 (bug C-B21): a line with no usual price and no typed price would make a ₱0.00 order; stop here.
+        if (pricesVisible && l.productId && !(safeD(effectivePrice(l)).gt(0))) e[`lines.${i}.unitPrice`] = "Type the price agreed with the customer (there is no usual price yet).";
       });
     }
     return e;

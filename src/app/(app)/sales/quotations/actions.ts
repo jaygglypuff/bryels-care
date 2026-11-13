@@ -6,7 +6,8 @@ import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
-import { QuoteSchema, approveQuote, convertQuote, createQuote, editQuote, issuesToFieldErrors, recordQuoteDecision, returnQuoteToDraft, submitQuote, voidQuote } from "@/modules/sales";
+import { QuoteSchema, approveQuote, convertQuote, createQuote, editQuote, emailQuoteToCustomer, issuesToFieldErrors, markQuoteGiven, recordQuoteDecision, returnQuoteToDraft, submitQuote, voidQuote } from "@/modules/sales";
+import { customerEmailWords } from "@/lib/send-words";
 
 /** Quotation actions (US-4-04): thin adapters over src/modules/sales/quotations.ts. */
 const str = (fd: FormData, k: string) => {
@@ -45,15 +46,25 @@ export async function quoteCommandAction(_: ActionState, fd: FormData): Promise<
   try {
     const ctx = await requireContext();
     const id = uuid.parse(str(fd, "quoteId"));
-    const cmd = z.enum(["submit", "approve", "return", "accept", "reject", "void"]).parse(str(fd, "command"));
+    const cmd = z.enum(["submit", "approve", "return", "accept", "reject", "void", "email", "given"]).parse(str(fd, "command"));
     const reason = str(fd, "reason") ?? "";
     let message: string;
     switch (cmd) {
       case "submit": {
         const r = await submitQuote(ctx, id, { idempotencyKey: str(fd, "idempotencyKey") || null });
-        message = r.status === "sent" ? "Quotation issued: print it for the customer." : "The discount needs approval.";
+        message = r.status === "sent" ? "Ready. Next: email it to the customer or print it." : "The discount needs approval.";
         break;
       }
+      case "email": {
+        // ADR-131: "Sent" only when the email really went out.
+        const r = await emailQuoteToCustomer(ctx, id, { idempotencyKey: str(fd, "idempotencyKey") || null });
+        refreshCurrentPage();
+        return { ok: r.given, message: customerEmailWords("price offer", r.outcome, r.to) };
+      }
+      case "given":
+        await markQuoteGiven(ctx, id);
+        message = "Saved: the customer has the printed price offer.";
+        break;
       case "approve": {
         const r = await approveQuote(ctx, id, str(fd, "note") || null);
         message = r.sent ? "Approved and issued." : "Your approval is recorded.";
@@ -97,5 +108,5 @@ export async function convertQuoteAction(_: ActionState, fd: FormData): Promise<
     return toActionState(e);
   }
   revalidatePath("/sales");
-  redirect(`/sales/${orderId}?done=edited`);
+  redirect(`/sales/${orderId}?done=fromquote`);
 }

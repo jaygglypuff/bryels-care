@@ -264,7 +264,8 @@ async function activeBatches(siteIds: string[], today: string, siteCode: Map<str
       productName: products.name,
       workOrderId: batches.workOrderId,
       orderNumber: workOrders.workOrderNumber,
-      dueOn: workOrders.plannedEnd,
+      // ADR-131 (B-owner bug B11): the date the products are needed (customer order or typed), else the planned finish.
+      dueOn: sql<string | null>`coalesce(${workOrders.neededBy}, ${workOrders.plannedEnd})::text`,
       currentStep: sql<string | null>`${batches.formulaSnapshot}->'steps'->(${stepsDone})->>'name'`,
       stepsDone,
       stepsTotal,

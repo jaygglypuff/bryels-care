@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { actionItems, batches, locations } from "@/db/schema";
-import type { AuthContext } from "@/lib/auth/context";
+import { AuthContext } from "@/lib/auth/context";
 import { getKpiRecords, getOwnerHome, listStockAlerts, listWeekBatches, stockAlertCounts } from "@/modules/analytics";
 import { activityEntityNames } from "@/modules/analytics/activity-names";
 import { lotKpis } from "@/modules/inventory/lots";
@@ -157,13 +157,18 @@ describe("sales today and this week: the KPI drill-down rows", () => {
     expect(home.salesWeek!.days.reduce((s, d) => s + d.orders, 0)).toBe(rec.rows.length);
   });
 
-  it("masks money in the DTO without the financial KPI permission (sales staff see order counts only)", async () => {
+  it("ADR-131 (bug C-B20): sales staff who see order prices on the order list see the order value on Home; without price access it is masked", async () => {
     const home = await getOwnerHome(salesCs);
-    expect(home.salesToday!.masked).toBe(true);
-    expect(home.salesToday!.value).toBeNull();
-    expect(home.salesToday!.orders).toBeGreaterThanOrEqual(1);
-    expect(home.salesWeek!.unit).toBe("count");
-    expect(home.salesWeek!.href).toContain("KPI-SAL-01?");
+    expect(salesCs.can("sales.price_list.view")).toBe(true);
+    expect(home.salesToday!.masked).toBe(false);
+    expect(home.salesToday!.value).not.toBeNull();
+    const noPrices = new AuthContext(salesCs.userId, salesCs.organizationId, salesCs.displayName, salesCs.email, salesCs.roleCodes, new Set([...salesCs.permissions].filter((p) => p !== "sales.price_list.view")), salesCs.allowedSites, salesCs.currentSiteId);
+    const masked = await getOwnerHome(noPrices);
+    expect(masked.salesToday!.masked).toBe(true);
+    expect(masked.salesToday!.value).toBeNull();
+    expect(masked.salesToday!.orders).toBeGreaterThanOrEqual(1);
+    expect(masked.salesWeek!.unit).toBe("count");
+    expect(masked.salesWeek!.href).toContain("KPI-SAL-01?");
   });
 
   it("an RVS-only owner does not see NFD's order (cross-site negative)", async () => {

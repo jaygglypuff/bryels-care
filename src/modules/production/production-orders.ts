@@ -12,7 +12,7 @@ import { getSetting } from "@/lib/settings";
 import { getEffectiveFormulaRevision, productReadiness } from "@/modules/masterdata";
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
 import { siteOrderCover, type SiteOrderCover } from "./order-cover";
-import { comingWords } from "./order-cover-rule";
+import { canShipFrom, comingWords, type CanShipFrom } from "./order-cover-rule";
 import { insertBatch } from "./batches";
 import { listDailyLogs, defectSummary } from "./daily-log";
 import { productionOrderActions, type NextAction } from "./production-order-next";
@@ -662,6 +662,10 @@ export type MakeForLine = {
   batchCount: number | null;
   unitsPerBatch: string | null;
   neededBy: string | null;
+  /** ADR-131 (C-office bug B11): the planner was already asked to make this shortage (the message exists). */
+  asked?: boolean;
+  /** When the planner was asked (the message time), for "Asked the planner on …". */
+  askedAt?: Date | null;
 };
 
 /**
@@ -678,7 +682,15 @@ export async function salesOrderShortfalls(ctx: AuthContext, salesOrderId: strin
   if (!so || !ctx.allowedSiteIds.includes(so.siteId)) throw new DomainError("not_found", "Customer order not found in your sites.");
   ctx.requireSite(so.siteId);
   if (!(MAKE_FOR_SALES_STATUSES as readonly string[]).includes(so.status)) return [];
-  return shortfallsFrom(ctx, await siteOrderCover(db, ctx.organizationId, so.siteId), [so.id]);
+  const lines = await shortfallsFrom(ctx, await siteOrderCover(db, ctx.organizationId, so.siteId), [so.id]);
+  // ADR-131 (bug B11): once asked, the order says so instead of offering the button again.
+  for (const l of lines) {
+    if (new Decimal(l.missing).lte(0)) continue;
+    const [n] = await db.select({ at: notifications.createdAt }).from(notifications).where(and(eq(notifications.organizationId, ctx.organizationId), eq(notifications.dedupeKey, askToMakeKey(l.salesOrderLineId, l.missing)))).orderBy(desc(notifications.createdAt)).limit(1);
+    l.asked = !!n;
+    l.askedAt = n?.at ?? null;
+  }
+  return lines;
 }
 
 /** MakeForLine rows of the given orders out of one site cover (one read for the planner's Home list). */
@@ -806,15 +818,71 @@ export async function productionOrdersForSalesOrder(ctx: AuthContext, salesOrder
   ctx.require("production.work_order.view");
   if (!UUID.test(salesOrderId)) return [];
   const rows = await db
-    .select({ id: workOrders.id, number: workOrders.workOrderNumber, status: workOrders.status, siteId: workOrders.siteId, productName: products.name })
+    .select({ id: workOrders.id, number: workOrders.workOrderNumber, status: workOrders.status, siteId: workOrders.siteId, productName: products.name, pieces: workOrders.targetUnits, plannedEnd: workOrders.plannedEnd, who: users.displayName })
     .from(workOrders)
     .innerJoin(products, eq(products.id, workOrders.productId))
+    .leftJoin(users, eq(users.id, workOrders.assignedOperatorId))
     .where(and(eq(workOrders.organizationId, ctx.organizationId), eq(workOrders.salesOrderId, salesOrderId), inArray(workOrders.siteId, ctx.allowedSiteIds), ne(workOrders.status, "cancelled")));
   const facts = await loadBatchFacts(rows.map((r) => r.id));
+  const today = manilaToday();
+  const qaDays = rows.length ? Number(await getSetting(db, ctx.organizationId, "sales.can_ship.qa_days", rows[0].siteId)) : 0;
   return rows.map((r) => {
     const v = productionOrderStatus(r.status, facts.get(r.id) ?? []);
-    return { id: r.id, number: r.number, productName: r.productName, status: v.status, statusLabel: v.label, subtitle: v.subtitle };
+    // ADR-131 (B-owner problem 2) "Where is it now": the step and who makes it, and when it should be ready.
+    const from = r.plannedEnd > today ? r.plannedEnd : today;
+    const readyOn = v.status === "done" || v.status === "failed" ? null : new Date(Date.parse(`${from}T00:00:00Z`) + qaDays * 86_400_000).toISOString().slice(0, 10);
+    return { id: r.id, number: r.number, productName: r.productName, status: v.status, statusLabel: v.label, subtitle: v.subtitle, stepNote: v.stepNote, who: r.who ?? null, pieces: r.pieces === null ? null : new Decimal(r.pieces).toString(), readyOn };
   });
+}
+
+export type EarlierOrder = { orderId: string; orderNumber: string; customerName: string; requestedDeliveryOn: string | null; productIds: string[] };
+
+/**
+ * ADR-131 (owner decision 2026-11-08: stock goes first to the order with the earliest delivery date): the open orders at
+ * the same site that are due earlier than this one and still need some of the same products (not all set aside). The
+ * set-aside button warns with them ("Order X (due earlier) also needs this"); setting aside is not refused — taking
+ * stock another order needs is an explicit choice. Read only; `sales.sales_order.view` at the order's site.
+ */
+export async function earlierOrdersNeedingSameStock(ctx: AuthContext, salesOrderId: string): Promise<EarlierOrder[]> {
+  ctx.require("sales.sales_order.view");
+  const [so] = UUID.test(salesOrderId) ? await db.select().from(salesOrders).where(and(eq(salesOrders.id, salesOrderId), eq(salesOrders.organizationId, ctx.organizationId))).limit(1) : [];
+  if (!so || !ctx.allowedSiteIds.includes(so.siteId)) throw new DomainError("not_found", "Customer order not found in your sites.");
+  const cover = await siteOrderCover(db, ctx.organizationId, so.siteId);
+  const me = cover.orders.find((o) => o.orderId === so.id);
+  if (!me) return [];
+  const mine = new Set(me.lines.filter((l) => l.need.gt(0)).map((l) => l.productId));
+  const due = me.requestedDeliveryOn;
+  return cover.orders
+    .filter((o) => o.orderId !== so.id && o.requestedDeliveryOn && (!due || o.requestedDeliveryOn < due) && ["confirmed", "pending_approval", "submitted", "allocated", "partially_shipped"].includes(o.status))
+    .map((o) => ({ orderId: o.orderId, orderNumber: o.orderNumber, customerName: o.customerName, requestedDeliveryOn: o.requestedDeliveryOn, productIds: [...new Set(o.lines.filter((l) => l.need.gt(0) && mine.has(l.productId)).map((l) => l.productId))] }))
+    .filter((o) => o.productIds.length > 0)
+    .slice(0, 3);
+}
+
+/**
+ * ADR-131 (C-office problem 3): "Can ship from" on a customer order, from the one order-cover rule (earliest delivery
+ * first): today when everything is set aside or on the shelf; else the latest ready day of the batches and production
+ * orders it waits for (planned finish or today, plus the QA days in Settings); null when something still needs making.
+ * Read only; `sales.sales_order.view` at the order's site.
+ */
+export async function orderCanShipFrom(ctx: AuthContext, salesOrderId: string): Promise<CanShipFrom & { asked: boolean }> {
+  ctx.require("sales.sales_order.view");
+  const [so] = UUID.test(salesOrderId) ? await db.select().from(salesOrders).where(and(eq(salesOrders.id, salesOrderId), eq(salesOrders.organizationId, ctx.organizationId))).limit(1) : [];
+  if (!so || !ctx.allowedSiteIds.includes(so.siteId)) throw new DomainError("not_found", "Customer order not found in your sites.");
+  const today = manilaToday();
+  if (!(MAKE_FOR_SALES_STATUSES as readonly string[]).includes(so.status)) return { date: null, why: "not_known", asked: false };
+  const cover = await siteOrderCover(db, ctx.organizationId, so.siteId);
+  const o = cover.orders.find((x) => x.orderId === so.id);
+  if (!o) return { date: today, why: "all_set_aside", asked: false };
+  const r = canShipFrom(o.lines, today);
+  let asked = false;
+  if (r.why === "not_known") {
+    for (const l of o.lines.filter((x) => x.missing.gt(0))) {
+      const [n] = await db.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.organizationId, ctx.organizationId), eq(notifications.dedupeKey, askToMakeKey(l.lineId, l.missing.toString())))).limit(1);
+      if (n) asked = true;
+    }
+  }
+  return { ...r, asked };
 }
 
 export type { ProductionOrderStatusView, WorkOrderDetail };

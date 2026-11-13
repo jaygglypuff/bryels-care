@@ -1,5 +1,5 @@
 import { requireContext } from "@/lib/auth/context";
-import { approvedMaterialsFor, convertibleRequestLines, poFormOptions } from "@/modules/procurement";
+import { approvedMaterialsFor, convertibleRequestLines, lastPurchasePrices, poFormOptions } from "@/modules/procurement";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { PlainList, PlainRow } from "@/ui/plain-list";
@@ -32,10 +32,18 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const supplierId = supplier ?? (named.length === 1 ? named[0] : undefined);
   const chosen = opts.suppliers.find((s) => s.id === supplierId) ?? null;
   const mats = chosen ? await approvedMaterialsFor(ctx, chosen.id) : [];
+  // Only the request's lines when the order is made from a request (ADR-110 C15); otherwise any open request line.
   const prLines = chosen ? (fromRequest ?? openLines).filter((l) => mats.some((m) => m.materialId === l.materialId)) : [];
   const prices = ctx.can("masterdata.supplier_price.view");
+  const last = chosen ? await lastPurchasePrices(ctx, chosen.id) : [];
   const needle = (q ?? "").trim().toLowerCase();
   const found = needle ? opts.suppliers.filter((s) => s.name.toLowerCase().includes(needle) || s.code.toLowerCase().includes(needle)) : opts.suppliers;
+  const keepRequest = fromRequest?.length ? `request=${request}` : "";
+  // ADR-131 (bugs B3/B6): say what the request really named, and what the approval covers.
+  const namedChosen = !!chosen && named.includes(chosen.id);
+  const namedOther = !!chosen && named.length > 0 && !namedChosen;
+  const approvedAmount = fromRequest?.length && fromRequest.every((l) => l.estimatedUnitAmount !== null) ? fromRequest.reduce((s, l) => s + Number(l.qty) * Number(l.estimatedUnitAmount), 0) : null;
+  const neededBy = fromRequest?.map((l) => l.neededByDate).filter((d): d is string => !!d).sort()[0] ?? null;
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="New purchase order" subtitle={`For ${ctx.currentSite.name}`} actions={<LinkButton href="/procurement/orders" variant="secondary">All orders</LinkButton>} />
@@ -46,8 +54,25 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           {fromRequest.length === 0 ? (
             <Banner tone="warn" title="That request to buy is not waiting to be ordered">It is not approved, is already on a purchase order, or is at another site. Pick the supplier below, or open the request.</Banner>
           ) : (
-            <Banner tone="info" title={`From request to buy ${fromRequest[0].requestNumber}`}>
-              {chosen ? `Supplier ${chosen.name}, as named on the request.` : "The request names no single supplier: pick one below."} Within the approved supplier, items and amount, the order needs no second approval.
+            <Banner tone={namedOther ? "warn" : "info"} title={`From request to buy ${fromRequest[0].requestNumber}`}>
+              {!chosen
+                ? named.length === 1
+                  ? "Pick the supplier below."
+                  : named.length > 1
+                    ? "The request names more than one supplier: pick one below."
+                    : "The request names no supplier: pick one below."
+                : namedChosen
+                  ? `Supplier ${chosen.name}, as named on the request.`
+                  : namedOther
+                    ? `The request named another supplier. With ${chosen.name} the order needs the manager's OK again.`
+                    : `You chose ${chosen.name} (the request named no supplier).`}{" "}
+              {namedOther
+                ? ""
+                : approvedAmount !== null
+                  ? prices
+                    ? `The request was approved for up to ₱${approvedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Up to that amount the order needs no second OK; above it, it does.`
+                    : "Up to the amount the request was approved for, the order needs no second OK."
+                  : "The request had no price, so the order needs an OK of its own."}
             </Banner>
           )}
         </div>
@@ -94,10 +119,14 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           materials={[...mats]
             .sort((a, b) => a.name.localeCompare(b.name))
             .map((m) => ({ id: m.materialId, name: m.name, code: m.code, baseUom: m.baseUom, leadTimeDays: m.leadTimeDays, moqQty: m.moqQty, moqUom: m.moqUom, packQty: m.packQty, packUom: m.packUom, priceUom: m.priceUom, unitPrice: prices ? m.unitPrice ?? null : null, brand: m.brand }))}
-          fromRequests={prLines.map((l) => ({ id: l.id, materialId: l.materialId, requestNumber: l.requestNumber, qty: String(Number(l.qty)), uom: l.uom }))}
+          fromRequests={prLines.map((l) => ({ id: l.id, materialId: l.materialId, requestNumber: l.requestNumber, qty: String(Number(l.qty)), uom: l.uom, price: l.estimatedUnitAmount }))}
+          lastPrices={last.map((p) => ({ materialId: p.materialId, unitAmount: p.unitAmount, uom: p.uom, poNumber: p.poNumber, orderDate: p.orderDate }))}
           warehouses={opts.warehouses.map((w) => ({ id: w.id, name: w.name, code: w.code }))}
           prices={prices}
           today={today()}
+          neededBy={neededBy}
+          approvedAmount={namedOther ? null : approvedAmount}
+          changeHref={`/procurement/orders/new${keepRequest ? `?${keepRequest}` : ""}`}
           canSubmit={ctx.can("procurement.purchase_order.submit")}
         />
       )}

@@ -64,8 +64,9 @@ describe("catalogue", () => {
     for (const o of OWNER_KPIS) for (const c of o.builtFrom) expect(kpiByCode(c), c).toBeTruthy();
     expect(OWNER_KPIS.map((o) => o.code)).toEqual(Array.from({ length: 14 }, (_, i) => `KPI-OWN-${String(i + 1).padStart(2, "0")}`));
   });
-  it("money KPIs need the financial permission; only KPI-FIN-02 is an Estimate", () => {
-    for (const k of KPIS.filter((k) => k.unit === "money")) expect(k.permissions).toContain("analytics.financial_kpi.view");
+  it("money KPIs need the financial permission, except the order value at order prices (ADR-131, bug C-B20: it follows price access); only KPI-FIN-02 is an Estimate", () => {
+    for (const k of KPIS.filter((k) => k.unit === "money" && k.code !== "KPI-SAL-01V")) expect(k.permissions).toContain("analytics.financial_kpi.view");
+    expect(KPIS.find((k) => k.code === "KPI-SAL-01V")!.permissions).toContain("sales.price_list.view");
     expect(KPIS.filter((k) => k.label === "estimate").map((k) => k.code)).toEqual(["KPI-FIN-02"]);
   });
 });

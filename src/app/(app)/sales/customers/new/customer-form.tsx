@@ -4,7 +4,7 @@ import { Button, Card, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
 import { useActionForm } from "../../use-action-form";
-import { createCustomerW3dAction } from "../actions";
+import { createCustomerW3dAction, similarCustomersAction } from "../actions";
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
@@ -13,7 +13,7 @@ const MORE_FIELDS = ["contactName", "email", "paymentTermsDays", "segment", "sta
 
 /**
  * New customer (US-4-01, ADR-088 grade-5 form): name, phone and address are all most people need; the
- * system gives the customer number (CUS-nnnn, ADR-075) and the first address becomes the usual deliver-to and
+ * system gives the customer number (CUS-nnn, ADR-075 and ADR-131) and the first address becomes the usual deliver-to and
  * bill-to. The contact person, days to pay (finance only) and everything else sit under "More details", with defaults.
  */
 export function CustomerForm({ segments, canSetTerms = false }: { segments: { value: string; label: string }[]; canSetTerms?: boolean }) {
@@ -41,17 +41,44 @@ export function CustomerForm({ segments, canSetTerms = false }: { segments: { va
   const fe = state?.fieldErrors ?? {};
   const bind = (k: string) => ({ id: k, name: k, value: v[k] ?? "", onChange: (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value }) });
   const moreOpen = MORE_FIELDS.some((k) => fe[k]);
+  // ADR-131 (C-office problem 10): "Already a customer?" while typing (same phone, email or nearly the same name).
+  const [similar, setSimilar] = useState<{ id: string; code: string; name: string; phone: string | null }[]>([]);
+  const check = async () => {
+    if ((v.name ?? "").trim().length < 3 && (v.phone ?? "").replace(/\D/g, "").length < 7 && !(v.email ?? "").includes("@")) return setSimilar([]);
+    setSimilar(await similarCustomersAction({ name: v.name ?? "", phone: v.phone ?? "", email: v.email ?? "" }));
+  };
+  const askDifferent = similar.length > 0 || /^Already a customer\?/.test(fe.name ?? "");
   return (
     <form onSubmit={onSubmit} className="flex max-w-2xl flex-col gap-4">
       <input type="hidden" name="idempotencyKey" value={key} />
       <Card>
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-4" onBlur={() => void check()}>
           <Field label="Customer name" htmlFor="name" error={fe.name} hint="The shop or person, as you would say it on the phone">
             <Input {...bind("name")} required maxLength={120} autoComplete="organization" />
           </Field>
           <Field label="Phone" htmlFor="phone" error={fe.phone}>
             <Input {...bind("phone")} type="tel" maxLength={40} autoComplete="tel" placeholder="e.g. 0917 123 4567" />
           </Field>
+          {askDifferent && (
+            <div role="status" className="flex flex-col gap-2 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="similar-customer">
+              {similar.length > 0 ? (
+                similar.map((s) => (
+                  <p key={s.id}>
+                    Already a customer? <strong>{s.name}</strong> {s.phone ? `· ${s.phone} ` : ""}
+                    <span className="font-mono text-[12px]">{s.code}</span> ·{" "}
+                    <a className="underline" href={`/sales/customers/${s.id}`}>
+                      Open it
+                    </a>
+                  </p>
+                ))
+              ) : (
+                <p>{fe.name}</p>
+              )}
+              <label className="flex min-h-[44px] items-center gap-2 font-medium text-fg">
+                <input type="checkbox" name="confirmedDifferent" value="yes" className="h-5 w-5" /> This is a different customer
+              </label>
+            </div>
+          )}
           <Field label="Street address" htmlFor="shipTo.line1" error={fe["shipTo.line1"]} hint="Where we deliver">
             <Input {...bind("shipTo.line1")} required maxLength={200} autoComplete="address-line1" />
           </Field>
@@ -106,7 +133,7 @@ export function CustomerForm({ segments, canSetTerms = false }: { segments: { va
         <Field label="Postal code (optional)" htmlFor="shipTo.postalCode" error={fe["shipTo.postalCode"]}>
           <Input {...bind("shipTo.postalCode")} maxLength={12} inputMode="numeric" />
         </Field>
-        <Field label="Customer number (optional)" htmlFor="code" error={fe.code} hint="Leave empty: the system gives the next number, e.g. CUS-0012.">
+        <Field label="Customer number (optional)" htmlFor="code" error={fe.code} hint="Leave empty: the system gives the next number, e.g. CUS-012.">
           <Input {...bind("code")} maxLength={20} autoCapitalize="characters" placeholder="Given by the system" />
         </Field>
         <Field label="Note for our team (optional)" htmlFor="notesInternal" error={fe.notesInternal} hint="Never printed on papers for the customer">

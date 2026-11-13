@@ -6,6 +6,12 @@ import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import {
   approveInvoice,
+  bookInvoiceInOneStep,
+  changeSupplierBillLines,
+  fixPostedSupplierBill,
+  emailInvoiceToCustomer,
+  markInvoiceGiven,
+  recordPaymentInOneStep,
   approvePeriodUnlock,
   approveTaxConfiguration,
   cancelCreditNote,
@@ -51,6 +57,8 @@ import {
   voidSupplierBill,
 } from "@/modules/finance";
 import { financeNext } from "./approval-waiting";
+import { paymentSavedWords } from "@/lib/payment-words";
+import { customerEmailWords } from "@/lib/send-words";
 
 /** Finance server actions (US-6-10..14): thin adapters over src/modules/finance; every rule is in the services. */
 const str = (fd: FormData, k: string) => {
@@ -108,6 +116,22 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         message = `Saved to the books as invoice ${r.invoiceNumber}.`;
         break;
       }
+      case "invoice:book": {
+        // ADR-131: below the owner's one-step amount, from the draft straight to the books.
+        const r = await bookInvoiceInOneStep(ctx, id, { password, idempotencyKey: key });
+        message = `Saved to the books as invoice ${r.invoiceNumber}. Next: give it to the customer (email or print).`;
+        break;
+      }
+      case "invoice:email": {
+        // ADR-131: "Given to the customer" only when the email really went out.
+        const r = await emailInvoiceToCustomer(ctx, id, { idempotencyKey: key });
+        refreshCurrentPage();
+        return { ok: r.given, message: customerEmailWords("invoice", r.outcome, r.to) };
+      }
+      case "invoice:given":
+        await markInvoiceGiven(ctx, id);
+        message = "Saved: the customer has the printed invoice.";
+        break;
       case "invoice:void":
         await voidInvoice(ctx, id, { reason, password });
         break;
@@ -154,7 +178,13 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "payment:record": {
         const r = await recordPayment(ctx, id, { password, idempotencyKey: key });
-        message = `Saved to the books: ${r.applied} used on bills or invoices, ${r.unapplied} kept for later.`;
+        message = paymentSavedWords(r.applied, r.unapplied);
+        break;
+      }
+      case "payment:book": {
+        // ADR-131: below the owner's one-step amount, from the draft straight to the books.
+        const r = await recordPaymentInOneStep(ctx, id, { password, idempotencyKey: key });
+        message = paymentSavedWords(r.applied, r.unapplied);
         break;
       }
       case "payment:void":
@@ -240,7 +270,7 @@ export async function periodCommandAction(_: ActionState, fd: FormData): Promise
     let message = "Done.";
     if (command === "lock") {
       const code = z.string().regex(/^\d{4}-\d{2}$/).parse(str(fd, "periodCode"));
-      await lockPeriod(ctx, code, { reason, acknowledge: str(fd, "acknowledge") === "on", acknowledgementNote: str(fd, "acknowledgementNote") || null, password });
+      await lockPeriod(ctx, code, { reason, acknowledge: str(fd, "acknowledge") === "on", acknowledgementNote: str(fd, "acknowledgementNote") || null, password, closeEarly: str(fd, "closeEarly") === "yes" });
       message = `Month ${code} closed. Nothing more can be saved in it.`;
     } else if (command === "request_unlock") {
       const code = z.string().regex(/^\d{4}-\d{2}$/).parse(str(fd, "periodCode"));
@@ -428,6 +458,38 @@ export async function createExpenseAction(_: ActionState, fd: FormData): Promise
     return toActionState(e);
   }
   redirect(`/finance/expenses/${id}?created=1`);
+}
+
+/** ADR-131 "Change the bill" (draft or does not match): the lines are replaced, with the reason; back to the bill. */
+export async function changeBillLinesAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let id: string;
+  try {
+    const ctx = await requireContext();
+    id = uuid.parse(str(fd, "id"));
+    let lines: unknown = [];
+    try {
+      lines = JSON.parse(str(fd, "lines") ?? "[]");
+    } catch {
+      return { ok: false, message: "The lines could not be read. Reload the page and try again." };
+    }
+    await changeSupplierBillLines(ctx, id, { lines: lines as never, reason: str(fd, "reason") ?? "", idempotencyKey: str(fd, "idempotencyKey") || null });
+  } catch (e) {
+    return toActionState(e);
+  }
+  redirect(`/finance/bills/${id}?changed=1`);
+}
+
+/** ADR-131 "Fix a mistake" on a bill in the books: undo it (kept on record) and open the draft copy to change. */
+export async function fixBillAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target: string;
+  try {
+    const ctx = await requireContext();
+    const r = await fixPostedSupplierBill(ctx, uuid.parse(str(fd, "id")), { reason: str(fd, "reason") ?? "", password: str(fd, "password") || null, idempotencyKey: str(fd, "idempotencyKey") || null });
+    target = `/finance/bills/${r.billId}/change?fixing=${encodeURIComponent(r.replacedBillNumber)}`;
+  } catch (e) {
+    return toActionState(e);
+  }
+  redirect(target);
 }
 
 export async function uploadReceiptAction(_: ActionState, fd: FormData): Promise<ActionState> {

@@ -6,7 +6,8 @@ import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
-import { NewOrderSchema, approveOrder, cancelOrder, editOrder, issuesToFieldErrors, moveOrderCard, reorderFromOrder, returnOrderToDraft, submitOrder } from "@/modules/sales";
+import { NewOrderSchema, approveOrder, cancelOrder, cancelOrderLine, changeOrderLine, editOrder, emailOrderConfirmation, issuesToFieldErrors, moveOrderCard, reorderFromOrder, returnOrderToDraft, submitOrder } from "@/modules/sales";
+import { customerEmailWords } from "@/lib/send-words";
 
 /**
  * Server actions of the W3D order screens (thin adapters: parse, call the service, return
@@ -109,6 +110,33 @@ export async function reorderAction(_: ActionState, fd: FormData): Promise<Actio
   }
   revalidatePath("/sales");
   redirect(`/sales/${id}?done=reordered`);
+}
+
+/** ADR-131: "Change how many" / "Cancel this line" on a confirmed order (reason required; the service checks everything). */
+export async function changeOrderLineAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const lineId = uuid.parse(str(fd, "lineId"));
+    const reason = str(fd, "reason") ?? "";
+    const r = str(fd, "mode") === "cancel" ? await cancelOrderLine(ctx, { lineId, reason, idempotencyKey: key(fd) }) : await changeOrderLine(ctx, { lineId, qty: str(fd, "qty") ?? "", reason, idempotencyKey: key(fd) });
+    refreshCurrentPage();
+    const freed = Number(r.released) > 0 ? ` ${r.released} set aside were let go.` : "";
+    return { ok: true, message: Number(r.after) === 0 ? `${r.productName} is taken off the order.${freed}` : `${r.productName}: now ${r.after} (was ${r.before}).${freed}` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-131: email the order confirmation to the customer (with "Can ship from"). */
+export async function emailOrderConfirmationAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await emailOrderConfirmation(ctx, uuid.parse(str(fd, "orderId")), { canShipFromText: str(fd, "canShipFromText") ?? "", idempotencyKey: key(fd) });
+    refreshCurrentPage();
+    return { ok: r.given, message: customerEmailWords("order confirmation", r.outcome, r.to) };
+  } catch (e) {
+    return toActionState(e);
+  }
 }
 
 /** Board drop (client calls this directly; the board wraps the result in startTransition, ADR-043 rule 5). */

@@ -57,7 +57,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
               href={`/sales/quotations/${q.id}`}
               title={q.customerName}
               code={q.quoteNumber}
-              status={<SalesStatus status={q.status} />}
+              status={<SalesStatus status={q.status === "sent" && q.givenVia ? "sent_given" : q.status} />}
               facts={`Good until ${fmtDate(q.validUntil)}`}
               aside={<Money className="text-[15px] font-semibold tabular text-fg" value={q.totalAmount} />}
             />

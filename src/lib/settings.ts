@@ -649,6 +649,33 @@ export const SETTINGS = {
   // (W4B: the former `sales.tax.rate_pct` moved to the reviewed tax configuration; see finance.tax.default_sales_code.)
   /** Customers without a credit limit: auto-confirm (false) or always need credit approval (true) (A-W3D-02). */
   "sales.credit_check.require_limit": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-W3D-02", group: "Sales", label: "Orders of customers without a credit limit need approval", requiresApproval: true },
+  /**
+   * ADR-131 (owner decision 2026-11-08, A-CREDIT-NOLIMIT-01): a customer with a blank credit limit may order up to this
+   * amount (order total with tax, plus their other open orders) without approval; above it the order waits for an OK.
+   * 0 = every order of such a customer waits.
+   */
+  /** ADR-131 (C-office problem 3, A-CANSHIP-01): days the QA check usually takes, added to a batch's finish for "Can ship from". */
+  "sales.can_ship.qa_days": {
+    scopes: ["organization", "site"],
+    schema: z.number().int().min(0).max(60),
+    default: 2,
+    assumption: "A-CANSHIP-01",
+    group: "Sales",
+    label: "Days the QA check usually takes (for “Can ship from” on customer orders)",
+    description: "“Can ship from” on a customer order = today for stock on the shelf; for stock still being made or waiting for QA, the batch's planned finish (or today) plus these days.",
+    whoChanges: "The owner, with QA.",
+  },
+  "sales.credit.no_limit_check_above": {
+    scopes: ["organization"],
+    schema: z.number().min(0).max(100_000_000),
+    default: 50_000,
+    assumption: "A-CREDIT-NOLIMIT-01",
+    group: "Sales",
+    label: "Customers with no credit limit: orders above this amount (₱) wait for an OK",
+    description: "A new customer has no credit limit until finance sets one. Their orders up to this amount are confirmed at once; a bigger order waits for an OK. 0 = always wait.",
+    whoChanges: "The owner.",
+    restricted: true,
+  },
   /** Order quantity below the customer's approved MOQ requirement: warn on the order, or block submission (US-4-05 AC1). */
   "sales.order.moq_policy": { scopes: ["organization"], schema: z.enum(["warn", "block"]), default: "warn" as "warn" | "block", assumption: "A-W3D-04", group: "Sales", label: "Order below the customer's minimum order quantity" },
   /** Lines without an approved price-list price: allow a manual price (recorded as price source "manual") or refuse. */
@@ -820,6 +847,33 @@ export const SETTINGS = {
     scopes: ["organization", "site"], schema: z.boolean(), default: true as boolean, assumption: "A-WD-03", group: "Finance", label: "Create the invoice draft when a shipment is dispatched",
     description: "On: dispatching a shipment also creates its invoice draft (system action, once per shipment); finance still checks, submits, approves and issues it. Off: finance creates each invoice from the shipment.",
     requiresApproval: true,
+  },
+  /**
+   * ADR-131 (round 5, C-office problem 9; A-FIN-1STEP-01): below these amounts one finance person saves an invoice or
+   * a payment to the books in one step (no separate approver). At or above them the approval rules apply as before.
+   * 0 = always the approval rules.
+   */
+  "finance.invoice.one_step_below": {
+    scopes: ["organization"],
+    schema: z.number().min(0).max(100_000_000),
+    default: 50_000,
+    assumption: "A-FIN-1STEP-01",
+    group: "Finance",
+    label: "Invoices below this amount (₱) need one person, one step",
+    description: "Below it, finance saves the invoice to the books straight from the draft (with their password). At or above it, the invoice is approved by another person first. 0 = always approved by another person.",
+    whoChanges: "The owner, with the accountant.",
+    restricted: true,
+  },
+  "finance.payment.one_step_below": {
+    scopes: ["organization"],
+    schema: z.number().min(0).max(100_000_000),
+    default: 50_000,
+    assumption: "A-FIN-1STEP-01",
+    group: "Finance",
+    label: "Payments below this amount (₱) need one person, one step",
+    description: "Below it, finance saves a payment to the books straight after typing it (with their password). At or above it, another person approves it first. 0 = always approved by another person.",
+    whoChanges: "The owner, with the accountant.",
+    restricted: true,
   },
   "finance.invoice.default_terms_days": { scopes: ["organization"], schema: z.number().int().min(0).max(365), default: 30, assumption: "A-FIN-04", group: "Finance", label: "Invoice due after (days) when the customer has no terms", requiresApproval: true },
   "finance.bill.default_terms_days": { scopes: ["organization"], schema: z.number().int().min(0).max(365), default: 30, assumption: "A-FIN-04", group: "Finance", label: "Bill due after (days) when the supplier has no terms", requiresApproval: true },

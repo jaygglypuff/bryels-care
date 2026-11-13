@@ -20,6 +20,8 @@ export {
   type TermsInput,
 } from "./asl";
 export { createMaterialWithUsualSupplier } from "./usual-supplier";
+export { whatToBuy, type WhatToBuyRow } from "./what-to-buy"; // ADR-131
+export { listDeliveryProblems, decideDeliveryProblem, deliveryProblemKindWords, type DeliveryProblem } from "./delivery-problems"; // ADR-131
 export {
   createPurchaseRequest,
   updatePurchaseRequest,
@@ -51,6 +53,8 @@ export {
   exportPurchaseOrdersCsv,
   poFormOptions,
   currentPurchaseOrderDocument,
+  lastPurchasePrices,
+  type LastPrice,
   regeneratePoDocument,
   purchaseOrderReceivingHooks,
   type PoInput,

@@ -23,8 +23,8 @@ const pages = all.filter((p) => p.endsWith("page.tsx"));
 const isRedirect = (src: string) => /redirect\(/.test(src) && !/<(PageHeader|RecordHeader)/.test(src);
 
 describe("grade-5 purchasing and finance screens", () => {
-  it("covers the 36 screens listed in PAGE_REVIEW.md (17 purchasing + 19 finance)", () => {
-    expect(pages.length).toBe(36);
+  it("covers the 38 screens listed in PAGE_REVIEW.md (18 purchasing + 20 finance; ADR-131 added Delivery problems and Change the bill)", () => {
+    expect(pages.length).toBe(38);
   });
 
   it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro)", (rel) => {

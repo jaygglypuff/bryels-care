@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
-import { getInvoice, taxCodeOptionsFor } from "@/modules/finance";
+import { getInvoice, oneStepFor, taxCodeOptionsFor } from "@/modules/finance";
+import { customerEmailReady } from "@/modules/sales";
+import { invoiceGivenWords } from "@/lib/send-words";
 import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -47,10 +49,17 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const canCancel = ["draft", "submitted", "approved"].includes(i.status) && ctx.can("finance.invoice.create");
   const canVoid = i.status === "issued" && Number(i.paidAmount) === 0 && Number(i.creditedAmount) === 0 && ctx.can("finance.invoice.void");
   const payHref = `/finance/payments/new?counterparty=customer:${d.customer.id}&invoice=${i.id}`;
+  // ADR-131: below the owner's one-step amount finance saves the draft to the books alone, in one step.
+  const oneStep = canSubmit && ctx.can("finance.invoice.post") ? await oneStepFor(ctx, "invoice", i.totalAmount) : null;
+  // ADR-131 "Send really sends": a booked invoice is given to the customer by email or on paper, and says so.
+  const canGive = open && ctx.can("finance.invoice.post") && !i.givenVia;
+  const email = customerEmailReady();
+  const noTax = Number(i.taxAmount) === 0 && d.lines.every((l) => !l.taxCode);
   // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
   const doNow = (
     <>
-        {canSubmit && <FinanceCommand entity="invoice" id={i.id} command="submit" label="Send for approval" variant="cta" />}
+        {canSubmit && oneStep !== null && <FinanceCommand entity="invoice" id={i.id} command="book" label="Save to the books" password variant="cta" hint={`Below ₱${oneStep.toLocaleString("en-PH")} you do it alone in one step (set by the owner). It gets its number and the customer's days to pay start. After this it cannot be changed: a mistake is fixed with a credit (money back).`} />}
+        {canSubmit && oneStep === null && <FinanceCommand entity="invoice" id={i.id} command="submit" label="Send for approval" variant="cta" />}
         {canDecide && (
           <>
             <FinanceCommand entity="invoice" id={i.id} command="approve" label="Approve" note variant="cta" />
@@ -111,8 +120,13 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           <Banner tone="ok" title="Invoice made from the delivery.">Check the items and tax, then send it for approval.</Banner>
         </div>
       )}
+      {noTax && ["draft", "submitted", "approved"].includes(i.status) && (
+        <div className="mb-4" data-testid="invoice-no-tax">
+          <Banner tone="warn" title="Tax: not set up yet – ask your accountant">This invoice has no tax because no tax rate is set up. The accountant sets the rates under Money › Tax rates; until then every invoice goes out with ₱0.00 tax.</Banner>
+        </div>
+      )}
       {canSubmit ? (
-        <NextStepBox text="Next: check the items and the tax, then send it for approval.">{doNow}</NextStepBox>
+        <NextStepBox text={oneStep !== null ? "Next: check the items and the tax, then save it to the books." : "Next: check the items and the tax, then send it for approval."}>{doNow}</NextStepBox>
       ) : i.status === "draft" ? (
         <NextStep text="This invoice is a draft." waitingFor={await waitingFor(ctx, "finance.invoice.submit", i.siteId, "to send it for approval", "finance")} />
       ) : canDecide ? (
@@ -123,10 +137,24 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         <NextStepBox text="Next: save it to the books. It gets its number and the customer's days to pay start.">{doNow}</NextStepBox>
       ) : i.status === "approved" ? (
         <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.invoice.post", i.siteId, "to save it to the books", "finance", { exclude: [...(d.progress && !d.progress.posterMayEqualApprover ? d.progress.approvers : [])], operational: true })} />
+      ) : canGive ? (
+        <NextStepBox text={`${invoiceGivenWords(null, null)}. Next: give it to ${d.customer.name}.`}>
+          <div className="flex flex-col gap-2" data-testid="give-invoice">
+            {d.customer.email && email.ready ? (
+              <FinanceCommand entity="invoice" id={i.id} command="email" label={`Email to ${d.customer.email}`} variant="cta" />
+            ) : (
+              <p className="text-[14px] text-fg-2">{!d.customer.email ? `${d.customer.name} has no email address, so print it.` : "Email is not set up, so print it and give it to the customer."}</p>
+            )}
+            <LinkButton href={`/print/invoice/${i.id}`} target="_blank" variant={d.customer.email && email.ready ? "secondary" : "cta"}>
+              Print the invoice
+            </LinkButton>
+            <FinanceCommand entity="invoice" id={i.id} command="given" label="I printed it and gave it to the customer" variant="secondary" />
+          </div>
+        </NextStepBox>
       ) : canPay ? (
-        <NextStep text={`Next: when ${d.customer.name} pays, save the payment here.${i.overdue ? " This invoice is late." : ""}`} action={{ label: "Record a payment", href: payHref }} />
+        <NextStep text={`${invoiceGivenWords(i.givenVia, i.givenToCustomerAt ? fmtDate(i.givenToCustomerAt) : null)}. Next: when ${d.customer.name} pays, save the payment here.${i.overdue ? " This invoice is late." : ""}`} action={{ label: "Record a payment", href: payHref }} />
       ) : open ? (
-        <NextStep text="Sent to the customer." waitingFor={`Waiting for ${d.customer.name} to pay by ${fmtDate(i.dueDate)}.`} />
+        <NextStep text={`${invoiceGivenWords(i.givenVia, i.givenToCustomerAt ? fmtDate(i.givenToCustomerAt) : null)}.`} waitingFor={`Waiting for ${d.customer.name} to pay by ${fmtDate(i.dueDate)}.`} />
       ) : (
         <NextStep text={i.status === "paid" || i.status === "closed" ? "Paid in full. Nothing more to do." : i.status === "voided" ? "Cancelled (kept on record). Nothing more to do." : "Cancelled before it was saved to the books. Nothing more to do."} />
       )}

@@ -28,6 +28,8 @@ export async function purchaseOrderLinesForMatch(q: DbOrTx, organizationId: stri
     materialId: l.materialId,
     qtyOrderedBase: l.qtyBase,
     unitAmount: new Decimal(l.lineAmount).div(l.qtyBase).toFixed(10),
+    uomEntered: l.uomEntered,
+    unitAmountEntered: new Decimal(l.unitAmount).toString(),
     currency: l.currency,
   }));
 }

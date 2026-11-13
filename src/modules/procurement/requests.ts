@@ -289,6 +289,8 @@ export async function getPurchaseRequest(ctx: AuthContext, requestId: string) {
       convert: pr.status === "approved" && ctx.canAt("procurement.purchase_order.create", pr.siteId),
       seePrices: prices,
       seeTotal: prices || ctx.canAt("procurement.purchase_request.approve", pr.siteId),
+      /** ADR-131: whether the request carries an approved amount (a yes/no, not the amount). */
+      hasEstimate: pr.estimatedTotalAmount !== null,
     },
   };
 }
@@ -304,7 +306,9 @@ export async function convertibleRequestLines(ctx: AuthContext) {
     .innerJoin(materials, eq(materials.id, purchaseRequestLines.materialId))
     .where(and(eq(purchaseRequests.organizationId, ctx.organizationId), eq(purchaseRequests.siteId, siteId), eq(purchaseRequests.status, "approved"), sql`${purchaseRequestLines.convertedPoLineId} is null`))
     .orderBy(asc(purchaseRequests.requestNumber), asc(purchaseRequestLines.lineNo));
-  return rows.map((r) => ({ id: r.l.id, requestId: r.l.purchaseRequestId, requestNumber: r.number, neededByDate: r.neededBy, lineNo: r.l.lineNo, materialId: r.l.materialId, materialCode: r.code, materialName: r.name, qty: r.l.qtyEntered, uom: r.l.uomEntered, suggestedSupplierId: r.l.suggestedSupplierId }));
+  // ADR-131: the price the request was approved with prefills the order (people who may see prices only).
+  const prices = canSeePrices(ctx);
+  return rows.map((r) => ({ id: r.l.id, requestId: r.l.purchaseRequestId, requestNumber: r.number, neededByDate: r.neededBy, lineNo: r.l.lineNo, materialId: r.l.materialId, materialCode: r.code, materialName: r.name, qty: r.l.qtyEntered, uom: r.l.uomEntered, suggestedSupplierId: r.l.suggestedSupplierId, estimatedUnitAmount: prices && r.l.estimatedUnitAmount !== null ? new Decimal(r.l.estimatedUnitAmount).toString() : null }));
 }
 
 /** Pickers of the request form: active materials and active suppliers (organization master data). */

@@ -69,7 +69,7 @@ export type AllocationResult = {
   orderNumber: string;
   fullyAllocated: boolean;
   created: AllocationRow[];
-  shortfalls: { sku: string; ordered: string; short: string }[];
+  shortfalls: { sku: string; name?: string; ordered: string; short: string }[];
   skippedForShelfLife: { lotNumber: string; daysLeft: number }[];
   skippedForLotAge: { lotNumber: string; ageDays: number }[];
   minShelfLifeDays: number;
@@ -170,7 +170,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     if (!ALLOCATABLE_STATUSES.includes(o.status)) throw new DomainError("state", `Order ${o.orderNumber} is ${o.status.replace(/_/g, " ")}; only confirmed orders (or the remainder of a partial shipment) can be allocated.`);
 
     const lines = await tx
-      .select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot })
+      .select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode, productName: products.name, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot })
       .from(salesOrderLines)
       .innerJoin(products, eq(products.id, salesOrderLines.productId))
       .where(eq(salesOrderLines.salesOrderId, o.id))
@@ -251,7 +251,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
       }
       if (need.gt(0)) {
         result.fullyAllocated = false;
-        result.shortfalls.push({ sku: line.sku, ordered: D(line.qty).toString(), short: need.toString() });
+        result.shortfalls.push({ sku: line.sku, name: line.productName, ordered: D(line.qty).toString(), short: need.toString() });
       }
     }
     result.skippedForShelfLife = [...skipped].map(([lotNumber, daysLeft]) => ({ lotNumber, daysLeft }));
@@ -377,7 +377,7 @@ export async function openAllocationsForOrder(q: DbOrTx, orderId: string) {
 }
 
 export function describeShortfall(r: AllocationResult, prefix: string): string {
-  const parts = r.shortfalls.map((s) => `${s.sku}: ${fmtQty(s.short, "pcs", 0)} short of ${fmtQty(s.ordered, "pcs", 0)} ordered`);
+  const parts = r.shortfalls.map((s) => `${s.name ?? s.sku}: ${fmtQty(s.short, "pcs", 0)} short of ${fmtQty(s.ordered, "pcs", 0)} ordered`);
   let msg = `${prefix} Not enough released stock — ${parts.join("; ")}. The order stays confirmed; allocate again when more stock is released.`;
   if (r.skippedForShelfLife.length) {
     msg += ` Lots skipped because they are below the customer's minimum shelf life of ${r.minShelfLifeDays} days: ${r.skippedForShelfLife.map((s) => `${s.lotNumber} (${s.daysLeft} days left)`).join(", ")}.`;

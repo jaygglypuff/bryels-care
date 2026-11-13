@@ -4,7 +4,7 @@ import { Button, Field, Input, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { convertQuoteAction, quoteCommandAction } from "../actions";
 
-export function QuoteCommand({ quoteId, command, label, reason, note, variant = "secondary" }: { quoteId: string; command: "submit" | "approve" | "return" | "accept" | "reject" | "void"; label: string; reason?: boolean; note?: boolean; variant?: "secondary" | "cta" | "danger" }) {
+export function QuoteCommand({ quoteId, command, label, reason, note, variant = "secondary" }: { quoteId: string; command: "submit" | "approve" | "return" | "accept" | "reject" | "void" | "email" | "given"; label: string; reason?: boolean; note?: boolean; variant?: "secondary" | "cta" | "danger" }) {
   const [open, setOpen] = useState(!reason);
   if (!open)
     return (
@@ -34,7 +34,7 @@ export function QuoteCommand({ quoteId, command, label, reason, note, variant = 
 
 export function ConvertQuoteForm({ quoteId, today }: { quoteId: string; today: string }) {
   return (
-    <ActionForm action={convertQuoteAction} hidden={{ quoteId }} submit="Make it an order" variant="cta" pending="Making the order…">
+    <ActionForm action={convertQuoteAction} hidden={{ quoteId }} submit="Make a draft order" variant="cta" pending="Making the draft order…">
       {(fe) => (
         <div className="grid grid-cols-1 gap-3">
           <Field label="Deliver by" htmlFor="cv-date" error={fe.requestedDeliveryOn ?? fe.form}>

@@ -33,7 +33,9 @@ const WORDS: Record<string, Word> = {
   invoiced: { tone: "ok", label: "Billed", icon: "ok" },
   closed: { tone: "neu", label: "Done", icon: "ok" },
   cancelled: { tone: "neu", label: "Cancelled", icon: "x" },
-  sent: { tone: "info", label: "Sent to customer", icon: "truck" },
+  // ADR-131: "Sent" only once it really reached the customer (quotes.given_via); before, it is ready to give.
+  sent: { tone: "info", label: "Ready to give the customer", icon: "draft" },
+  sent_given: { tone: "info", label: "Given to the customer", icon: "truck" },
   accepted: { tone: "ok", label: "Customer said yes", icon: "ok" },
   rejected: { tone: "rej", label: "Not accepted", icon: "x" },
   expired: { tone: "exp", label: "Too old", icon: "x" },

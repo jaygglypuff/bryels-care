@@ -33,13 +33,20 @@ export type W4b = Kit & {
   procurement: AuthContext;
 };
 
-export async function loadW4b(opts: { draftAtDispatch?: boolean } = {}): Promise<W4b> {
+export async function loadW4b(opts: { draftAtDispatch?: boolean; oneStepBelow?: number } = {}): Promise<W4b> {
   registerAppHooks();
   const kit = await loadKit();
   // The W4B suites exercise "Create invoice from a dispatched order" by hand, so the invoice draft made at
   // dispatch (consultant review 2026-10-30, finance.invoice.draft_at_dispatch, default on) is switched off for
   // them; tests/integration/finance/invoice-at-dispatch.test.ts covers the automatic draft.
   await setOrgSetting(kit.orgId, "finance.invoice.draft_at_dispatch", opts.draftAtDispatch ?? false);
+  // The W4B suites check the approval rules of invoices and payments themselves, so ADR-131's "one person, one step
+  // below the owner's amount" (default ₱50,000) is off for them; tests/integration/finance/r5-one-step.test.ts covers it.
+  await setOrgSetting(kit.orgId, "finance.invoice.one_step_below", opts.oneStepBelow ?? 0);
+  await setOrgSetting(kit.orgId, "finance.payment.one_step_below", opts.oneStepBelow ?? 0);
+  // Their orders go to customers without a credit limit and may be large; ADR-131's "no limit: big orders wait for an
+  // OK" (sales.credit.no_limit_check_above) is tested in tests/integration/sales/r5-order-changes.test.ts.
+  await setOrgSetting(kit.orgId, "sales.credit.no_limit_check_above", 100_000_000);
   const both = [kit.nfd, kit.rvs];
   return {
     ...kit,

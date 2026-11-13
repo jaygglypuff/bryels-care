@@ -90,7 +90,8 @@ describe("ADR-075 system-assigned codes", () => {
     expect(s.code).toMatch(/^SUP-\d{4}$/); // the seed already uses SUP-0001..: those numbers are skipped
     expect(["SUP-0001", "SUP-0002"]).not.toContain(s.code);
     const c = await createCustomer(sales, { code: "", name: "Auto Customer (fictional)", minShelfLifeDays: 0, shipToAddress: "1 Test Street, Quezon City" });
-    expect(c.code).toBe("CUS-0001");
+    expect(c.code).toMatch(/^CUS-\d{3}$/); // ADR-131: the 3-digit shape of the seeded customers; seeded numbers are skipped
+    expect(["CUS-001", "CUS-002", "CUS-003"]).not.toContain(c.code);
     const [w] = await db.select().from(warehouses).where(eq(warehouses.siteId, kit.nfd.id));
     const l = await createLocation(admin, { warehouseId: w.id, code: "", name: "Auto rack (fictional)", kind: "storage" });
     expect(l.code).toBe("LOC-0001");

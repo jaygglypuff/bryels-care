@@ -7,13 +7,13 @@ import { approveOrderAction, reorderAction, returnOrderAction, submitOrderAction
 /** Draft → submit (customer requirements, minimum order, credit and approval check). The server decides: confirmed, or pending approval with the reason. */
 export function SubmitOrderForm({ orderId }: { orderId: string }) {
   return (
-    <ActionForm action={submitOrderAction} hidden={{ orderId }} submit="Send the order" pending="Checking credit and approvals…" variant="cta" size="lg" />
+    <ActionForm action={submitOrderAction} hidden={{ orderId }} submit="Confirm the order" pending="Checking credit and approvals…" variant="cta" size="lg" />
   );
 }
 
 export function ApproveOrderForm({ orderId }: { orderId: string }) {
   return (
-    <ActionForm action={approveOrderAction} hidden={{ orderId }} submit="Approve and confirm" pending="Approving…" variant="cta">
+    <ActionForm action={approveOrderAction} hidden={{ orderId }} submit="Approve and confirm" pending="Approving…" variant="cta" confirm="Approve and confirm this customer order? Next, the stock is set aside for it.">
       {(fe) => (
         <Field label="Approval note (optional)" htmlFor="approve-note" error={fe.note}>
           <Textarea id="approve-note" name="note" maxLength={500} className="min-h-[56px]" placeholder="e.g. Customer paid the overdue invoice" />

@@ -102,7 +102,7 @@ const SO_STAGES: readonly Stage[] = [
  * order status cannot: a delivery taken from the shelf waits for the second check ("picked"), and a sent delivery
  * with its proof saved ("delivered") is at Proof of delivery.
  */
-export function salesOrderSteps(status: string, opts: { delivery?: string | null } = {}): RecordStep[] {
+export function salesOrderSteps(status: string, opts: { delivery?: string | null; setAside?: { done: number; of: number } | null } = {}): RecordStep[] {
   if (status === "cancelled") return stopped("Cancelled");
   const steps = strip(SO_STAGES, status);
   const at = (label: string) => SO_STAGES.findIndex((s) => s.label === label);
@@ -110,6 +110,8 @@ export function salesOrderSteps(status: string, opts: { delivery?: string | null
     const i = at(label);
     return SO_STAGES.map((s, k) => ({ label: k === i ? current : s.label, state: k < i ? "done" : k === i ? "current" : "upcoming" }));
   };
+  // ADR-131 (B-owner bug B10): part of the stock set aside: the strip says "Set aside 70 of 100", like the lines.
+  if (status === "confirmed" && opts.setAside && opts.setAside.done > 0 && opts.setAside.done < opts.setAside.of) return moveTo("Set aside", `Set aside ${opts.setAside.done.toLocaleString("en-PH")} of ${opts.setAside.of.toLocaleString("en-PH")}`);
   if (status === "picking" && opts.delivery === "picked") return moveTo("Second check of the box", "Waiting for the second check");
   if (status === "shipped" && opts.delivery === "delivered") return moveTo("Proof of delivery", "Delivered");
   return steps;

@@ -110,17 +110,17 @@ export async function normalizePo(tx: Tx, ctx: AuthContext, siteId: string, inpu
     const f = (k: string) => `lines.${i}.${k}`;
     const mat = mats.find((m) => m.id === l.materialId);
     if (!mat) throw new DomainError("validation", `Line ${n}: choose a material.`, { field: f("materialId") });
-    if (mat.status !== "active") throw new DomainError("validation", `Line ${n}: ${mat.code} is ${mat.status} and cannot be ordered.`, { field: f("materialId") });
+    if (mat.status !== "active") throw new DomainError("validation", `${mat.name} is ${mat.status === "inactive" ? "no longer used" : mat.status} and cannot be ordered.`, { field: f("materialId") });
     const { supplierMaterial: sm } = await assertAslApproved(tx, ctx.organizationId, supplier.id, mat.id, f("materialId"));
     const qty = parseDecimal(l.qty, f("qty"), `Line ${n} quantity`);
     const uom = (l.uom || sm.priceUom || mat.baseUom).trim();
     const qtyBase = await toBase(tx, ctx.organizationId, mat, qty, uom);
-    if (!qtyBase) throw new DomainError("validation", `Line ${n}: ${uom} cannot be converted to ${mat.code}'s base unit ${mat.baseUom} (V-UOM).`, { field: f("uom") });
-    if (mat.baseUom === "pcs" && !qtyBase.isInteger()) throw new DomainError("validation", `Line ${n}: ${mat.code} is counted in pieces; order a whole number.`, { field: f("qty") });
+    if (!qtyBase) throw new DomainError("validation", `${mat.name}: ${uom} does not fit this item (it is counted in ${mat.baseUom}). Choose another unit.`, { field: f("uom") });
+    if (mat.baseUom === "pcs" && !qtyBase.isInteger()) throw new DomainError("validation", `${mat.name} is counted in pieces: type a whole number.`, { field: f("qty") });
     // Price: entered (only by someone who may see prices) or the approved pair's price.
     let unit = prices ? optDecimal(l.unitAmount, f("unitAmount"), `Line ${n} unit price`, { dp: 4, allowZero: true }) : null;
     unit ??= await priceFor(tx, ctx.organizationId, mat, sm, uom);
-    if (!unit) throw new DomainError("validation", `Line ${n}: enter the unit price (no supplier price is recorded for ${mat.code} per ${uom}).`, { field: f("unitAmount") });
+    if (!unit) throw new DomainError("validation", `Type the price of ${mat.name} (per ${uom}).`, { field: f("unitAmount") });
     const lead = sm.leadTimeDays ?? supplier.defaultLeadTimeDays ?? 0;
     const minDate = addDaysIso(orderDate, lead);
     const expectedDate = optDate(l.expectedDate, f("expectedDate"), `Line ${n} expected date`) ?? minDate;
@@ -293,7 +293,7 @@ export type RequestCover =
  * own approval rule asks for at this amount; and the request's approver must not be the person who made or submits
  * the order. Anything else follows the normal approval rule. Read only (the caller holds the PO row lock).
  */
-export async function requestApprovalCover(tx: DbOrTx, organizationId: string, po: PoRow, lines: PoLineRow[], submitterId: string | null = po.submittedBy): Promise<RequestCover> {
+export async function requestApprovalCover(tx: DbOrTx, organizationId: string, po: PoRow, lines: PoLineRow[], submitterId: string | null = po.submittedBy, opts: { samePersonAllowed?: boolean } = {}): Promise<RequestCover> {
   const live = lines.filter((l) => l.lineStatus !== "cancelled");
   if (!live.length || live.some((l) => !l.purchaseRequestLineId)) return { covered: false, why: live.some((l) => l.purchaseRequestLineId) ? "not_all_lines" : "no_request" };
   const prl = await tx
@@ -306,14 +306,16 @@ export async function requestApprovalCover(tx: DbOrTx, organizationId: string, p
     const r = prl.find((x) => x.l.id === l.purchaseRequestLineId);
     if (!r || !["approved", "converted"].includes(r.pr.status) || !r.pr.approvedBy || r.pr.siteId !== po.siteId) return { covered: false, why: "no_request" };
     if (r.l.materialId !== l.materialId) return { covered: false, why: "item" };
-    if (!r.l.suggestedSupplierId || r.l.suggestedSupplierId !== po.supplierId) return { covered: false, why: "supplier" };
+    // ADR-131 (owner 2026-11-08): a request that named no supplier is covered for any supplier we may buy the item from
+    // (the approved supplier list is checked on every line); a request that named one is covered for that one only.
+    if (r.l.suggestedSupplierId && r.l.suggestedSupplierId !== po.supplierId) return { covered: false, why: "supplier" };
     if (new Decimal(l.qtyBase).gt(r.l.qtyBase)) return { covered: false, why: "quantity" };
     if (r.l.estimatedUnitAmount === null) return { covered: false, why: "no_estimate" };
     approved = approved.plus(new Decimal(r.l.qtyEntered).mul(r.l.estimatedUnitAmount));
   }
   if (new Decimal(po.totalAmount).gt(approved.toDecimalPlaces(4))) return { covered: false, why: "amount" };
   const prs = [...new Map(prl.map((r) => [r.pr.id, r.pr])).values()];
-  if (prs.some((pr) => pr.approvedBy === po.createdBy || pr.approvedBy === po.submittedBy || pr.approvedBy === submitterId)) return { covered: false, why: "same_person" };
+  if (!opts.samePersonAllowed && prs.some((pr) => pr.approvedBy === po.createdBy || pr.approvedBy === po.submittedBy || pr.approvedBy === submitterId)) return { covered: false, why: "same_person" };
   const poRule = await approvalProgress(tx, organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
   for (const pr of prs) {
     const prProgress = await approvalProgress(tx, organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: { amount: pr.estimatedTotalAmount ?? "unbounded" } });
@@ -333,7 +335,13 @@ export async function submitPurchaseOrder(ctx: AuthContext, input: { purchaseOrd
     await transitionPo(tx, ctx, po, "submitted", { set: { submittedBy: ctx.userId, submittedAt: new Date() } });
     await audit(tx, ctx, { action: "procurement.purchase_order.submitted", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { status: "submitted", total: po.totalAmount } });
     // ADR-110 C15: one approval per purchase. Within what the request's approver approved, the order needs no second approval.
-    const cover = await requestApprovalCover(tx, ctx.organizationId, po, lines, ctx.userId);
+    let cover = await requestApprovalCover(tx, ctx.organizationId, po, lines, ctx.userId);
+    // ADR-131 (B-owner problem 7): the owner or site manager who approved the request and now makes the order would
+    // approve it themselves anyway (ADR-088 §2), so their one approval carries over; recorded as their own request.
+    if (!cover.covered && cover.why === "same_person" && !ctx.sodConflictAt(ctx.userId, po.siteId)) {
+      const again = await requestApprovalCover(tx, ctx.organizationId, po, lines, ctx.userId, { samePersonAllowed: true });
+      if (again.covered && !ctx.sodBlocksAt(true, "Own request to buy carried over to the purchase order (one approval per purchase)", po.siteId)) cover = again;
+    }
     if (cover.covered) {
       await transitionPo(tx, ctx, po, "approved", { reason: `Approved with request ${cover.requestNumbers.join(", ")}`, set: { approvedBy: cover.approvedBy, approvedAt: new Date(), approvalNote: `Approved with request to buy ${cover.requestNumbers.join(", ")} (one approval per purchase).` } });
       await audit(tx, ctx, {
@@ -516,12 +524,21 @@ export async function sendPurchaseOrder(ctx: AuthContext, input: { purchaseOrder
   });
   let sendResult: string = out.to ? "pending" : "download";
   if (out.to && !out.replayed) {
-    const res = await sendEmail({ to: out.to, subject: `Purchase order ${out.poNumber}`, text: out.text, template: "procurement.purchase_order", organizationId: out.organizationId });
-    sendResult = res.status;
-    await db.update(purchaseOrders).set({ sendResult }).where(eq(purchaseOrders.id, out.purchaseOrderId));
-    await audit(db, ctx, { action: "procurement.purchase_order.emailed", entityType: "purchase_order", entityId: out.purchaseOrderId, entityNumber: out.poNumber, after: { to: out.to, status: res.status, provider: res.provider } });
+    // ADR-131 (bug B1): the order is already sent (committed above). Nothing after this point may report the send as
+    // failed: email trouble is a result ("failed" / "not set up"), never an error, and the screen offers Print.
+    try {
+      const res = await sendEmail({ to: out.to, subject: `Purchase order ${out.poNumber}`, text: out.text, template: "procurement.purchase_order", organizationId: out.organizationId });
+      sendResult = res.status;
+      await db.transaction(async (tx) => {
+        await tx.update(purchaseOrders).set({ sendResult }).where(eq(purchaseOrders.id, out.purchaseOrderId));
+        await audit(tx, ctx, { action: "procurement.purchase_order.emailed", entityType: "purchase_order", entityId: out.purchaseOrderId, entityNumber: out.poNumber, after: { to: out.to, status: res.status, provider: res.provider } });
+      });
+    } catch (e) {
+      console.error(`[procurement] ${out.poNumber} was sent but recording the email outcome failed: ${(e as Error).message}`);
+      if (sendResult === "pending") sendResult = "failed";
+    }
   }
-  return { purchaseOrderId: out.purchaseOrderId, documentId: out.documentId, documentNumber: out.documentNumber, emailedTo: out.to, sendResult, replayed: out.replayed };
+  return { purchaseOrderId: out.purchaseOrderId, poNumber: out.poNumber, documentId: out.documentId, documentNumber: out.documentNumber, emailedTo: out.to, sendResult, replayed: out.replayed };
 }
 
 /** Supplier confirmation reference and promised date (W04-06). */
@@ -678,6 +695,23 @@ export const purchaseOrderReceivingHooks: ReceivingPoHooks = {
     const allDone = live.every((l) => l.lineStatus === "received" || l.lineStatus === "short_closed");
     await transitionPo(tx, ctx, po, allDone ? "received" : "partially_received");
     await audit(tx, ctx, { action: "procurement.purchase_order.receipt_posted", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { receipt: args.receiptLabel, receiptId: args.receiptId, status: po.status, lines: progress } });
+    // ADR-131 (C-office problem 11): a short, damaged or wrong delivery reaches purchasing as a "Delivery problem" to decide.
+    const problems = args.lines.filter((l) => l.discrepancyKind && ["short", "damaged", "wrong_item"].includes(l.discrepancyKind));
+    if (problems.length) {
+      const [s] = await tx.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, po.supplierId));
+      const words = { short: "less than ordered", damaged: "damaged", wrong_item: "a wrong item" } as Record<string, string>;
+      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, {
+        organizationId: ctx.organizationId,
+        siteId: po.siteId,
+        kind: "procurement.delivery_problem",
+        severity: "warning",
+        title: `Delivery problem: ${s?.name ?? "supplier"} (${po.poNumber})`,
+        body: `The delivery ${args.receiptLabel} came ${[...new Set(problems.map((p) => words[p.discrepancyKind!]))].join(" and ")}. Decide: the supplier sends the rest, ask them for money back, or the rest is not needed.`,
+        entityType: "purchase_order",
+        entityId: po.id,
+        link: `/procurement/orders/${po.id}#delivery-problems`,
+      });
+    }
   },
 
   async onReverse(tx, ctx, args) {
@@ -884,6 +918,26 @@ export async function exportPurchaseOrdersCsv(ctx: AuthContext, f: PoFilter = {}
 }
 
 export type PoLine = PoLineRow;
+
+export type LastPrice = { materialId: string; unitAmount: string; uom: string; poNumber: string; orderDate: string };
+
+/**
+ * ADR-131 (C-office problem 8): the last price paid to this supplier for each item ("Last time ₱9.00 on PO-26-00001"),
+ * from the newest sent or received purchase order at the caller's sites. Empty for people who may not see prices.
+ */
+export async function lastPurchasePrices(ctx: AuthContext, supplierId: string): Promise<LastPrice[]> {
+  ctx.require("procurement.purchase_order.create");
+  if (!canSeePrices(ctx) || !isUuid(supplierId)) return [];
+  const rows = await db
+    .select({ materialId: purchaseOrderLines.materialId, unitAmount: purchaseOrderLines.unitAmount, uom: purchaseOrderLines.uomEntered, poNumber: purchaseOrders.poNumber, orderDate: purchaseOrders.orderDate })
+    .from(purchaseOrderLines)
+    .innerJoin(purchaseOrders, eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId))
+    .where(and(eq(purchaseOrders.organizationId, ctx.organizationId), eq(purchaseOrders.supplierId, supplierId), inArray(purchaseOrders.siteId, ctx.allowedSiteIds), inArray(purchaseOrders.status, ["sent", "partially_received", "received", "closed"])))
+    .orderBy(desc(purchaseOrders.orderDate), desc(purchaseOrders.poNumber));
+  const seen = new Map<string, LastPrice>();
+  for (const r of rows) if (!seen.has(r.materialId)) seen.set(r.materialId, { ...r, unitAmount: new Decimal(r.unitAmount).toString() });
+  return [...seen.values()];
+}
 
 /** Pickers of the PO form at the caller's current site: suppliers (active, not suspended) and warehouses. */
 export async function poFormOptions(ctx: AuthContext) {

@@ -272,12 +272,60 @@ function assertCreditInput(ctx: AuthContext, input: { creditLimitAmount?: string
 }
 
 /** Creates a customer; with `{ tx }` (W3C imports) it runs in a savepoint of the caller's transaction. */
-export async function createCustomer(ctx: AuthContext, input: CustomerInput, opts: InTx = {}) {
+/** The name as people compare it: lower case, no punctuation, single spaces, a trailing plural "s" dropped per word. */
+export function customerNameKey(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w))
+    .join(" ");
+}
+/** The last 10 digits of a phone number (+63 917 555 0101 = 0917 555 0101). */
+export const phoneKey = (p: string | null | undefined) => (p ?? "").replace(/\D+/g, "").slice(-10);
+
+export type SimilarCustomer = { id: string; code: string; name: string; phone: string | null; email: string | null; why: ("phone" | "email" | "name")[] };
+
+/**
+ * ADR-131 (C-office problem 10, bug C-B2): customers that look like the one being added: the same phone (last 10
+ * digits), the same email (any case) or nearly the same name (case, punctuation and a plural "s" ignored). Organization
+ * master data, read with `masterdata.customer.view`. At most 5.
+ */
+export async function findSimilarCustomers(ctx: AuthContext, input: { name?: string | null; phone?: string | null; email?: string | null }, q: DbOrTx = db): Promise<SimilarCustomer[]> {
+  ctx.require("masterdata.customer.view");
+  const name = customerNameKey(input.name ?? "");
+  const phone = phoneKey(input.phone);
+  const email = (input.email ?? "").trim().toLowerCase();
+  if (!name && phone.length < 7 && !email) return [];
+  const rows = await q.select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, email: customers.email }).from(customers).where(eq(customers.organizationId, ctx.organizationId));
+  const out: SimilarCustomer[] = [];
+  for (const r of rows) {
+    const why: SimilarCustomer["why"] = [];
+    if (phone.length >= 7 && phoneKey(r.phone) === phone) why.push("phone");
+    if (email && (r.email ?? "").trim().toLowerCase() === email) why.push("email");
+    if (name && customerNameKey(r.name) === name) why.push("name");
+    if (why.length) out.push({ ...r, why });
+  }
+  return out.slice(0, 5);
+}
+
+export async function createCustomer(ctx: AuthContext, input: CustomerInput & { duplicateCheck?: boolean; confirmedDifferent?: boolean }, opts: InTx = {}) {
   ctx.require("masterdata.customer.create");
   assertCreditInput(ctx, input);
   const shipTo = input.shipTo ?? (input.shipToAddress ? legacyAddress(input.shipToAddress) : null);
   if (!shipTo) throw new DomainError("validation", "Enter the ship-to address.", { field: "shipTo.line1" });
   return runInTx(opts, async (tx) => {
+    // ADR-131: the New customer screen asks before saving a customer that looks like one we already have.
+    if (input.duplicateCheck && !input.confirmedDifferent && ctx.can("masterdata.customer.view")) {
+      const similar = await findSimilarCustomers(ctx, { name: input.name, phone: input.phone, email: input.email }, tx);
+      if (similar.length) {
+        const s = similar[0];
+        throw new DomainError("conflict", `Already a customer? ${s.name} (${s.code})${s.phone ? ` · ${s.phone}` : ""} has the same ${s.why.join(" and ")}. Open it, or tick “This is a different customer”.`, { code: "POSSIBLE_DUPLICATE", field: "name", similar });
+      }
+    }
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "masterdata.customer.create", async () => {
       const taken = async (c: string) => (await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.code, c))).limit(1)).length > 0;
       const typed = input.code?.trim().toUpperCase() || null;

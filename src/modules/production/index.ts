@@ -124,6 +124,9 @@ export {
   customerOrdersShort,
   type ShortCustomerLine,
   productionOrdersForSalesOrder,
+  orderCanShipFrom,
+  earlierOrdersNeedingSameStock,
+  type EarlierOrder,
   MAKE_FOR_SALES_STATUSES,
   batchPlanWords,
   type ProductionOrderInput,
@@ -214,4 +217,4 @@ export { plannedBatchSizesG } from "./work-orders";
 export { batchBoxInfo, batchBoxInfoFor, planBatchBoxes, batchBoxPrintJobs, currentBoxPlan, leftOverWrappers, returnLeftOverWrappers, BOX_LABEL_KIND, type BatchBoxInfo, type PlanBoxesResult, type LeftOverWrapper } from "./batch-boxes";
 export { floorCheckNext, productionOrderNext, batchQaNext } from "./next-approver"; // docs/NEXT_APPROVER.md
 export { siteOrderCover, comingStock, COVER_ORDER_STATUSES, type SiteOrderCover, type CoverOrderMeta } from "./order-cover";
-export { coverOrders, comingWords, type ComingSource, type ComingKind, type LineCover, type OrderCoverResult, type OrderCoverState } from "./order-cover-rule";
+export { coverOrders, comingWords, canShipFrom, type CanShipFrom, type ComingSource, type ComingKind, type LineCover, type OrderCoverResult, type OrderCoverState } from "./order-cover-rule";

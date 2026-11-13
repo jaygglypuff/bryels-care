@@ -1,4 +1,6 @@
 export * from "./orders";
+export { changeOrderLine, cancelOrderLine, AMENDABLE_ORDER_STATUSES, type LineChangeResult } from "./order-amend"; // ADR-131
+export { emailQuoteToCustomer, markQuoteGiven, emailOrderConfirmation, customerEmailReady, type CustomerEmailResult } from "./customer-copies"; // ADR-131
 export * from "./allocation";
 export * from "./shipments";
 export * from "./customers";

@@ -78,9 +78,9 @@ describe("ADR-110 C15: one approval per purchase", () => {
     expect(submitted).toMatchObject({ notCoveredBecause: "supplier" });
   });
 
-  it("no supplier or no estimate on the request, or more than requested: the normal approval applies", async () => {
+  it("no estimate on the request, or more than requested: the normal approval applies (a request with no supplier is covered, ADR-131)", async () => {
     const noSupplier = await orderFrom(await approvedRequest({ supplier: null }));
-    expect(noSupplier.submitted).toMatchObject({ status: "submitted", notCoveredBecause: "supplier" });
+    expect(noSupplier.submitted).toMatchObject({ status: "approved" });
     const noEstimate = await orderFrom(await approvedRequest({ estimate: null }));
     expect(noEstimate.submitted).toMatchObject({ status: "submitted", notCoveredBecause: "no_estimate" });
     const more = await orderFrom(await approvedRequest({ qty: "50", estimate: "1000" }), { qty: "60" });

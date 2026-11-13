@@ -7,8 +7,10 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
-import { fulfilmentForOrder, getOrder, manilaToday, orderDaysLate, salesBusinessDate } from "@/modules/sales";
-import { productionOrdersForSalesOrder, salesOrderShortfalls, type MakeForLine } from "@/modules/production";
+import { AMENDABLE_ORDER_STATUSES, customerEmailReady, fulfilmentForOrder, getOrder, manilaToday, orderDaysLate, salesBusinessDate } from "@/modules/sales";
+import { earlierOrdersNeedingSameStock, orderCanShipFrom, productionOrdersForSalesOrder, salesOrderShortfalls, type MakeForLine } from "@/modules/production";
+import { fmtDayMonth } from "@/lib/qty";
+import { AllocateForm, EmailConfirmation, LineChange } from "./order-actions";
 import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -16,7 +18,6 @@ import { Banner, StatusChip } from "@/ui/status";
 import { RecordHeader } from "@/ui/record";
 import { salesOrderSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../forbidden";
-import { AllocateForm } from "./order-actions";
 import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
 import { askPlannerToMakeAction, releaseAllocationsAction, startPickAction } from "../fulfilment-actions";
 import { Cmd, ReasonCmd } from "../fulfilment-forms";
@@ -33,10 +34,11 @@ import { DeleteDraftButton } from "../../delete-draft-button";
 export const metadata = { title: "Customer order" };
 
 const DONE: Record<string, string> = {
-  confirmed: "Order confirmed. The warehouse can now set aside the stock.",
-  pending_approval: "Sent. The order needs approval before the warehouse can set aside the stock.",
+  confirmed: "Order confirmed. Next: the stock is set aside for it.",
+  pending_approval: "Saved. The order needs an OK before it is confirmed.",
   edited: "Draft saved.",
-  reordered: "New draft made from the earlier order at today's prices. Check it, then send it.",
+  fromquote: "Draft order made from the price offer. Check it, then press “Confirm the order”.",
+  reordered: "New draft made from the earlier order at today's prices. Check it, then confirm it.",
   allocated: "Stock set aside (the oldest expiry first). Next: get it from the shelf.",
   dispatched: "Sent out: stock taken off the shelf. Delivery receipt",
   delivered: "Delivery recorded.",
@@ -74,6 +76,16 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const canMake = ctx.can("production.work_order.create");
   const canAsk = !canMake && ctx.can("sales.sales_order.create");
   const beingMade = ctx.can("production.work_order.view") ? await productionOrdersForSalesOrder(ctx, order.id) : [];
+  // ADR-131: when can it ship, who is due earlier, can lines be changed, can the confirmation be emailed.
+  const shipFrom = await orderCanShipFrom(ctx, order.id).catch(() => null);
+  const shipFromText = !shipFrom || ["draft", "cancelled", "closed"].includes(status) ? null : shipFrom.date ? (shipFrom.date === manilaToday() ? "today" : fmtDayMonth(shipFrom.date)) : shipFrom.asked ? "not known yet – the planner has been asked" : "not known yet – it needs making";
+  const earlier = status === "confirmed" ? await earlierOrdersNeedingSameStock(ctx, order.id).catch(() => []) : [];
+  const canAmend = (AMENDABLE_ORDER_STATUSES as readonly string[]).includes(status) && ctx.can("sales.sales_order.edit");
+  const confirmable = ["confirmed", "allocated", "picking", "packed", "partially_shipped"].includes(status);
+  const canGiveConfirmation = confirmable && ctx.can("sales.sales_order.submit");
+  const emailReady = customerEmailReady().ready;
+  const setAsideNow = lines.reduce((s, l) => s.plus(l.allocated), new Decimal(0));
+  const allocateConfirm = `Set the stock aside for ${customer.name}?${earlier.length ? ` ${earlier.map((e) => `Order ${e.orderNumber} (${e.customerName}, due ${fmtDayMonth(e.requestedDeliveryOn)}) is due earlier and also needs this stock.`).join(" ")} Stock should go first to the order due first.` : ""}`;
   const warnings = order.warnings ?? [];
   const fulfilment = await fulfilmentForOrder(ctx, order.id);
   const canSubmit = ctx.can("sales.sales_order.submit");
@@ -90,11 +102,11 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const next = await (async () => {
     if (status === "draft")
       return canSubmit ? (
-        <DoNext text="Next: send the order. The system checks the customer's credit; within limits it is confirmed at once.">
+        <DoNext text="Next: confirm the order. The system checks the customer's credit; within limits it is confirmed at once. Nothing is sent to the customer.">
           <SubmitOrderForm orderId={order.id} />
         </DoNext>
       ) : (
-        <DoNext text="This order is a draft." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.sales_order.submit", order.siteId, "the sales team")} to send it.`} />
+        <DoNext text="This order is a draft." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.sales_order.submit", order.siteId, "the sales team")} to confirm it.`} />
       );
     if (status === "pending_approval" || status === "submitted")
       return approval?.canApprove ? (
@@ -108,7 +120,12 @@ export default async function OrderDetailPage({ params, searchParams }: { params
     if (status === "confirmed")
       return canAllocate ? (
         <DoNext text={hasAllocations ? "Next: set aside the rest of the stock." : "Next: set aside the stock for this order (the oldest expiry first)."}>
-          <AllocateForm orderId={order.id} label={hasAllocations ? "Set aside the rest" : "Set aside the stock"} />
+          {earlier.length > 0 && (
+            <p className="mb-2 rounded-[10px] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="earlier-order">
+              {earlier.map((e) => `Order ${e.orderNumber} (${e.customerName}, due ${fmtDayMonth(e.requestedDeliveryOn)}) is due earlier and also needs this stock.`).join(" ")} Stock goes first to the order due first: set that one aside first unless you agreed otherwise.
+            </p>
+          )}
+          <AllocateForm orderId={order.id} label={hasAllocations ? "Set aside the rest" : "Set aside the stock"} confirm={allocateConfirm} />
         </DoNext>
       ) : (
         <DoNext text="Order confirmed." waitingFor={`Waiting for ${await whoDoes(ctx, "inventory.allocation.create", order.siteId, "the warehouse")} to set aside the stock.`} />
@@ -161,9 +178,11 @@ export default async function OrderDetailPage({ params, searchParams }: { params
         statusLabel={salesWord(status)}
         meta={[
           ["Deliver by", fmtDate(order.requestedDeliveryOn)],
+          ...(shipFromText ? ([["Can ship from", <span key="csf" data-testid="can-ship-from">{shipFromText}</span>]] as [string, React.ReactNode][]) : []),
           ["Total", <Money key="t" value={total} />],
         ]}
         steps={salesOrderSteps(status, {
+          setAside: { done: setAsideNow.toNumber(), of: totalPcs.toNumber() },
           // ADR-110 C0: the delivery tells "waiting for the second check" and "proof of delivery saved".
           delivery: shipments.some((x) => x.status === "picked") ? "picked" : shipments.length > 0 && shipments.filter((x) => !["cancelled", "reversed"].includes(x.status)).every((x) => x.status === "delivered") ? "delivered" : null,
         })}
@@ -180,6 +199,19 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             <Help screen="sales.order" />
             <MoreMenu compact>
               <div className="flex flex-col gap-3">
+                {canGiveConfirmation && (
+                  <div className="flex flex-col gap-2" data-testid="order-confirmation">
+                    <p className="text-[13px] text-fg-2">Give the customer an order confirmation (what, how many, price, deliver by, can ship from).</p>
+                    <LinkButton href={`/print/order-confirmation/${order.id}`} target="_blank" variant="secondary">
+                      Print the order confirmation
+                    </LinkButton>
+                    {customer.email && emailReady ? (
+                      <EmailConfirmation orderId={order.id} to={customer.email} canShipFromText={shipFromText ? `Can ship from: ${shipFromText}.` : ""} />
+                    ) : (
+                      <p className="text-[13px] text-muted">{customer.email ? "Email is not set up: print it instead." : "No email address for this customer: print it instead."}</p>
+                    )}
+                  </div>
+                )}
                 {canReorder && (
                   <div>
                     <p className="mb-2 text-[14px] font-medium">Order the same again</p>
@@ -204,7 +236,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                     <DeleteDraftButton kind="sales_order" id={order.id} what="this customer order" />
                   </div>
                 )}
-                {!canReorder && !releasable && !canVoid && !canDeleteDraft && <p className="text-[14px] text-fg-2">Nothing else to do on this order.</p>}
+                {!canGiveConfirmation && !canReorder && !releasable && !canVoid && !canDeleteDraft && <p className="text-[14px] text-fg-2">Nothing else to do on this order.</p>}
               </div>
             </MoreMenu>
           </>
@@ -270,16 +302,21 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               {lines.map((l) => (
                 <li key={l.id} className="flex items-start justify-between gap-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="font-medium">{l.productName}</p>
-                    <p className="text-[13px] tabular text-fg-2">
-                      {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
-                      {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price changed by hand)") : ""}
-                      {showAlloc && (status === "shipped" ? ` · sent ${fmtQty(l.qtyUnits, "", 0)}` : ` · set aside ${fmtQty(l.allocated, "", 0)} of ${fmtQty(l.qtyUnits, "", 0)}`)}
-                    </p>
+                    <p className={D(l.qtyUnits).isZero() ? "font-medium text-muted line-through" : "font-medium"}>{l.productName}</p>
+                    {D(l.qtyUnits).isZero() ? (
+                      <p className="text-[13px] text-fg-2" data-testid="line-cancelled">Taken off the order (see What happened).</p>
+                    ) : (
+                      <p className="text-[13px] tabular text-fg-2">
+                        {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
+                        {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price changed by hand)") : ""}
+                        {showAlloc && (status === "shipped" ? ` · sent ${fmtQty(l.qtyUnits, "", 0)}` : ` · set aside ${fmtQty(l.allocated, "", 0)} of ${fmtQty(l.qtyUnits, "", 0)}`)}
+                      </p>
+                    )}
                     <p className="font-mono text-[12px] text-muted">
                       {l.sku}
                       {l.customerItemCode ? ` · customer's code ${l.customerItemCode}` : ""}
                     </p>
+                    {canAmend && !D(l.qtyUnits).isZero() && <LineChange lineId={l.id} productName={l.productName} qty={D(l.qtyUnits).toString()} sent={l.sent} />}
                   </div>
                   <Money className="whitespace-nowrap text-right font-semibold tabular" value={l.value} />
                 </li>
@@ -299,7 +336,8 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 <ul className="mb-3 flex flex-col gap-1.5 text-[14px]">
                   {comingLines.map((l) => (
                     <li key={l.salesOrderLineId}>
-                      <span className="font-medium">{l.productName}</span>: {l.comingText} <span className="text-fg-2">· nothing needs making</span>
+                      {/* ADR-131 (bug B10): one plain sentence, no "nothing needs making" next to "short". */}
+                      <span className="font-medium">{l.productName}</span>: {l.comingText}. Enough is on the way; no new production order is needed.
                     </li>
                   ))}
                 </ul>
@@ -316,9 +354,13 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                         </p>
                       </div>
                       {canMake ? (
-                        <LinkButton href={`/production/orders/new?salesOrderLine=${l.salesOrderLineId}`} variant="cta">Make for this order</LinkButton>
+                        // ADR-131 (B-owner problem 2): one button that makes the production order linked to this order line.
+                        <LinkButton href={`/production/orders/new?salesOrderLine=${l.salesOrderLineId}`} variant="cta">{`Make the missing ${Number(l.missing).toLocaleString("en-PH")} for this order`}</LinkButton>
+                      ) : canAsk && l.asked ? (
+                        // ADR-131 (bug B11): once asked, the button becomes the fact.
+                        <span className="text-[14px] text-fg-2" data-testid="asked-planner">Asked the planner{l.askedAt ? ` on ${fmtDateTime(l.askedAt)}` : ""}. It shows here when they start.</span>
                       ) : canAsk ? (
-                        <Cmd action={askPlannerToMakeAction} fields={{ salesOrderLineId: l.salesOrderLineId }} label={`Ask the planner to make ${Number(l.missing).toLocaleString("en-PH")}`} pending="Asking…" variant="cta" />
+                        <Cmd action={askPlannerToMakeAction} fields={{ salesOrderLineId: l.salesOrderLineId }} label={`Ask the planner to make ${Number(l.missing).toLocaleString("en-PH")}`} pending="Asking…" variant="secondary" />
                       ) : (
                         <span className="text-[14px] text-fg-2">The planner makes a production order for it.</span>
                       )}
@@ -329,9 +371,14 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               {beingMade.length > 0 && (
                 <ul className={toMake.length > 0 ? "mt-3 flex flex-col gap-1.5 text-[14px]" : "flex flex-col gap-1.5 text-[14px]"}>
                   {beingMade.map((p) => (
-                    <li key={p.id}>
-                      <Link className="text-primary-text hover:underline" href={`/production/orders/${p.id}`}>{p.productName}</Link> · {p.statusLabel}
-                      {p.subtitle ? ` · ${p.subtitle}` : ""} <span className="font-mono text-[12px] text-muted">{p.number}</span>
+                    // ADR-131 (B-owner problem 2) "Where is it now": what, which step, who, when ready.
+                    <li key={p.id} data-testid="where-is-it-now">
+                      <span className="font-medium">Where is it now: </span>
+                      {p.pieces ? `${Number(p.pieces).toLocaleString("en-PH")} ` : ""}
+                      <Link className="text-primary-text hover:underline" href={`/production/orders/${p.id}`}>{p.productName}</Link> · {p.statusLabel.toLowerCase()}
+                      {p.who ? ` by ${p.who}` : ""}
+                      {p.stepNote ? `, ${p.stepNote.charAt(0).toLowerCase()}${p.stepNote.slice(1)}` : p.subtitle ? ` · ${p.subtitle}` : ""}
+                      {p.readyOn ? `, ready about ${fmtDayMonth(p.readyOn)}` : ""} <span className="font-mono text-[12px] text-muted">{p.number}</span>
                     </li>
                   ))}
                 </ul>
@@ -420,7 +467,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
           <Card>
             <CardTitle>What happened</CardTitle>
             <ol className="flex flex-col gap-2 text-[13px]" data-testid="order-history">
-              {orderHistory(transitions, { at: order.createdAt, byName: data.createdByName }).map((h) => (
+              {[...orderHistory(transitions, { at: order.createdAt, byName: data.createdByName }), ...data.lineChanges.map((c) => ({ key: c.id, label: c.label, at: new Date(c.at), who: c.who, reason: c.reason }))].sort((a, b) => a.at.getTime() - b.at.getTime()).map((h) => (
                 <li key={h.key} className="flex flex-col border-l-2 border-line pl-3">
                   <span className="font-medium">{h.label}</span>
                   <span className="text-[12px] text-muted">
@@ -441,7 +488,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
 /** Credit check in plain words. Orders confirmed before the check was recorded say so instead of "pending". */
 function creditCheckText(credit: string, status: string): string {
   if (credit === "passed") return "OK";
-  if (credit === "not_required") return "Not needed for this customer";
+  if (credit === "not_required") return "OK (no credit limit set: bigger orders wait for an OK)";
   if (credit === "overridden") return "Over the limit, approved by a manager";
   if (credit === "failed") return "Not OK: needs approval";
   return ["draft", "submitted"].includes(status) ? "Not checked yet (checked when the order is sent)" : status === "pending_approval" ? "Waiting" : "Not recorded";
