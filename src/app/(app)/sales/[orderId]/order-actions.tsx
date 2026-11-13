@@ -16,9 +16,16 @@ export function AllocateForm({ orderId, label = "Set aside the stock", confirm }
 /** ⋯ on one line of a confirmed order: "Change how many" or "Cancel this line", each with a reason (ADR-131). */
 export function LineChange({ lineId, productName, qty, sent }: { lineId: string; productName: string; qty: string; sent: string }) {
   const [mode, setMode] = useState<null | "change" | "cancel">(null);
+  // ADR-132 §12 (browser walk): after saving, the form closes and says what changed; it never shows a second "Save".
+  const [done, setDone] = useState<string | null>(null);
   if (!mode)
     return (
-      <div className="mt-1 flex flex-wrap gap-2" data-testid="line-change">
+      <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="line-change">
+        {done && (
+          <p role="status" className="w-full rounded-[10px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
+            {done}
+          </p>
+        )}
         <Button type="button" variant="ghost" size="sm" onClick={() => setMode("change")}>
           Change how many
         </Button>
@@ -34,6 +41,10 @@ export function LineChange({ lineId, productName, qty, sent }: { lineId: string;
       submit={mode === "cancel" ? (Number(sent) > 0 ? "Cancel the rest" : "Cancel this line") : "Save the new amount"}
       variant={mode === "cancel" ? "danger" : "primary"}
       pending="Saving…"
+      onDone={(s) => {
+        setDone(s.message ?? "Saved.");
+        setMode(null);
+      }}
       confirm={mode === "cancel" ? `Take ${productName} off this order${Number(sent) > 0 ? ` (keep the ${sent} already sent)` : ""}? Stock set aside for it is let go.` : undefined}
     >
       {(fe) => (

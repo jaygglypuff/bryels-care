@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, BarChart3, Bell, Boxes, Building2, CalendarDays, ChevronDown, ClipboardList, Clock, Cloud, CloudOff, CloudUpload, Database, Factory, FlaskConical, GitBranch, GitMerge, HelpCircle, Home,
   ListChecks, Menu, PackagePlus, PhilippinePeso, ScanLine, ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, UserRound, Warehouse, Wrench, X,
@@ -10,6 +10,7 @@ import { activeEntry, groupHref, groupSections, MORE, type NavBadges, type NavGr
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
+import { SavedLanding } from "@/ui/saved-landing";
 import { DemoBanner } from "@/ui/demo-banner";
 import { SignOutButton, SyncChip, useSync } from "@/ui/sync-status";
 import { FrameHelp, type FrameHelpResult } from "@/ui/help/frame-help";
@@ -436,6 +437,10 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
       <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
         <main id="main" className="min-w-0 flex-1 py-5 sm:py-7" data-frame-help={loadHelp && !floor ? "on" : undefined}>
           <DeletedNotice pathname={pathname} />
+          {/* ADR-132 §6: after a save the record opens at the top with its success message. */}
+          <Suspense fallback={null}>
+            <SavedLanding />
+          </Suspense>
           {children}
         </main>
       </div>

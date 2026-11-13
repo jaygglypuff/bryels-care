@@ -37,7 +37,7 @@ export default async function ReturnReceiptPrint({ params }: { params: Promise<{
     <main className="min-h-dvh bg-[#e9e7e1] py-6 print:bg-white print:py-0">
       <style>{`@page { size: A4 portrait; margin: 15mm; } @media print { thead { display: table-header-group; } tr { break-inside: avoid; } }`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 px-4">
-        <a href={`/sales/returns/${h.id}`} className="text-[14px] text-primary-text hover:underline">
+        <a href={`/sales/returns/${h.id}`} className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
           ← Back to {h.returnNumber}
         </a>
         <PrintButton />
