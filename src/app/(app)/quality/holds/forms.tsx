@@ -6,6 +6,7 @@ import { FormMessage, SubmitButton } from "@/ui/form";
 import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 import { resolvePickAction } from "../../scan-pick-actions";
 import { issueHeldStockAction, placeHoldAction } from "./actions";
+import { useClientKey, useRenewableClientKey } from "@/ui/use-client-key";
 
 type Loc = { id: string; code: string; name: string; kind: string; held: boolean };
 type Reason = { code: string; label: string };
@@ -31,7 +32,7 @@ function LotPicker({ lots, fe, defaultLot, required = true, onChange }: { lots: 
 export function PlaceHoldForm({ locations, reasonCodes, defaultLot, lots }: { locations: Loc[]; reasonCodes: Reason[]; defaultLot?: string; lots: LotOpt[] }) {
   const [state, dispatch] = useActionState<ActionState, FormData>(placeHoldAction, null);
   const [scope, setScope] = useState<"lot" | "location">("lot");
-  const [key] = useState(() => crypto.randomUUID());
+  const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   const fe = state?.fieldErrors ?? {};
   return (
     <form
@@ -42,7 +43,7 @@ export function PlaceHoldForm({ locations, reasonCodes, defaultLot, lots }: { lo
         if (!window.confirm(msg)) e.preventDefault();
       }}
     >
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <input type="hidden" name="scope" value={scope} />
       <fieldset className="flex flex-wrap gap-3">
         <legend className="mb-2 text-[14px] font-medium">What to stop</legend>
@@ -82,7 +83,7 @@ export function PlaceHoldForm({ locations, reasonCodes, defaultLot, lots }: { lo
 }
 
 export function HeldIssueForm({ locations, lots }: { locations: { id: string; code: string; name: string; kind: string }[]; lots: LotOpt[] }) {
-  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [key, renewKey] = useRenewableClientKey();
   // "From which place?" offers only the places that hold the chosen lot (one → chosen and hidden).
   const [places, setPlaces] = useState<PickCandidate[] | null>(null);
   const [, startPlaces] = useTransition();
@@ -96,13 +97,13 @@ export function HeldIssueForm({ locations, lots }: { locations: { id: string; co
   };
   const [state, dispatch] = useActionState<ActionState, FormData>(async (p, fd) => {
     const r = await issueHeldStockAction(p, fd);
-    if (r?.ok) setKey(crypto.randomUUID());
+    if (r?.ok) renewKey();
     return r;
   }, null);
   const fe = state?.fieldErrors ?? {};
   return (
     <form action={dispatch} className="space-y-4" onSubmit={(e) => !window.confirm("Take out stopped stock as an exception? This is saved with your name.") && e.preventDefault()}>
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-3 sm:col-span-2">
           <LotPicker lots={lots} fe={fe} onChange={onLot} />

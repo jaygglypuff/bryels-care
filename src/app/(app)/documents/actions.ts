@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError, toActionState, type ActionState } from "@/lib/errors";
 import { reprintDocument, requestPdfDownload, voidDocument } from "@/modules/documents";
+import { formKey } from "@/lib/form-key";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 function withField(e: unknown): ActionState {
@@ -16,7 +17,7 @@ export async function reprintDocumentAction(_prev: ActionState, f: FormData): Pr
   let id: string;
   try {
     const ctx = await requireContext();
-    const r = await reprintDocument(ctx, str(f, "id"), { reasonCode: str(f, "reasonCode"), note: str(f, "note") || null, idempotencyKey: str(f, "idempotencyKey") });
+    const r = await reprintDocument(ctx, str(f, "id"), { reasonCode: str(f, "reasonCode"), note: str(f, "note") || null, idempotencyKey: formKey(f) });
     id = r.id;
   } catch (e) {
     return withField(e);

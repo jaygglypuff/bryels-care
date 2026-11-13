@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
 import { issueHeldStock, liftHold, markHoldInvestigating, placeHold, type HeldIssuePurpose, type HoldResolution } from "@/modules/inventory/holds";
+import { formKey } from "@/lib/form-key";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 /** The lot comes from the pick list (`lot`) or, under "More details", from a scanned label (`lotScan`, wins when filled). */
@@ -14,7 +15,7 @@ export async function placeHoldAction(_p: ActionState, fd: FormData): Promise<Ac
   try {
     const ctx = await requireContext();
     const scope = str(fd, "scope") === "location" ? "location" : "lot";
-    const r = await placeHold(ctx, { scope, lotRef: lotRef(fd), locationId: str(fd, "locationId"), reasonCode: str(fd, "reasonCode"), reason: str(fd, "reason"), idempotencyKey: str(fd, "idempotencyKey") });
+    const r = await placeHold(ctx, { scope, lotRef: lotRef(fd), locationId: str(fd, "locationId"), reasonCode: str(fd, "reasonCode"), reason: str(fd, "reason"), idempotencyKey: formKey(fd) });
     holdId = r.holdId;
   } catch (e) {
     return toActionState(e);
@@ -58,7 +59,7 @@ export async function issueHeldStockAction(_p: ActionState, fd: FormData): Promi
       qty: str(fd, "qty"),
       purpose: str(fd, "purpose") as HeldIssuePurpose,
       reason: str(fd, "reason"),
-      idempotencyKey: str(fd, "idempotencyKey"),
+      idempotencyKey: formKey(fd),
     });
     revalidatePath("/inventory");
     return { ok: true, message: r.replayed ? "Already saved (same form sent twice)." : "Taken out as an exception. The stock record marks it as an exception." };

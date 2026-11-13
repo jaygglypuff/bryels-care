@@ -19,6 +19,7 @@ import {
   updateLabelTemplate,
   updateStation,
 } from "@/modules/documents";
+import { formKey } from "@/lib/form-key";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 function withField(e: unknown): ActionState {
@@ -75,7 +76,7 @@ export async function testPageAction(_prev: ActionState, f: FormData): Promise<A
   let id: string;
   try {
     const ctx = await requireContext();
-    const r = await generateTemplateTestPage(ctx, str(f, "versionId"), str(f, "idempotencyKey"));
+    const r = await generateTemplateTestPage(ctx, str(f, "versionId"), formKey(f));
     id = r.id;
   } catch (e) {
     return withField(e);

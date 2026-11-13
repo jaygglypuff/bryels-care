@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
 import { generateBmr } from "@/modules/production";
+import { formKey } from "@/lib/form-key";
 
 /** Generates (numbers, renders, hashes) the BMR of a batch and shows it ready to print. */
 export async function generateBmrAction(_prev: ActionState, f: FormData): Promise<ActionState> {
@@ -10,7 +11,7 @@ export async function generateBmrAction(_prev: ActionState, f: FormData): Promis
   let documentId: string;
   try {
     const ctx = await requireContext();
-    const r = await generateBmr(ctx, { batchId, idempotencyKey: String(f.get("idempotencyKey") ?? "") });
+    const r = await generateBmr(ctx, { batchId, idempotencyKey: formKey(f) });
     documentId = r.documentId;
   } catch (e) {
     return toActionState(e);

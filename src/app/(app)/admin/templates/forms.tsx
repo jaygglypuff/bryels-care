@@ -17,6 +17,7 @@ import {
   updateLabelTemplateAction,
   versionAction,
 } from "./actions";
+import { useClientKey } from "@/ui/use-client-key";
 
 export function NewTemplateForm({ kinds }: { kinds: { value: string; label: string; datasets: string[] }[] }) {
   const [state, action] = useActionState<ActionState, FormData>(createTemplateAction, null);
@@ -111,11 +112,11 @@ export function DefinitionEditor({ templateId, versionId, definition }: { templa
 
 export function TestPageButton({ versionId }: { versionId: string }) {
   const [state, action] = useActionState<ActionState, FormData>(testPageAction, null);
-  const [key] = useState(() => crypto.randomUUID());
+  const key = useClientKey(); // after hydration (ADR-125, ADR-132 §10)
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="versionId" value={versionId} />
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <SubmitButton variant="secondary" pendingText="Generating…">Generate test page</SubmitButton>
       <FormMessage state={state} />
     </form>

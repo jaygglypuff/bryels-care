@@ -8,6 +8,7 @@ import { MoreDetails } from "@/ui/guide";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { useActionForm } from "../_kit/forms";
 import { approveCountAction, planCountAction, recordCountAction, recountAction, rejectLinesAction } from "./actions";
+import { useRenewableClientKey } from "@/ui/use-client-key";
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
@@ -77,14 +78,14 @@ export type ShelfLine ={ lotNumber: string | null; itemName: string | null; base
  * Every option is at least 44 px tall.
  */
 export function ShelfCountForm({ countId, location, lines }: { countId: string; location: { id: string; code: string }; lines: ShelfLine[] }) {
-  const [key, setKey] = useState(newKey);
+  const [key, renewKey] = useRenewableClientKey();
   const { state, pending, onSubmit } = useActionForm(recordCountAction.bind(null, countId));
   const [mode, setMode] = useState<"lot" | "unlabelled">("lot");
   const [lotCode, setLotCode] = useState("");
   const [qty, setQty] = useState("");
   useEffect(() => {
     if (state?.ok) {
-      setKey(newKey());
+      renewKey();
       setLotCode("");
       setQty("");
     }
@@ -98,7 +99,7 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
   const id = (f: string) => `${f}-${location.code}`;
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3" data-testid={`shelf-form-${location.code}`}>
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <input type="hidden" name="locationId" value={location.id} />
       {lines.some((l) => l.unlabelled) && (
         <ul className="divide-y divide-line rounded-[12px] border border-line text-[14px]" aria-label={`Found without a label on ${location.code}`}>
@@ -157,11 +158,11 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
 }
 
 export function RecountForm({ countId, lineId, label, baseUom }: { countId: string; lineId: string; label: string; baseUom: string | null }) {
-  const [key] = useState(newKey);
+  const [key] = useRenewableClientKey();
   const { state, pending, onSubmit } = useActionForm(recountAction.bind(null, countId, lineId));
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2">
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label={`Count again: ${label}`} htmlFor={`rc-${lineId}`} error={state?.fieldErrors?.qty}>
         <QtyUnitInput id={`rc-${lineId}`} name="qty" unitName="qtyUom" baseUom={baseUom ?? "*"} required />
       </Field>

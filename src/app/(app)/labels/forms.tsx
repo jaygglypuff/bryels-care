@@ -12,6 +12,7 @@ import {
   retryAction,
   voidAction,
 } from "./actions";
+import { useClientKey } from "@/ui/use-client-key";
 
 type Action = (prev: ActionState, f: FormData) => Promise<ActionState>;
 const ACTIONS: Record<string, Action> = { printed: markPrintedAction, retry: retryAction, cancel: cancelAction };
@@ -55,8 +56,7 @@ function useOnPageConfirm(question: string | undefined) {
 }
 
 function useKey() {
-  const [key] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`));
-  return key;
+  return useClientKey(); // after hydration (ADR-125, ADR-132 §10)
 }
 
 /** One-button command on a job (printed / retry / cancel). */
@@ -114,7 +114,7 @@ export function ReprintForm({ jobId, reasons, maxCopies }: { jobId: string; reas
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="jobId" value={jobId} />
-      <input type="hidden" name="idempotencyKey" value={key} />
+      {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <Field label="Why print it again?" htmlFor="reasonCode" error={fe.reasonCode}>
         <Select id="reasonCode" name="reasonCode" required value={reason} onChange={(e) => setReason(e.target.value)}>
           <option value="">Choose a reason…</option>
