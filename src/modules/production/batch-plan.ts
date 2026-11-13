@@ -109,7 +109,24 @@ export function proposeBatches(input: { pieces: number; refBatchG: Num; yieldPct
   };
 }
 
-export type SizesCheck = { ok: true; sizes: number[] } | { ok: false; message: string; index: number | null };
+export type BatchChoiceOption = { value: "split" | "one" | "custom"; title: string; detail: string; disabled: boolean };
+
+/**
+ * The choices "How to make it" offers (ADR-104 §4). Round 5 B B7 / ADR-133 item 8: when the split is one batch, "Split
+ * into 1 batch · 1 batch of 100 bars" and "Make it one batch · 1 batch of 100 bars" were the same choice twice; then
+ * only "Make it one batch" is offered (sent as the split, which the server plans the same way).
+ */
+export function batchChoiceOptions(p: BatchProposal, word = "pieces"): BatchChoiceOption[] {
+  const custom: BatchChoiceOption = { value: "custom", title: "Choose sizes", detail: `For example 1,500 + 500. Each one up to the largest batch.`, disabled: false };
+  if (p.split.count === 1) return [{ value: "split", title: "Make it one batch", detail: batchPlanText(p.split.sizes, word), disabled: false }, custom];
+  return [
+    { value: "split", title: `Split into ${p.split.count} batches`, detail: batchPlanText(p.split.sizes, word), disabled: false },
+    { value: "one", title: "Make it one batch", detail: p.one.allowed ? batchPlanText([p.pieces], word) : p.one.reason!, disabled: !p.one.allowed },
+    custom,
+  ];
+}
+
+export type SizesCheck ={ ok: true; sizes: number[] } | { ok: false; message: string; index: number | null };
 
 /** "Choose sizes": each a whole number above 0, each ≤ the largest, the sum = the pieces ordered, at most 200 batches. */
 export function checkBatchSizes(raw: (string | number)[], total: number, maxPieces: number, word = "pieces"): SizesCheck {
