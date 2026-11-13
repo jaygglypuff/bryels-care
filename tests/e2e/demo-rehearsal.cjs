@@ -513,17 +513,45 @@ section('i. finish: good pieces and the packaging count', async () => {
   // Round 5: Finish is step N of N in the step template (B19, problem 2).
   await page.getByTestId('finish-panel').waitFor();
   await expectText(page, /Step \d+ of \d+/);
-  const checker = page.locator('#checkerId');
-  if (await checker.count()) await checker.selectOption({ label: CHECKER });
-  const pw = page.locator('#checkerPassword');
-  if (await pw.count()) await pw.fill(PW);
+  // ADR-133: the checker checks the counts on his OWN phone (the way that also works with same-device signing off).
+  // FINISH_CHECK=here keeps the older way: Jun types his own password on the operator's phone.
+  const onPhone = process.env.FINISH_CHECK !== 'here' && (await page.getByTestId('finish-checker').count()) > 0;
+  if (onPhone) {
+    const mode = page.getByTestId('check-mode-phone');
+    if (await mode.count()) await mode.click();
+    await page.getByTestId('check-on-phone').waitFor();
+  } else {
+    const checker = page.locator('#checkerId');
+    if (await checker.count()) await checker.selectOption({ label: CHECKER });
+    const pw = page.locator('#checkerPassword');
+    if (await pw.count()) await pw.fill(PW);
+  }
   // One question per packing item ("All 96 bottles used, none broken?"): Yes. An empty count is never sent (B2).
   for (const yes of await page.locator('[data-testid^="pkg-yes-"]').all()) await yes.click();
   await shot(page, 'finish-phone', { full: true });
   await page.getByTestId('finish-batch').click();
-  const yes = page.getByRole('button', { name: 'Yes, finish' });
-  await yes.click({ timeout: 5000 }).catch(() => {}); // auto-confirm may have pressed it already
-  await waitUrl(page, /\/production\/orders\/[0-9a-f-]{36}\?finished=B-/); // back on the order page, the batch is with QA
+  if (onPhone) {
+    await page.getByRole('button', { name: 'Yes, send' }).click({ timeout: 5000 }).catch(() => {});
+    await page.getByTestId('finish-check-waiting').waitFor();
+    await expectText(page, /Waiting for .+ to check the counts/);
+    await shot(page, 'finish-waiting-phone', { full: true });
+    log('  counts sent:', (await page.getByTestId('finish-check-waiting').locator('p').first().innerText()).trim());
+    const chk = await asUser(who('checker.nfd'), PHONE);
+    await go(chk.page, '/production/checks');
+    const card = chk.page.getByTestId('check-card-finish').filter({ hasText: facts.lotionBatchNumber || '' }).first();
+    await card.waitFor();
+    await shot(chk.page, 'checker-finish-card-phone', { full: true });
+    await card.getByTestId('looks-right').click();
+    await chk.page.getByTestId('check-done').waitFor();
+    log('  Jun on his own phone:', (await chk.page.getByTestId('check-done').innerText()).trim());
+    await chk.close();
+    await page.reload();
+    await expectText(page, 'This batch is finished');
+  } else {
+    const yes = page.getByRole('button', { name: 'Yes, finish' });
+    await yes.click({ timeout: 5000 }).catch(() => {}); // auto-confirm may have pressed it already
+    await waitUrl(page, /\/production\/orders\/[0-9a-f-]{36}\?finished=B-/); // back on the order page, the batch is with QA
+  }
   await shot(page, 'finished');
   log('lotion batch finished');
   await close();
