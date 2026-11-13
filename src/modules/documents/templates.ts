@@ -7,8 +7,8 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { definitionChecksum } from "./checksum";
-import { checkDefinition, renderersForKind, supportedKinds } from "./renderers/registry";
-import { createTemplateInput } from "./schemas";
+import { checkDefinition, findRenderer, renderersForKind, supportedKinds } from "./renderers/registry";
+import { createTemplateInput, type TemplateDefinition } from "./schemas";
 
 /**
  * Document templates and their versions (US-2-11; docs/reports-and-templates.md §1.1, §11.1).
@@ -90,6 +90,11 @@ export async function getTemplate(ctx: AuthContext, templateId: string) {
     ...t,
     versions: versions.map((r) => ({ ...r.v, authorName: r.authorName, submittedByName: r.submittedByName, approvedByName: r.approvedByName })),
     renderers: renderersForKind(t.templateKind).map((r) => ({ id: r.id, version: r.version, title: r.title, datasets: [...r.datasets] })),
+    /** ADR-133 item 10: a newer layout this build offers for the latest version ("Start a new version with the newer layout"). */
+    newerLayout: (() => {
+      const d = versions[0] ? newerLayoutDefinition(t.templateKind, versions[0].v.definition) : null;
+      return d ? { version: d.renderer.version, title: findRenderer(d.renderer.id, d.renderer.version)?.title ?? `v${d.renderer.version}` } : null;
+    })(),
   };
 }
 
@@ -145,7 +150,26 @@ export async function createTemplate(ctx: AuthContext, raw: unknown, opts: { dat
 }
 
 /** New draft version copied from the latest version. Only one open draft/pending version at a time. */
-export async function createDraftVersion(ctx: AuthContext, templateId: string, changeNote?: string | null) {
+/**
+ * A newer layout of the same kind than the one `definition` uses, when this build has one (BMR v2, label v2, delivery
+ * receipt v2): the definition moved to the newest renderer that takes its dataset, else that renderer's default.
+ */
+export function newerLayoutDefinition(templateKind: string, definition: unknown): TemplateDefinition | null {
+  const cur = definition as { renderer?: { id?: string; version?: number }; dataset?: string } | null;
+  const newest = renderersForKind(templateKind).find((r) => r.id === cur?.renderer?.id && (!cur?.dataset || r.datasets.includes(cur.dataset)));
+  if (!newest || !cur?.renderer || newest.version <= (cur.renderer.version ?? 0)) return null;
+  const moved = { ...(definition as TemplateDefinition), renderer: { id: newest.id, version: newest.version } };
+  const check = checkDefinition(moved, templateKind);
+  if (check.ok) return check.definition;
+  const fresh = newest.defaultDefinition(templateKind, cur.dataset);
+  return checkDefinition(fresh, templateKind).ok ? fresh : null;
+}
+
+/**
+ * A new draft from the latest version. `opts.newerLayout` (ADR-133 item 10): the draft uses the newest layout of this
+ * build (for example delivery receipt v2, product name first). Like every draft it prints only after QA approves it.
+ */
+export async function createDraftVersion(ctx: AuthContext, templateId: string, changeNote?: string | null, opts: { newerLayout?: boolean } = {}) {
   ctx.require("documents.template.edit");
   return db.transaction(async (tx) => {
     const t = await loadTemplate(tx, ctx, templateId, true);
@@ -153,14 +177,16 @@ export async function createDraftVersion(ctx: AuthContext, templateId: string, c
     const open = versions.find((v) => v.status === "draft" || v.status === "pending_approval");
     if (open) throw new DomainError("state", `Version ${open.versionNo} is still ${open.status.replace("_", " ")}. Finish or retire it first.`);
     const latest = versions[0];
+    const newer = opts.newerLayout ? newerLayoutDefinition(t.templateKind, latest.definition) : null;
+    if (opts.newerLayout && !newer) throw new DomainError("state", "This layout already uses the newest design of this version of the system.");
     const [v] = await tx
       .insert(documentTemplateVersions)
       .values({
         documentTemplateId: t.id,
         versionNo: (latest?.versionNo ?? 0) + 1,
         status: "draft",
-        definition: latest.definition,
-        definitionChecksum: latest.definitionChecksum,
+        definition: newer ?? latest.definition,
+        definitionChecksum: newer ? definitionChecksum(newer) : latest.definitionChecksum,
         changeNote: changeNote?.trim() || null,
         createdBy: ctx.userId,
       })
