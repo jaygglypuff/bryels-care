@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, useTransition, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select, Textarea, type ButtonVariant } from "@/ui/core";
-import { ActionForm } from "@/ui/form";
+import { ActionForm, FormMessage, useInPlaceAction } from "@/ui/form";
+import { proofFormData, type ProofKind } from "./proof-form-data";
 import { MoreDetails } from "@/ui/guide";
 import { ScanOrPick, type PickCandidate, type PickVia } from "@/ui/scan-or-pick";
 import type { ScanActionResult, ScanOptions } from "./fulfilment-actions";
@@ -240,11 +241,16 @@ export function ScanPanel({
   );
 }
 
-/** Drawn signature on a canvas, attached to the form as a PNG file (evidence, not an e-signature). */
-function SignaturePad({ inputName }: { inputName: string }) {
+type SignaturePadHandle = { toFile: () => Promise<File | null> };
+
+/**
+ * Drawn signature on a canvas (evidence, not an e-signature). The image is taken from the canvas when Save is tapped
+ * (`toFile`), never from a hidden file input, so a refused first try or a quick tap after the last stroke cannot lose it.
+ */
+function SignaturePad({ ref }: { ref: React.Ref<SignaturePadHandle> }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const file = useRef<HTMLInputElement>(null);
   const drawing = useRef(false);
+  const inked = useRef(false);
   const [hasInk, setHasInk] = useState(false);
   useEffect(() => {
     const c = canvas.current!;
@@ -255,25 +261,25 @@ function SignaturePad({ inputName }: { inputName: string }) {
     g.lineCap = "round";
     g.strokeStyle = "#111";
   }, []);
+  useImperativeHandle(ref, () => ({
+    toFile: () =>
+      new Promise<File | null>((resolve) => {
+        const c = canvas.current;
+        if (!c || !inked.current) return resolve(null);
+        c.toBlob((b) => resolve(b ? new File([b], "signature.png", { type: "image/png" }) : null), "image/png");
+      }),
+  }));
   const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * e.currentTarget.width, y: ((e.clientY - r.top) / r.height) * e.currentTarget.height };
-  };
-  const save = () => {
-    canvas.current!.toBlob((b) => {
-      if (!b || !file.current) return;
-      const dt = new DataTransfer();
-      dt.items.add(new File([b], "signature.png", { type: "image/png" }));
-      file.current.files = dt.files;
-    }, "image/png");
   };
   const clear = () => {
     const c = canvas.current!;
     const g = c.getContext("2d")!;
     g.fillStyle = "#fff";
     g.fillRect(0, 0, c.width, c.height);
+    inked.current = false;
     setHasInk(false);
-    if (file.current) file.current.value = "";
   };
   return (
     <div className="flex flex-col gap-2">
@@ -283,6 +289,7 @@ function SignaturePad({ inputName }: { inputName: string }) {
         height={200}
         aria-label="Signature box: the person receiving signs here"
         className="h-[140px] w-full touch-none rounded-[12px] border border-line bg-white"
+        data-testid="signature-pad"
         onPointerDown={(e) => {
           drawing.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -297,14 +304,13 @@ function SignaturePad({ inputName }: { inputName: string }) {
           const p = pos(e);
           g.lineTo(p.x, p.y);
           g.stroke();
+          inked.current = true;
           setHasInk(true);
         }}
         onPointerUp={() => {
           drawing.current = false;
-          save();
         }}
       />
-      <input ref={file} type="file" name={inputName} accept="image/png" className="hidden" tabIndex={-1} aria-hidden="true" />
       <div className="flex items-center justify-between gap-2 text-[12px] text-muted">
         <span>{hasInk ? "Signed ✓ (not saved yet: tap Save)" : "Ask the person receiving to sign with a finger."}</span>
         <Button type="button" variant="ghost" size="sm" onClick={clear} className="min-h-[44px] min-w-[64px]">
@@ -315,45 +321,104 @@ function SignaturePad({ inputName }: { inputName: string }) {
   );
 }
 
+/**
+ * Proof of delivery (W09-09). Round 5 A B11 / ADR-133 item 2: Save never goes through a form action (React would reset
+ * the fields and the signature file after a refusal); the proof image is added at the moment Save is tapped
+ * (`proofFormData`), the typed fields stay after a refusal, and a retry with the same answers reuses the same
+ * submission key (`useInPlaceAction`), so a slow first try that did save is never saved twice.
+ */
 export function AcknowledgeForm({ action, shipmentId, now }: { action: Action; shipmentId: string; now: string }) {
-  const [kind, setKind] = useState<"drawn" | "photo" | "name_only">("drawn");
+  const [kind, setKind] = useState<ProofKind>("drawn");
+  const pad = useRef<SignaturePadHandle>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [state, dispatch, pending] = useInPlaceAction(action);
+  const [, startTransition] = useTransition();
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const fe: Record<string, string> = { ...(state?.fieldErrors ?? {}), ...(refusal ? { file: refusal } : {}) };
+  const busy = pending || preparing;
   return (
-    <ActionForm action={action} hidden={{ shipmentId }} submit="Save proof of delivery" pending="Saving…" variant="cta" size="lg" className="flex min-w-0 flex-col gap-3" messageBelow>
-      {(fe) => (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Who received it (name)" htmlFor="receivedByName" error={fe.receivedByName}>
-              <Input id="receivedByName" name="receivedByName" required maxLength={120} />
-            </Field>
-            <Field label="When" htmlFor="receivedAt" error={fe.receivedAt} hint="Philippine time">
-              <Input id="receivedAt" name="receivedAt" type="datetime-local" max={now} defaultValue={now} required />
-            </Field>
-            <Field label="Proof" htmlFor="kind" error={fe.kind}>
-              <Select id="kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-                <option value="drawn">Signature drawn on this device</option>
-                <option value="photo">Photo of the signed paper copy</option>
-                <option value="name_only">Name only (no signature image)</option>
-              </Select>
-            </Field>
-          </div>
-          {kind === "drawn" && <SignaturePad inputName="file" />}
-          {kind === "photo" && (
-            <Field label="Photo of the signed copy" htmlFor="file" error={fe.file} hint="JPEG, PNG or WebP">
-              <input id="file" name="file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="block w-full text-[14px]" />
-            </Field>
-          )}
-          {fe.file && kind === "drawn" && <p className="text-[13px] text-[var(--bad-fg)]">{fe.file}</p>}
-          <Field label="Anything wrong? (missing, damaged or refused boxes)" htmlFor="remarks" error={fe.remarks}>
-            <Textarea id="remarks" name="remarks" maxLength={600} rows={2} />
-          </Field>
-          <MoreDetails title="Their job (you can skip this)" open={!!fe.receivedByPosition}>
-            <Field label="Their job (optional)" htmlFor="receivedByPosition" error={fe.receivedByPosition}>
-              <Input id="receivedByPosition" name="receivedByPosition" maxLength={80} placeholder="e.g. Store supervisor" />
-            </Field>
-          </MoreDetails>
-          <p className="text-[12px] text-muted">This shows the customer got the goods. It is not an electronic signature.</p>
-        </>
+    <form
+      className="flex min-w-0 flex-col gap-3"
+      data-testid="proof-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (busy) return;
+        const form = e.currentTarget;
+        if (!form.reportValidity()) return;
+        setPreparing(true);
+        try {
+          const fd = new FormData(form);
+          const image = kind === "drawn" ? ((await pad.current?.toFile()) ?? null) : kind === "photo" ? photo : null;
+          const why = proofFormData(fd, kind, image);
+          setRefusal(why);
+          if (why) return;
+          startTransition(() => dispatch(fd));
+        } finally {
+          setPreparing(false);
+        }
+      }}
+    >
+      <input type="hidden" name="shipmentId" value={shipmentId} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Who received it (name)" htmlFor="receivedByName" error={fe.receivedByName}>
+          <Input id="receivedByName" name="receivedByName" required maxLength={120} />
+        </Field>
+        <Field label="When" htmlFor="receivedAt" error={fe.receivedAt} hint="Philippine time">
+          <Input id="receivedAt" name="receivedAt" type="datetime-local" max={now} defaultValue={now} required />
+        </Field>
+        <Field label="Proof" htmlFor="kind" error={fe.kind}>
+          <Select
+            id="kind"
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value as ProofKind);
+              setRefusal(null);
+            }}
+          >
+            <option value="drawn">Signature drawn on this device</option>
+            <option value="photo">Photo of the signed paper copy</option>
+            <option value="name_only">Name only (no signature image)</option>
+          </Select>
+        </Field>
+      </div>
+      {kind === "drawn" && <SignaturePad ref={pad} />}
+      {kind === "photo" && (
+        <Field label="Photo of the signed copy" htmlFor="photo" error={fe.file} hint="JPEG, PNG or WebP">
+          <input
+            id="photo"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            className="block w-full text-[14px]"
+            onChange={(e) => {
+              setPhoto(e.target.files?.[0] ?? null);
+              setRefusal(null);
+            }}
+          />
+          {photo && <span className="text-[13px] text-muted">Chosen: {photo.name}</span>}
+        </Field>
       )}
-    </ActionForm>
+      {fe.file && kind === "drawn" && (
+        <p className="text-[13px] text-[var(--bad-fg)]" role="alert">
+          {fe.file}
+        </p>
+      )}
+      <Field label="Anything wrong? (missing, damaged or refused boxes)" htmlFor="remarks" error={fe.remarks}>
+        <Textarea id="remarks" name="remarks" maxLength={600} rows={2} />
+      </Field>
+      <MoreDetails title="Their job (you can skip this)" open={!!fe.receivedByPosition}>
+        <Field label="Their job (optional)" htmlFor="receivedByPosition" error={fe.receivedByPosition}>
+          <Input id="receivedByPosition" name="receivedByPosition" maxLength={80} placeholder="e.g. Store supervisor" />
+        </Field>
+      </MoreDetails>
+      <p className="text-[12px] text-muted">This shows the customer got the goods. It is not an electronic signature.</p>
+      <div>
+        <Button type="submit" variant="cta" size="lg" disabled={busy} aria-busy={busy} data-testid="proof-save">
+          {busy ? "Saving…" : "Save proof of delivery"}
+        </Button>
+      </div>
+      <FormMessage state={state} />
+    </form>
   );
 }
