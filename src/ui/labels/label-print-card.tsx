@@ -37,7 +37,7 @@ export function LabelPrintCard({
   return (
     <section className="grid gap-4 rounded-[20px] border border-line bg-surface p-4 sm:p-5" aria-label={title ?? LABEL_KIND_WORDS[k].title} data-testid="label-print-card">
       {title !== null && <h2 className="text-[18px] font-semibold text-fg">{title ?? LABEL_KIND_WORDS[k].title}</h2>}
-      {opt ? <LabelPreview kind={k} data={opt.face} sentence={sentence} /> : <p className="text-[15px] text-fg-2">No label is approved for this yet, so there is nothing to show.</p>}
+      {opt ? <LabelPreview kind={k} data={opt.face} sentence={sentence} layout={preview.showLayout ? opt.layout : null} /> : <p className="text-[15px] text-fg-2">No label is approved for this yet, so there is nothing to show.</p>}
       {opt && preview.printer && !preview.blocked && (
         <p className="text-[15px] text-fg-2" data-testid="label-printer">
           Printer: <strong className="text-fg">{plainPrinter(preview.printer.printerName)}</strong> · label {opt.media}. In the print window choose this printer and <strong>Actual size</strong>.

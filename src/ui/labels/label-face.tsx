@@ -16,6 +16,8 @@ const BASE_CSS = `
   .lf-first .lbl ~ .lbl { display: none; }
   .lf-fit { zoom: var(--lf-zoom, 1); }
   .lf-face .lbl { box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  /* ADR-132 §11: the layout code and version print in the footer; on screen they are hidden (More details for QA). */
+  .lf-face .lbl-foot > span:first-child { visibility: hidden; }
 }
 @media print {
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
