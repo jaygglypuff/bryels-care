@@ -134,7 +134,8 @@ describe("sales order → FEFO allocation → dispatch (W09)", () => {
     const o = await newConfirmedOrder("CUS-002", "ACS-135", String(free + 10));
     const r = await allocateOrder(warehouse, o.id);
     expect(r.fullyAllocated).toBe(false);
-    expect(r.shortfalls).toEqual([{ sku: "ACS-135", ordered: String(free + 10), short: "10" }]);
+    // ADR-131 (B-owner bug B10): the shortfall also carries the product name, so the words never show only the code.
+    expect(r.shortfalls).toEqual([{ sku: "ACS-135", name: expect.any(String), ordered: String(free + 10), short: "10" }]);
     const view = await getOrder(warehouse, o.id);
     expect(view.order.status).toBe("confirmed");
     expect(view.allocations.reduce((s, a) => s + Number(a.qtyUnits), 0)).toBe(free);
