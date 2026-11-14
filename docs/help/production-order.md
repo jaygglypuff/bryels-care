@@ -1,8 +1,8 @@
 ---
 key: production.production_order
 title: Make a product with a production order
-version: 5
-updated_at: 2026-11-13
+version: 6
+updated_at: 2026-11-14
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -68,16 +68,16 @@ A production order says what to make, how many and by when. You follow it on one
 2. Press **Save to daily log**. You can add more entries during the day.
 3. Made a mistake? Open the **Daily log** tab, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
 4. The reject types come from the setting **Reject types for the daily log**. The owner can change the list.
-5. **Make → More → Today** shows everything written today for all orders of your site.
+5. **Make → Today** shows everything written today for all orders of your site.
 
 ## Rejects summary
 
-1. Open **Make → More → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
+1. Open **Make → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
 2. The **Daily log** and **Batches** tabs of an order show the same numbers for that order.
 
 ## Planning tools
 
-The production plan is a tab of **Make** (**Production plan**); the list of all batch records is under **Make → More → Batch records**. You do not need them for daily work.
+The production plan is a tab of **Make** (**Production plan**); the list of all batch records is under **Make → Batch records**. You do not need them for daily work.
 
 ## Older batches and paper copies
 

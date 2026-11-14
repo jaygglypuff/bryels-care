@@ -1,8 +1,8 @@
 ---
 key: sales.fulfilment
 title: Get from shelf, check the boxes, send out
-version: 5
-updated_at: 2026-11-13
+version: 6
+updated_at: 2026-11-14
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -10,7 +10,7 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 
 ## Get from shelf
 
-1. Open **Sell → More → To get from shelf** (warehouse: on your Home) and press **Get from shelf** on the first order.
+1. Open **Sell → To get from shelf** (warehouse: on your Home) and press **Get from shelf** on the first order.
 2. Go to the shelf the screen shows. Under **Scan the box label, or type the number printed on it**, scan each box. The scan will not work? Type the box number from the label, for example BX-00000005 (or just its last digits, 0005). Boxes made at Finish have their own box label: scan it. You do not need a lot label for them. A box that is not on the list is refused. Scanning the same box twice counts once.
 3. Scanned the wrong box? Press **Undo this scan**.
 4. Press **Finish getting from shelf**. If a box is missing, tap **A box is missing** and say why.
@@ -27,7 +27,7 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 
 ## Send out
 
-1. Open the delivery (**Sell → More → Send out**). First tap **1. Make the delivery receipt for the driver**, then **1. Print the delivery receipt**: the driver needs this paper before the truck leaves. It does not take stock out.
+1. Open the delivery (**Sell → Send out**). First tap **1. Make the delivery receipt for the driver**, then **1. Print the delivery receipt**: the driver needs this paper before the truck leaves. It does not take stock out.
 2. **Driver** and **Plate number** are filled in from the last truck that left. Change them if another driver goes. Then press **The truck is leaving: send out now**. This takes the stock out and numbers the delivery receipt.
 3. Print the delivery receipt for the driver's copies.
 

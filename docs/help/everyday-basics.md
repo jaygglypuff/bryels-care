@@ -1,8 +1,8 @@
 ---
 key: start.everyday_basics
 title: Everyday basics: finding anything, codes, locations, deleting drafts, approvals and notifications
-version: 5
-updated_at: 2026-11-08
+version: 6
+updated_at: 2026-11-14
 sop: Training guide; not an SOP
 ---
 
@@ -10,7 +10,7 @@ Seven things people ask about most. Each one says where to tap.
 
 ## Find anything
 
-1. On a computer or tablet, click the box with the word **Search** at the top, right after the menu, or press **Ctrl+K** (**⌘K** on a Mac) or **/** from any screen.
+1. On a computer or tablet, click the **Search** box in the middle of the top bar, or press **Ctrl+K** (**⌘K** on a Mac) or **/** from any screen.
 2. On a phone, tap **Search** at the top. The first line of the search is **Scan a label** (the camera). Floor people also have **Scan** in the bottom bar.
 3. Type what you look for. Results show as you type:
    - a **screen** word, like **bills**, **lots**, **master data**, **QA**, **receive** or **PO** — you get the screens you may open (**Supplier bills**, **Stock**, the set-up screens…);
@@ -26,11 +26,14 @@ Seven things people ask about most. Each one says where to tap.
 
 ## Finding your way (the menu)
 
-1. **Home** is always one tap away: the logo at the top left, or **Home** / **My jobs** in the bottom bar.
-2. The menu shows only what your job uses. Owner and site manager: **Home · Needs me · Sell · Make · Buy & stock · Money**. Sales: **Orders, Customers, Price offers, Invoices**. Purchasing: **Buying, Suppliers**. Finance: Home is the **Money** page, then **Money in, Money out, Month end, Reports**. QA: **Check, Problems, Trace**.
-3. Machine operators and the warehouse have four doors in the bottom bar: **My jobs, Scan, Batches** (or **Receive**), **Help**. The site manager's phone shows **My jobs, Scan, To check/approve, Help**.
-4. **Set-up** (products, recipes, materials, people, settings, labels, shelves, machines, record numbers) is behind your initials at the top right. **All screens** there opens the full list for your job.
-5. A screen that is not in your menu still opens from **Search** or from a link, if your job may open it.
+1. **Home** is always one tap away: **Home** at the top of the menu, the logo, or **Home** / **My jobs** in the bottom bar.
+2. On a computer (screens 1024 px wide and more) the menu is the column on the left. Each part of your work has its name in bold with its screens listed under it; the screen you are on has a green bar. Click a bold name to fold its list away or open it again. **Icons only** at the bottom makes the column narrow; the computer remembers your choice.
+3. The line at the top of the page says where you are, for example **Sell › Customer orders › SO-26-00002**. Click a part of it to go back there.
+4. The menu shows only what your job uses. Owner and site manager: **Home · Needs me · Sell · Make · Buy & stock · Money**. Sales: **Orders, Customers, Price offers, Invoices**. Purchasing: **Buying, Suppliers**. Finance: Home is the **Money** page, then **Money in, Money out, Month end, Reports**. QA: **Check, Problems, Trace**.
+5. On a phone or a small tablet, tap **☰** at the top left to open the same menu. Machine operators and the warehouse have four doors in the bottom bar instead: **My jobs, Scan, Batches** (or **Receive**), **Help**. The site manager's phone shows **My jobs, Scan, To check/approve, Help**.
+6. **Set-up**, **Settings** and **Help** are at the bottom of the menu. **Set-up** (products, recipes, materials, people, settings, labels, shelves, machines, record numbers) is also behind your initials at the top right.
+7. A screen that is not in your menu still opens from **Search** or from a link, if your job may open it.
+8. **?** at the top right (**Help**) explains the screen you are on: first what the screen is for, then the guide.
 
 ## Codes are given for you
 
@@ -55,7 +58,7 @@ Seven things people ask about most. Each one says where to tap.
 
 ## Everything waiting for your approval
 
-1. Tap **To approve** at the top of the screen. The red number shows how many items wait for you.
+1. Open **To approve**: under **Needs me** in the menu (owner and managers), or the list button at the top right (other jobs). The red number shows how many items wait for you.
 2. Each row shows what it is, who asked and when. Tap the row or **Open** to see the full record.
 3. For many items (purchase requests and orders, sales orders, quotations, price lists, stock adjustments, invoices, expense claims, change controls, imports) you can tap **Approve** right there, or **Reject** / **Send back** with a short reason.
 4. Items that need a password, a measurement or a longer form open on their own page.

@@ -1,12 +1,12 @@
 ---
 key: operations.work_flow
 title: How work flows
-version: 1
-updated_at: 2026-11-06
+version: 2
+updated_at: 2026-11-14
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
-One order goes through 16 steps, from **Ask to buy** to **Invoice**. The **How work flows** screen shows all of them on one page. Open it from **Make → More → How work flows**, or type "how work flows" in **Search**.
+One order goes through 16 steps, from **Ask to buy** to **Invoice**. The **How work flows** screen shows all of them on one page. Open it from **Make → How work flows**, or type "how work flows" in **Search**.
 
 ## What each row shows
 

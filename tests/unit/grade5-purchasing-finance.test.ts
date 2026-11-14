@@ -27,7 +27,7 @@ describe("grade-5 purchasing and finance screens", () => {
     expect(pages.length).toBe(38);
   });
 
-  it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro)", (rel) => {
+  it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro, shown in the Help panel as About this screen, ADR-136)", (rel) => {
     const src = readFileSync(join(ROOT, rel), "utf8");
     if (isRedirect(src)) return; // /procurement/expected/[poId] only forwards to Receive
     expect(src).toMatch(/<PageIntro>\s*This screen is for/);

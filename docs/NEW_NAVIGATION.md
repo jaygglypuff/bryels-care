@@ -7,6 +7,13 @@
 | Tests | `tests/unit/nav-per-role.test.ts`, `tests/unit/nav-titles.test.ts`, `tests/unit/menu-paths.test.ts`, `tests/unit/search-screens.test.ts`, `tests/unit/search-round5.test.ts`, `tests/e2e/top-bar-fit.cjs` |
 | Why | `docs/ux-audit/round5/` (A floor, B owner and manager, C office): "including navigation"; the owner could not find the search |
 
+> **ADR-136 (2026-11-14), desktop frame:** from 1024 px the menu of each job is a left sidebar that lists every page
+> of every area (the five tabs and the former **More** entries in one list, `groupEntries`); there is no top-bar menu
+> row, no tab row and no More dropdown any more. The top bar shows the breadcrumb (`crumbsFor`), the Search box in
+> the middle, Help and the avatar. Below 1024 px: ☰ opens the same tree, the bottom bars are unchanged. The menus per
+> job, the catalogue and the permission rules below are unchanged. `tests/e2e/top-bar-fit.cjs` now checks the new
+> frame (sidebar, breadcrumb, ☰ and bottom bars, no sideways scroll; see `docs/ux-system.md` §0).
+
 ## 1. Principles
 
 1. **Organised by the person's questions, not by department.** The owner asks "what needs me, how are sales, is

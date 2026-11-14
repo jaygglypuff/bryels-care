@@ -34,7 +34,7 @@ describe("grade-5 home, settings, reports, help and operations screens", () => {
     expect(pages.length).toBe(54);
   });
 
-  it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro)", (rel) => {
+  it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro, shown in the Help panel as About this screen, ADR-136)", (rel) => {
     const src = readFileSync(join(ROOT, rel), "utf8");
     expect(src).toMatch(/<PageIntro>/);
     expect(src).toMatch(/This screen is for|homeIntro\(|PLAIN_AREA\[/);

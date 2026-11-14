@@ -1,8 +1,8 @@
 ---
 key: analytics.reports
 title: Run, export and schedule a report
-version: 2
-updated_at: 2026-11-06
+version: 3
+updated_at: 2026-11-14
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -10,7 +10,7 @@ Lists read saved records live, only for your sites and your role. Each list show
 
 ## Show a list
 
-1. Open **Money → More → Lists to download or print**. It shows only the lists your role may see.
+1. Open **Money → Lists to download or print**. It shows only the lists your role may see.
 2. Tap a list. Choose the **Site** and the **Dates**, or your own dates with **From (your own dates)** and **To (your own dates)**.
 3. Press **Show the list**.
 4. **Nothing matches**: try longer dates, another site, or fewer filters.

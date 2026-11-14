@@ -30,7 +30,7 @@ describe("grade-5 sales screens", () => {
     expect(pages.length).toBe(25);
   });
 
-  it.each(pages.map((p) => [rel(p)]))("%s says what the screen is for (PageIntro)", (r) => {
+  it.each(pages.map((p) => [rel(p)]))("%s says what the screen is for (PageIntro, shown in the Help panel as About this screen, ADR-136)", (r) => {
     const src = readFileSync(join(ROOT, r), "utf8");
     expect(src).toMatch(/<PageIntro>\s*This screen is for/);
   });

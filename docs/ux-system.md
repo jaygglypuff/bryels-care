@@ -21,6 +21,91 @@ actions queue), `docs/reports-and-templates.md` (document content), `docs/PRD.md
 
 ---
 
+## 0. Standard business system (ADR-136, phase 1, 2026-11-14) — read this first
+
+> The owner, 2026-11-14: "I am still not convinced with the UI, also in desktop mode. There are still a lot of
+> navigation problems, also the UI is ugly, feels AI-ish and not standard." This section **supersedes** the values in
+> §2.2–2.3 (surfaces), §2.8 (type sizes), §2.9 (radii), §3.1–3.2 (frame) and the pill rules of §5 wherever they
+> disagree. Words, permissions, state machines and floor phone flows (Weigh, Step, Scan, My jobs) are unchanged.
+
+### 0.1 Frame (`src/app/(app)/shell.tsx`, `nav.ts`)
+
+| Width | Frame |
+|---|---|
+| ≥ 1024 px | **Left sidebar**, 240 px (64 px "Icons only", remembered on the device as `localStorage bc.sidebar`, read in try/catch and applied before paint by the app layout). The whole two-level menu of the job from `buildNav` (`groupEntries`: the area's tabs, then its former "More" entries) is always visible: area name (semibold, icon, collapsible, the open area never folds) with its pages under it. Areas with one page (Home) are one link. Foot: **Set-up**, **Settings** (when the person may open it), **Help**, **Icons only**. Active page: tinted background (`--nav-active-bg`) and a 3 px green bar; never a filled pill. Arrow keys, Home and End move through the menu. |
+| ≥ 1024 px | **Top bar**, 56 px, white with a hairline: breadcrumb **Section › Page › record** (`crumbsFor` in nav.ts; the last part is the record number from `[data-testid=record-number]` or the page H1), the **Search** box in the middle (Ctrl/⌘K, "/"), site switcher (from 1280 px), sync chip, To approve / Messages for office approvers (word from 1280 px), Help "?", avatar menu. |
+| < 1024 px | ☰ opens the **same tree** in a drawer (office roles); the role's **bottom bar** stays for every role; floor roles (operator, warehouse) have no ☰ and keep their four doors and big-touch screens. The Help "?" shows at every width for office roles. |
+| all | A skip link "Skip to the page" is the first focusable element. The demo line is one 26 px amber line fixed above everything (`--demo-h`). |
+
+### 0.2 Tokens (`src/app/globals.css`)
+
+| Token | Light | Dark (`:root[data-theme="dark"]`) | Use |
+|---|---|---|---|
+| `--bg` | `#F7F8FA` | `#0C111D` | app background |
+| `--surface` / `--surface-2` / `--surface-3` | `#FFFFFF` / `#F9FAFB` / `#F2F4F7` | `#161B26` / `#1F242F` / `#252B37` | content, table header and hover, hover of menu entries |
+| `--border` / `--border-strong` | `#E4E7EC` / `#D0D5DD` | `#2A303C` / `#3C4350` | hairlines / inputs and outlined buttons |
+| `--fg` / `--fg-2` / `--fg-muted` | `#101828` / `#475467` / `#667085` | `#F5F5F6` / `#CECFD2` / `#94969C` | text (all ≥ 4.5:1 on white) |
+| `--primary` = `--cta` | brand green `#2F6B1F` (white text 6.4:1) | `#3F8F5C` | the one primary button, links, the active menu entry, focus |
+| `--nav-active-bg` / `--nav-active-fg` | `#EEF6EA` / `#27581C` | `#1C3A28` / `#B6E6C6` | open page in the menu, selected row |
+| status `--ok/warn/bad/info/neu/q/hold/exp/rej/appr-{bg,fg,bd}` | muted tints (e.g. ok `#ECFDF3`/`#067647`) | dark tints | badges and alert lines; text ≥ 4.5:1 on its tint |
+
+- **Radius:** buttons and inputs 6 px, cards, panels and tables 8 px, badges 4 px. `rounded-full` only for avatars,
+  dots, progress bars and switches (the floor TV and print layouts keep their own).
+- **Type:** Inter for everything (the rounded display face is gone). Body 14 px with a mouse, 15 px on touch; page
+  title `text-title` 20 px / `lg:text-title-lg` 22 px semibold; record identifier `text-id` 22 / 24 px; section and
+  panel titles 14–16 px semibold; KPI number `text-stat` 24 px; tabular figures for every number.
+- **Controls:** buttons 36 px tall for a mouse (`min-h-[36px]`), 44 px on touch screens (`pointer-coarse:min-h-[44px]`;
+  `lg` 44 / 52 px). Inputs the same. Secondary buttons are outlined; ghost buttons have no border.
+- **Shadows:** one hairline shadow on buttons and inputs; cards are drawn by their border, popovers by `--shadow-pop`.
+- **Dark mode:** the dark column is ready under `data-theme="dark"`; it is not switched on from the operating system
+  yet because some screens still hold fixed light colours (phase 2). The floor TV keeps `[data-tv-theme="dark"]`.
+
+### 0.3 Page header
+
+Title, one short meta line (site · count, or date · site), actions on the right: one primary (green), the rest
+outlined, rare ones in **⋯ More**. No "This screen is for…" paragraph under the title where the frame has its "?":
+`PageIntro` keeps the sentence in the page (hidden) and the "?" panel shows it first as **About this screen**; floor
+roles, who have no frame "?", still read it under the title. Empty states say what will appear and how. No greeting
+sentence. An alert line (`Banner`, `Callout tone="warn"`) only when the person must do something.
+
+### 0.4 What to do next (`Callout`, `src/ui/kit.tsx`)
+
+One compact line on a white surface with a 3 px green bar: an arrow, the sentence, an optional "waiting for" line
+and the one action on the right (under the text on a phone). `NextStep`, `NextStepBox`, `DoNext` (sales) and
+`RecordHeader next` all render it; screen readers hear "What to do next". Record pages keep it; list pages and Home
+do not show it (Home's first panel is **Needs you**).
+
+### 0.5 List pages (`ListToolbar`, `Tabs`, `ToolbarSearch`, `FilterSelect`, `DataTable`, `TableFooter`)
+
+1. Page header (title, "site · N orders", actions).
+2. One toolbar: status as **underline tabs with counts** on the left (never stat cards repeating the same counts,
+   never pill rows), the search box and filter dropdowns on the right ("Everyone's / Mine and unassigned" is a
+   select). Section tabs that change the page (Stock: Raw materials, Being made, Finished goods, All stock) sit above
+   the toolbar.
+3. A **data table**: sticky header under the top bar, sortable headers where the data allows (`?sort=&dir=`, decimals
+   compared with decimal.js), numbers and money right-aligned with tabular figures, 48 px rows, the whole row opens
+   the record (`RowClicks` in the shell; Ctrl/⌘-click opens a new tab) and the name cell is a real link, a muted second
+   line only where needed (`CellMeta`), record numbers in small mono (`CellCode`), a red or amber bar at the start of a
+   late or blocked row (the cell also says why), a footer with the count ("2 orders") and page links.
+4. No letter avatars, no underlined names. Cards only on phones (`mobile` → `MobileRow`, or the module's own card as
+   for production orders).
+
+### 0.6 Dashboards (`KpiTile`, `Panel`, `PanelRow`, `PanelLink`)
+
+Owner and manager Home: a row of compact clickable KPI tiles (Sales this month, Customers owe us, We owe suppliers,
+Needs you — amber border and dot when it asks for action), then two columns of panels with the same header anatomy
+(title, grey count, link on the right): **Needs you** (decisions, checks, messages, own work), **Waiting on others**
+(with names), **Watch out**, then **Sales this week** (chart with its table twin) and **Recent activity**. The site
+scope is a dropdown.
+
+### 0.7 Reference pages converted in phase 1
+
+Home (owner, manager; sales and QA Homes lost the greeting), Customer orders (`/sales`) and the customer order page,
+Production orders (table on desktop, cards on phones and on the board), Stock (`/inventory`, title "Stock" = menu
+word), To approve, Settings (groups as a side list, settings as rows with **Change**). Every other page picks up the
+shell, tokens, buttons, badges, tabs (`FilterTabs`), cards, callouts and the radius sweep; the pages that still use the
+old list anatomy are listed in ADR-136 for phase 2.
+
 ## 1. Design principles
 
 | # | Principle | What it means on screen |
@@ -435,6 +520,9 @@ flowchart LR
 
 ### 3.1 Desktop: persistent left navigation (1024 px and up)
 
+> ADR-136 built this sidebar (with the round 5 menus per job, not the groups in the table below, which are the Gate 0
+> proposal); the active page is a tinted entry with a green bar, not a filled pill. See §0.1.
+
 240 px wide, `--surface` with hairline right border, collapsible to a 72 px icon rail
 (state remembered per user). Groups are collapsible; the current group is expanded on load.
 The active page is a solid `--cta` pill with `--fg-inverse` text (adopted from the reference);
@@ -460,6 +548,8 @@ Nav footer: current user (avatar, name, role at selected site), sync status line
 density toggle, sign out.
 
 ### 3.2 Top bar (all breakpoints, condensed on phone)
+
+> ADR-136: breadcrumb on the left, Search in the middle, site, Help and the avatar on the right (§0.1).
 
 Left to right on desktop: page title (`h1`) with optional context line (record number,
 state chip); **site / context selector** (pill: "Site A · Warehouse 1 ▾"; owners and

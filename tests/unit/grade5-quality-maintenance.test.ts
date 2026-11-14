@@ -26,7 +26,7 @@ describe("grade-5 quality and maintenance screens", () => {
     expect(pages.length).toBe(39);
   });
 
-  it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro)", (rel) => {
+  it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro, shown in the Help panel as About this screen, ADR-136)", (rel) => {
     const src = readFileSync(join(ROOT, rel), "utf8");
     // Pages that only redirect (an old address kept working, docs/LEGACY_SCREENS.md) have nothing to explain.
     if (/redirect\(/.test(src) && !/<(PageHeader|RecordHeader)/.test(src)) return;

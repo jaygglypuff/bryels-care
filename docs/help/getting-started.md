@@ -1,8 +1,8 @@
 ---
 key: start.getting_started
 title: Getting started: from an empty company to a shipped order
-version: 6
-updated_at: 2026-11-13
+version: 7
+updated_at: 2026-11-14
 sop: Training guide for the sandbox; not an SOP
 ---
 
@@ -66,14 +66,14 @@ The detailed pages (**Recipes (advanced)** and **Steps (advanced)**, under **Adv
 ## 7. Buy and receive the materials
 
 1. Optional but realistic: **Buy & stock → Purchase orders**, create a purchase order to your supplier, submit and approve it.
-2. Open **Buy & stock → More → Receive a delivery** (warehouse: **Receive** in the bottom bar). Choose the supplier and the material, type the supplier lot, the amount and the expiry date, and save it to stock. Print the labels when asked.
+2. Open **Buy & stock → Receive a delivery** (warehouse: **Receive** in the bottom bar). Choose the supplier and the material, type the supplier lot, the amount and the expiry date, and save it to stock. Print the labels when asked.
 3. The received lot waits for the QA check. Nobody can use it until QA says OK.
 
 ## 8. QA releases the materials
 
 1. Open **Make → Check a batch or delivery**. Each new lot waits there.
 2. Open the lot, record the test results and choose **OK to use**. The lot can now be used.
-3. Open **Buy & stock → More → Put away** and move the released lot from the receiving dock to a storage rack (scan the labels or choose the locations).
+3. Open **Buy & stock → Put away** and move the released lot from the receiving dock to a storage rack (scan the labels or choose the locations).
 
 ## 9. Plan production (production order)
 
@@ -94,14 +94,14 @@ The detailed pages (**Recipes (advanced)** and **Steps (advanced)**, under **Adv
 
 1. Open **Make → Check a batch or delivery** and press **Check this batch**. Read how the batch went and type the test results.
 2. Choose **OK to use**. The finished goods can now be sold and the order shows **Done**.
-3. On the batch (open the production order, then tap the batch number; or **Make → More → Batch records**), open **Close the batch and paper pages** and close the batch. The final batch record (BMR) can be printed.
+3. On the batch (open the production order, then tap the batch number; or **Make → Batch records**), open **Close the batch and paper pages** and close the batch. The final batch record (BMR) can be printed.
 
 ## 12. Sell and ship
 
 1. Open **Sell → Customers** and create a customer (made-up name), then approve it.
 2. Open **Set-up → Prices** and give the product a price. Approve the price list.
 3. Open **Sell → Customer orders → New customer order**. Choose the customer, add the product and quantity, submit and confirm the order.
-4. **Sell → More → To get from shelf** (warehouse: on your Home): get the boxes (the system suggests the lots that expire first). Then **Boxing** and **Send out**: print the delivery receipt and press **Send out now**.
+4. **Sell → To get from shelf** (warehouse: on your Home): get the boxes (the system suggests the lots that expire first). Then **Boxing** and **Send out**: print the delivery receipt and press **Send out now**.
 
 ## 13. Bill and get paid
 
@@ -110,9 +110,9 @@ The detailed pages (**Recipes (advanced)** and **Steps (advanced)**, under **Adv
 
 ## 14. See it all together
 
-1. **Home** and **Money → More → Business overview (detailed)** now show your stock, the batch and the order.
-2. **Make → More → Where it came from and where it went** (QA: **Trace**): search the batch number to see which material lots went into it and which customer received it.
-3. **Money → More → Lists to download or print** has the standard lists; each one downloads for Excel.
+1. **Home** and **Money → Business overview (detailed)** now show your stock, the batch and the order.
+2. **Make → Where it came from and where it went** (QA: **Trace**): search the batch number to see which material lots went into it and which customer received it.
+3. **Money → Lists to download or print** has the standard lists; each one downloads for Excel.
 
 ## Start over
 
