@@ -215,7 +215,13 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
   useEffect(() => {
     document.querySelectorAll<HTMLDetailsElement>("details[data-frame-menu][open]").forEach((d) => d.removeAttribute("open"));
     const cur = sideRef.current?.querySelector<HTMLElement>("[aria-current=page]");
-    cur?.scrollIntoView({ block: "nearest" });
+    // Only when it is out of view: the menu does not jump on every page.
+    const box = sideRef.current?.querySelector<HTMLElement>("nav");
+    if (cur && box) {
+      const r = cur.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      if (r.top < b.top || r.bottom > b.bottom) box.scrollTop += r.top - b.top - b.height / 2 + r.height / 2;
+    }
   }, [pathname]);
 
   // The record or page title as the breadcrumb's last part (read from the page's H1 once it is shown).
@@ -410,7 +416,9 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
   };
 
   return (
-    <div className="min-h-dvh">
+    // --demo-h: the demo line is fixed above everything (sidebar, top bar and sticky table headers move down by it).
+    <div className="min-h-dvh" style={{ "--demo-h": demo ? "26px" : "0px" } as React.CSSProperties}>
+      {demo && <DemoBanner canReset={demo.canReset} sandbox={demo.sandbox} />}
       <a href="#main" className="sr-only z-[70] rounded-[6px] bg-surface px-3 py-2 text-[14px] font-medium text-fg shadow-[var(--shadow-pop)] focus:not-sr-only focus:fixed focus:left-3 focus:top-3">
         Skip to the page
       </a>
@@ -418,7 +426,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
       <RowClicks />
 
       {/* Sidebar from 1024 px (ADR-136). */}
-      <aside ref={sideRef} aria-label="Menu" data-testid="sidebar" className="no-print fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-w)] flex-col border-r border-line bg-surface lg:flex">
+      <aside ref={sideRef} aria-label="Menu" data-testid="sidebar" className="no-print fixed bottom-0 left-0 top-[var(--demo-h)] z-40 hidden w-[var(--sidebar-w)] flex-col border-r border-line bg-surface lg:flex">
         <div className={cx("flex h-14 shrink-0 items-center border-b border-line", collapsed ? "justify-center px-2" : "gap-2.5 px-4")}>
           <Link href={homeHref} className="flex min-w-0 items-center gap-2.5 rounded-[6px]" aria-label="Bryel's Care home">
             <LogoMark className="size-7 shrink-0" />
@@ -443,10 +451,9 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
         </div>
       </aside>
 
-      <div className="pb-[76px] lg:pb-0 lg:pl-[var(--sidebar-w)]">
-        {demo && <DemoBanner canReset={demo.canReset} sandbox={demo.sandbox} />}
+      <div className="pb-[76px] pt-[var(--demo-h)] lg:pb-0 lg:pl-[var(--sidebar-w)]">
         {/* Top bar, 56 px. */}
-        <header className="no-print sticky top-0 z-30 border-b border-line bg-surface">
+        <header className="no-print sticky top-[var(--demo-h)] z-30 border-b border-line bg-surface">
           <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:px-6">
             {/* One menu button below 1024 px (B report B12, C report). Floor roles have none (their doors are below). */}
             {!floor && (

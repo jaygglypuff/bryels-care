@@ -89,7 +89,7 @@ function Detail({ a, first }: { a: ApprovalRow; first: boolean }) {
   const href = rowHref(a);
   const inline = INLINE_DECISIONS[a.kind];
   return (
-    <aside aria-label="The selected item" data-testid="approval-detail" className="hidden xl:sticky xl:top-[72px] xl:block">
+    <aside aria-label="The selected item" data-testid="approval-detail" className="hidden xl:sticky xl:top-[calc(4.5rem+var(--demo-h,0px))] xl:block">
       <div className="rounded-[8px] border border-line bg-surface p-5">
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={a.severity === "critical" ? "bad" : a.severity === "warning" ? "warn" : "info"}>{a.kindLabel}</Chip>

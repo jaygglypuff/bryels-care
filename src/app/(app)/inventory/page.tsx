@@ -5,7 +5,7 @@ import { getCurrentSiteLocation } from "@/modules/inventory/lots";
 import { stockByItem } from "@/modules/inventory";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { EmptyState, LinkButton, PageHeader, buttonClass } from "@/ui/core";
-import { ListToolbar } from "@/ui/kit";
+import { Toolbar } from "@/ui/kit";
 import { FilterSelect } from "@/ui/kit-client";
 import { Banner } from "@/ui/status";
 import { PageIntro } from "@/ui/guide";
@@ -80,8 +80,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       />
       <PageIntro>This screen is for seeing what is in stock, if it is OK to use, and when it expires. Tap a row to see its lots; the one that expires first is listed first.</PageIntro>
 
-      {/* ADR-136: one toolbar: the kind tabs, the search box, and status and place as dropdowns (were pill rows and "More filters"). */}
-      <ListToolbar tabs={<StockTabs active={kind} bare />}>
+      {/* ADR-136: the kind tabs, then one toolbar: the search box, and status and place as dropdowns (were pill rows and "More filters"). */}
+      <StockTabs active={kind} />
+      <Toolbar label="Search and filters">
         <StockSearch defaultQ={q} keep={keep} />
         <FilterSelect
           id="stock-status"
@@ -98,7 +99,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
           value={section ?? ""}
           options={[{ value: "", label: "Everywhere", href: href({ section: undefined }) }, ...LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x], href: href({ section: x }) }))]}
         />
-      </ListToolbar>
+      </Toolbar>
 
       {loc && (
         <Banner tone="info" title={`Showing stock stored at ${loc.name} (${loc.code})`} action={<Link href={href({ loc: undefined })} className={buttonClass("secondary", "sm")}>Show all places</Link>} />

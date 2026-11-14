@@ -90,7 +90,8 @@ describe("frame and page layout (UX re-audit C #8, #9, #10)", () => {
     expect(src("src/ui/core.tsx")).toMatch(/"page-header--actions"/);
     expect(src("src/ui/core.tsx")).toMatch(/className="page-actions /);
     expect(src("src/ui/guide.tsx")).toMatch(/className="page-intro /);
-    expect(src("src/app/globals.css")).toMatch(/\.page-header--actions \+ \.page-intro \{ order: -2/);
+    // ADR-136: only where the intro is shown (no frame "?" on <main>).
+    expect(src("src/app/globals.css")).toMatch(/\.page-header--actions:not\(\[data-frame-help\] \*\) \+ \.page-intro \{ order: -2/);
     expect(src("src/app/globals.css")).not.toMatch(/:has\([^)]*:has\(/); // :has() inside :has() is invalid CSS: the browser drops the rule
   });
   it("the site selector shows the site name only, never cut (no max width, no code first)", () => {

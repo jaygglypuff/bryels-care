@@ -81,7 +81,7 @@ export function RecordHeader({
   return (
     <header className="mb-4 sm:mb-6" data-testid="record-header">
       {back && (
-        <Link href={back.href} className="-ml-1.5 mb-1 inline-flex min-h-[32px] items-center gap-0.5 rounded-[6px] px-1.5 text-meta font-medium text-fg-2 hover:bg-surface-3 hover:text-fg pointer-coarse:min-h-[44px]">
+        <Link href={back.href} className="-ml-1.5 mb-1 inline-flex min-h-[32px] lg:hidden items-center gap-0.5 rounded-[6px] px-1.5 text-meta font-medium text-fg-2 hover:bg-surface-3 hover:text-fg pointer-coarse:min-h-[44px]">
           <ChevronLeft size={16} aria-hidden /> {back.label}
         </Link>
       )}

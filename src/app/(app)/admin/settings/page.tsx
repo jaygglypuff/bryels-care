@@ -116,7 +116,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       ) : (
         // ADR-136: the groups as a list on the left (tabs on a phone), the settings of the open group on the right.
         <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start lg:gap-6">
-          <nav aria-label="Setting groups" className="hidden lg:sticky lg:top-[72px] lg:block">
+          <nav aria-label="Setting groups" className="hidden lg:sticky lg:top-[calc(4.5rem+var(--demo-h,0px))] lg:block">
             <ul className="flex flex-col gap-px">
               {groupLinks.map((g) => {
                 const on = g.key === group;

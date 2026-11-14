@@ -77,7 +77,7 @@ function LotLines({ item }: { item: StockItem }) {
             </span>
           </span>
           <span className="justify-self-end lg:justify-self-start"><ItemStateChip state={l.state} /></span>
-          <span className="col-span-2 pl-4 font-medium tabular lg:col-span-1 lg:pl-0">{l.qtyText}</span>
+          <span className="col-span-2 pl-4 font-medium tabular lg:col-span-1 lg:pl-0 lg:text-right">{l.qtyText}</span>
           <span className="col-span-2 pl-4 lg:col-span-1 lg:pl-0"><ExpiryText date={l.expiresOn} days={l.daysLeft} /></span>
         </li>
       ))}
@@ -101,7 +101,7 @@ function ItemRow({ item, blocked, open }: { item: StockItem; blocked: boolean; o
         <ItemStateChip state={item.state} />
         {item.low && item.state !== "low" && <span className="ml-1 hidden lg:inline"><ItemStateChip state="low" /></span>}
       </span>
-      <span className="col-span-2 lg:col-span-1"><QtyBlock item={item} blocked={blocked} /></span>
+      <span className="col-span-2 lg:col-span-1 lg:text-right"><QtyBlock item={item} blocked={blocked} /></span>
       <span className="col-span-2 text-[13px] lg:col-span-1">
         {item.lots.length === 0 ? <span className="text-muted">None in stock here</span> : item.nearestExpiry ? <><span className="text-muted lg:hidden">{blocked ? "Expiry " : "Next expiry "}</span><ExpiryText date={item.nearestExpiry} days={item.nearestDaysLeft} /></> : <span className="text-muted">No expiry date</span>}
       </span>
@@ -140,10 +140,10 @@ function ItemRow({ item, blocked, open }: { item: StockItem; blocked: boolean; o
 export function StockItemList({ items, blocked = false, open = false, label }: { items: StockItem[]; blocked?: boolean; open?: boolean; label: string }) {
   return (
     <div className={cx("rounded-[8px] border bg-surface", blocked ? "border-[var(--bad-bd)]" : "border-line")}>
-      <div className="sticky top-14 z-[1] hidden h-10 grid-cols-[minmax(0,2.2fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_24px] items-center gap-x-3 rounded-t-[8px] border-b border-line bg-surface-2 px-4 text-[12px] font-medium text-fg-2 lg:grid" aria-hidden>
+      <div className="sticky top-[calc(3.5rem+var(--demo-h,0px))] z-[1] hidden h-10 grid-cols-[minmax(0,2.2fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_24px] items-center gap-x-3 rounded-t-[8px] border-b border-line bg-surface-2 px-4 text-[12px] font-medium text-fg-2 lg:grid" aria-hidden>
         <span>{label}</span>
         <span>Status</span>
-        <span>Quantity</span>
+        <span className="text-right">Quantity</span>
         <span>{blocked ? "Expiry" : "Next expiry"}</span>
         <span />
       </div>

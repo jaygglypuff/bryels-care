@@ -176,13 +176,14 @@ body { font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; 
    header buttons (PageHeader in src/ui/core.tsx, PageIntro in src/ui/guide.tsx). Only when the header has buttons
    and a PageIntro follows it: the page column becomes a flex column, the header's two parts take part in it, and
    `order` puts title → intro → buttons; anything above the header (a back link) stays above. */
+/* ADR-136: only where the intro is shown (floor roles: no frame "?", so no data-frame-help on <main>). */
 @media (max-width: 639.98px) {
-  :is(div, main, section):has(> .page-header--actions + .page-intro) { display: flex; flex-direction: column; }
-  .page-header--actions:has(+ .page-intro) { display: contents; }
-  .page-header--actions:has(+ .page-intro) > .page-title { order: -3; }
-  .page-header--actions + .page-intro { order: -2; margin-top: 0.25rem; }
-  .page-header--actions:has(+ .page-intro) > .page-actions { order: -1; margin-bottom: 1.25rem; }
-  :is(div, main, section) > *:has(~ .page-header--actions + .page-intro) { order: -4; }
+  :is(div, main, section):not([data-frame-help]):not([data-frame-help] *):has(> .page-header--actions + .page-intro) { display: flex; flex-direction: column; }
+  .page-header--actions:not([data-frame-help] *):has(+ .page-intro) { display: contents; }
+  .page-header--actions:not([data-frame-help] *):has(+ .page-intro) > .page-title { order: -3; }
+  .page-header--actions:not([data-frame-help] *) + .page-intro { order: -2; margin-top: 0.25rem; }
+  .page-header--actions:not([data-frame-help] *):has(+ .page-intro) > .page-actions { order: -1; margin-bottom: 1.25rem; }
+  :is(div, main, section):not([data-frame-help] *) > *:has(~ .page-header--actions + .page-intro) { order: -4; }
 }
 /* Navigation feedback (src/ui/navigation-progress.tsx, ADR-043): a bar along the top edge after
    150 ms, the previous page held at 60 % opacity after 300 ms; no skeleton, no layout jump. */

@@ -188,7 +188,7 @@ export function DataTable<T>({
                   scope="col"
                   aria-sort={sorted ? (sorted === "asc" ? "ascending" : "descending") : undefined}
                   className={cx(
-                    "sticky top-14 z-[1] h-10 whitespace-nowrap border-b border-line bg-surface-2 px-3 text-[12px] font-medium text-fg-2 first:pl-4 last:pr-4",
+                    "sticky top-[calc(3.5rem+var(--demo-h,0px))] z-[1] h-10 whitespace-nowrap border-b border-line bg-surface-2 px-3 text-[12px] font-medium text-fg-2 first:pl-4 last:pr-4",
                     i === 0 && "rounded-tl-[8px]",
                     i === columns.length - 1 && "rounded-tr-[8px]",
                     c.align === "right" && "text-right",
