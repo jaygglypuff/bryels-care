@@ -155,6 +155,15 @@ async function confirmOnPage(page, name) {
 
 /** Types a number on the on-screen keypad (weighing, counts). */
 async function keypad(scope, value) {
+  // ADR-135: on a computer (automatic mode) the field takes typing and the keypad is hidden.
+  const key1 = scope.getByRole('button', { name: 'Key 1', exact: true });
+  if (!(await key1.isVisible().catch(() => false))) {
+    const field = scope.getByTestId('keypad-field').first();
+    await field.click();
+    await field.press('Control+a').catch(() => {});
+    await field.pressSequentially(String(value));
+    return;
+  }
   for (const k of String(value)) await scope.getByRole('button', { name: `Key ${k}`, exact: true }).click();
 }
 
@@ -378,7 +387,8 @@ async function weighAll(op, chk) {
     const target = (await card.getByTestId('weigh-target').innerText()).replace(/,/g, '').match(/([\d.]+)\s*(kg|g)\b/);
     await scanBurst(op, `BC:LOT:${lot}`);
     await card.getByTestId('lot-confirmed').waitFor();
-    await card.getByRole('button', { name: /Weight/ }).click().catch(() => {});
+    const weightButton = card.getByRole('button', { name: /Weight/ });
+    if (await weightButton.count()) await weightButton.first().click(); // keypad mode only (ADR-135)
     await keypad(card, target[1]);
     await card.getByText('OK', { exact: true }).first().waitFor();
     if (guard === 0) await shot(op, 'weigh-card-scanned-phone');
@@ -418,10 +428,17 @@ async function doStep(op, chk) {
       await eq.getByText(/^Using /).waitFor();
     }
     await boxLabels(op);
-    for (const field of await op.locator('button[id^="f-"]').all()) {
-      const hint = await field.locator('xpath=..').innerText();
+    // ADR-135: the number fields are inputs (typing on a computer, the big keypad on a touch phone).
+    for (const field of await op.locator('[id^="f-"]').all()) {
+      const box = field.locator('xpath=ancestor::*[.//*[starts-with(normalize-space(.), "OK ")]][1]');
+      const hint = (await box.count()) ? await box.first().innerText() : await field.locator('xpath=..').innerText();
+      const value = middle(hint.split('\n').find((l) => /^OK /.test(l)) || hint);
       await field.click();
-      await keypad(op, middle(hint.split('\n').find((l) => /^OK /.test(l)) || hint));
+      if (await op.getByRole('button', { name: 'Key 1', exact: true }).first().isVisible().catch(() => false)) await keypad(op, value);
+      else {
+        await field.press('Control+a').catch(() => {});
+        await field.pressSequentially(value);
+      }
     }
     await op.locator('button[id^="done-"]').first().click();
   }
