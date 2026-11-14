@@ -67,7 +67,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
             Search
             <Input name="q" defaultValue={sp.q} placeholder="Name or number" />
           </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
+          <button type="submit" className="min-h-[44px] rounded-[6px] bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
           <details className="w-full" open={!!(sp.warehouse || sp.kind || sp.all === "1" || (sp.site && sp.site !== ctx.currentSiteId))}>
             <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] font-medium text-primary-text">More filters</summary>
             <div className="flex flex-wrap items-end gap-3 pt-1">
@@ -117,7 +117,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
             <ul className="flex flex-col gap-2">
               {tree(g.rows).map(({ row: l, depth }) => (
                 <li key={l.id} style={{ marginLeft: `${Math.min(depth, 3) * 16}px` }}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line p-3">
                     <div className="min-w-0">
                       <Link href={`/masterdata/locations/${l.id}`} className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline">{l.name}</Link>
                       <span className="ml-2 font-mono text-[11px] text-muted">{l.code}</span>

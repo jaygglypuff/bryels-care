@@ -61,7 +61,7 @@ export default async function WorkInstructionPage({ params }: { params: Promise<
             )}
           </div>
         ) : (
-          <p className="mt-3 whitespace-pre-wrap break-words rounded-[12px] bg-surface-2/60 p-3 text-[14px]">{r.bodyMarkdown}</p>
+          <p className="mt-3 whitespace-pre-wrap break-words rounded-[8px] bg-surface-2/60 p-3 text-[14px]">{r.bodyMarkdown}</p>
         )}
       </Card>
       {r.status !== "draft" && (

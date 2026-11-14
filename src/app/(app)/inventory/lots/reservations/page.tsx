@@ -72,7 +72,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         This screen is for choosing which lot to take next (the one that expires first comes first) and, if you may, setting stock aside for an order or a batch so nobody else takes it.
       </PageIntro>
 
-      <form method="get" className="grid grid-cols-1 gap-3 rounded-[20px] bg-surface p-4 shadow-[var(--shadow-card)] sm:grid-cols-[2fr_1fr_auto] sm:items-end" role="search">
+      <form method="get" className="grid grid-cols-1 gap-3 rounded-[8px] bg-surface p-4 border border-line sm:grid-cols-[2fr_1fr_auto] sm:items-end" role="search">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="item" className="text-[14px] font-medium">What do you need?</label>
           <Select id="item" name="item" defaultValue={item}>
@@ -114,13 +114,13 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
           {rec.candidates.length === 0 ? (
             <EmptyState title={`No ${itemName ?? "stock of this item"} at ${ctx.currentSite.name}`}>Receive it first, or ask purchasing to order it.</EmptyState>
           ) : (
-            <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+            <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
               {rec.candidates.map((c) => (
                 <li key={`${c.lotId}-${c.locationId}`} className={c.eligible ? "px-4 py-3" : "px-4 py-3 opacity-75"} data-testid="fefo-row">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold">
-                        {c.eligible && c.rank === 1 ? <span className="rounded-full bg-cta px-2 py-0.5 text-[12px] text-white">Use this first</span> : c.rank ? <span className="text-muted">{c.rank}.</span> : null}
+                        {c.eligible && c.rank === 1 ? <span className="rounded-[4px] bg-cta px-2 py-0.5 text-[12px] text-white">Use this first</span> : c.rank ? <span className="text-muted">{c.rank}.</span> : null}
                         <Link href={`/inventory/${c.lotId}`} className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">On {c.locationCode}</Link>
                         <LotStatusChip status={c.qualityStatus} expiresOn={c.expiresOn} />
                       </p>
@@ -157,7 +157,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
           {reservations.length === 0 ? (
             <EmptyState title="Nothing is set aside">Choose an item above and tap “Set aside” on a lot. It stays here until it is used, let go, or the time runs out.</EmptyState>
           ) : (
-            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Stock set aside">
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="Stock set aside">
               {reservations.map((r) => (
                 <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">

@@ -113,7 +113,7 @@ export function CorrectForm({ inspectionId, resultId, test }: { inspectionId: st
   return (
     <details className="mt-1">
       <summary className="min-h-[44px] cursor-pointer py-2 text-[13px] text-primary-text">Correct this result</summary>
-      <div className="mt-2 rounded-[12px] border border-line p-3">
+      <div className="mt-2 rounded-[8px] border border-line p-3">
         <ActionForm action={correctResultAction} hidden={{ inspectionId, resultId }} submit="Save correction" pending="Saving…" variant="secondary">
           {(fe) => (
             <>
@@ -380,7 +380,7 @@ export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: 
           Untick all
         </button>
       </div>
-      <ul className="flex max-h-[420px] flex-col divide-y divide-line overflow-y-auto rounded-[16px] border border-line">
+      <ul className="flex max-h-[420px] flex-col divide-y divide-line overflow-y-auto rounded-[8px] border border-line">
         {rows.map((r) => {
           const outcome = state?.outcomes?.find((o) => o.lotId === r.id);
           return (
@@ -464,7 +464,7 @@ export function VerifyScanForm({ locationId, expected = [], allowTyping = true }
       <ScanOrPick mode="emit" kind="container" alsoAccept={["lot"]} id="verify-scan" label={allowTyping ? "Scan a box or lot label, or type its number" : "Scan a box or lot label"} hint="Each one is checked against the record. A label you cannot read: print a new one and destroy the old one." candidates={expected} showCandidates={false} allowTap={false} allowTyping={allowTyping} search={false} pending={pending} onEmit={(v, _c, via) => send(v, via)} error={state?.fieldErrors?.scan} />
       {pending && <p className="text-[13px] text-muted" role="status">Checking…</p>}
       {state?.ok && state.message && (
-        <p role="status" className={cx("rounded-[10px] border px-3 py-2 text-[14px] font-medium", state.last?.status === "verified" ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]")}>
+        <p role="status" className={cx("rounded-[6px] border px-3 py-2 text-[14px] font-medium", state.last?.status === "verified" ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]")}>
           {state.message}
         </p>
       )}

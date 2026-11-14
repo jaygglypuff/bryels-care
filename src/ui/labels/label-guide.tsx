@@ -16,7 +16,7 @@ export function LabelGuide() {
       <h2 className="text-[17px] font-semibold">Which label goes where?</h2>
       <ul className="grid gap-2 sm:grid-cols-2">
         {ROWS.map((r) => (
-          <li key={r.label} className="rounded-[14px] border border-line bg-surface p-3 text-[15px]">
+          <li key={r.label} className="rounded-[8px] border border-line bg-surface p-3 text-[15px]">
             <p className="font-semibold text-fg">{r.label}</p>
             <p className="text-fg-2"><span className="font-medium text-fg">Print:</span> {r.print}</p>
             <p className="text-fg-2"><span className="font-medium text-fg">Stick:</span> {r.stick}</p>

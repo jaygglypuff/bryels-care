@@ -117,7 +117,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             <ul className="flex flex-col gap-2 md:hidden">
               {users.map((u) => (
                 <li key={u.id}>
-                  <Link href={`/admin/users/${u.id}`} className="block rounded-[12px] border border-line p-3 hover:border-line-strong">
+                  <Link href={`/admin/users/${u.id}`} className="block rounded-[8px] border border-line p-3 hover:border-line-strong">
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-medium text-fg">{u.displayName}</span>
                       <UserStatusChip status={u.status} />

@@ -28,7 +28,7 @@ export function PackagingBox({ batchId, stepNo, packaging, canPerform, done, lab
   return (
     <div className="grid gap-3">
       {packaging.lines.length > 0 && (
-        <section className="rounded-[16px] border border-line bg-surface p-4" aria-label="Wrappers and labels for this batch" data-testid="packaging-taken">
+        <section className="rounded-[8px] border border-line bg-surface p-4" aria-label="Wrappers and labels for this batch" data-testid="packaging-taken">
           <h2 className="flex items-center gap-2 text-[17px] font-semibold text-fg">
             <Package size={18} aria-hidden /> You took these at Get materials
           </h2>
@@ -36,7 +36,7 @@ export function PackagingBox({ batchId, stepNo, packaging, canPerform, done, lab
             {packaging.lines.map((l) => {
               const rows = l.issued.length ? l.issued : l.plan;
               return (
-                <li key={l.batchMaterialId} className="rounded-[12px] bg-surface-2 p-3 text-[16px]">
+                <li key={l.batchMaterialId} className="rounded-[8px] bg-surface-2 p-3 text-[16px]">
                   <p className="font-semibold text-fg">{l.materialName}</p>
                   {rows.length ? (
                     rows.map((r, i) => (
@@ -55,7 +55,7 @@ export function PackagingBox({ batchId, stepNo, packaging, canPerform, done, lab
         </section>
       )}
       {packaging.choose && packaging.recorded > 0 && (
-        <p className="flex items-center gap-2 rounded-[16px] border border-line bg-surface p-4 text-[16px] text-fg" data-testid="packaging-recorded">
+        <p className="flex items-center gap-2 rounded-[8px] border border-line bg-surface p-4 text-[16px] text-fg" data-testid="packaging-recorded">
           <CheckCircle2 size={20} className="text-[var(--ok-fg)]" aria-hidden /> The wrapper or label lot you used is recorded for this batch.
         </p>
       )}
@@ -97,7 +97,7 @@ function ChooseLot({ batchId, stepNo, choices, defaultCount }: { batchId: string
   const candidates = [...byLot.values()];
   const firstQty = lot ? Math.floor(Number(choices.find((c) => c.lotId === lot.value)?.qty ?? defaultCount)) : defaultCount;
   return (
-    <form action={action} className="grid gap-3 rounded-[16px] border border-[var(--warn-bd)] bg-surface p-4" aria-label="Which wrapper or label did you take?" data-testid="packaging-choose">
+    <form action={action} className="grid gap-3 rounded-[8px] border border-[var(--warn-bd)] bg-surface p-4" aria-label="Which wrapper or label did you take?" data-testid="packaging-choose">
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="stepNo" value={stepNo} />
       {candidates.length === 0 ? (
@@ -159,7 +159,7 @@ function ChooseLot({ batchId, stepNo, choices, defaultCount }: { batchId: string
 function LabelPreview({ labels }: { labels: Partial<Packaging["labels"]> & Pick<Packaging["labels"], "lotNumber" | "expiresOn"> }) {
   return (
     <figure className="mt-3 grid gap-1" data-testid="label-preview">
-      <div className="max-w-[300px] rounded-[10px] border-2 border-dashed border-line-strong bg-white p-3 text-[13px] leading-tight text-[#1c1b18]" aria-label="Label preview">
+      <div className="max-w-[300px] rounded-[6px] border-2 border-dashed border-line-strong bg-white p-3 text-[13px] leading-tight text-[#1c1b18]" aria-label="Label preview">
         <p className="text-[15px] font-bold">{labels.productName || "This product"}</p>
         <p>
           Lot: <span className="font-mono font-semibold">{labels.lotNumber ?? "given at the first print"}</span>
@@ -178,7 +178,7 @@ export function LabelPrint({ batchId, labels }: { batchId: string; labels: Pick<
   const [state, action] = useInPlaceAction(printBatchLabelsAction);
   const jobId = state?.ok ? state.jobId : undefined;
   return (
-    <section className="rounded-[16px] border border-line bg-surface p-4" aria-label="Product labels" data-testid="batch-labels">
+    <section className="rounded-[8px] border border-line bg-surface p-4" aria-label="Product labels" data-testid="batch-labels">
       <h2 className="flex items-center gap-2 text-[17px] font-semibold text-fg">
         <Tag size={18} aria-hidden /> Labels for this batch
       </h2>
@@ -206,7 +206,7 @@ export function LabelPrint({ batchId, labels }: { batchId: string; labels: Pick<
       )}
       <FormMessage state={state} />
       {jobId && (
-        <Link href={`/print/labels/${jobId}`} className="mt-2 inline-flex min-h-[48px] items-center gap-2 rounded-full bg-primary px-5 text-[15px] font-semibold text-white" data-testid="open-labels">
+        <Link href={`/print/labels/${jobId}`} className="mt-2 inline-flex min-h-[48px] items-center gap-2 rounded-[6px] bg-primary px-5 text-[15px] font-semibold text-white" data-testid="open-labels">
           <Printer size={16} aria-hidden /> Open the labels and print
         </Link>
       )}

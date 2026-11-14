@@ -41,7 +41,7 @@ function Avatar({ name, kind, blocked }: { name: string; kind: string; blocked?:
     <span
       aria-hidden
       className={cx(
-        "inline-flex size-10 shrink-0 items-center justify-center rounded-[12px] text-[16px] font-semibold",
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-[8px] text-[16px] font-semibold",
         blocked ? "bg-[var(--bad-bg)] text-[var(--bad-fg)]" : kind === "product" ? "bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "bg-[var(--info-bg)] text-[var(--info-fg)]",
       )}
     >
@@ -156,7 +156,7 @@ function ItemRow({ item, blocked, open }: { item: StockItem; blocked: boolean; o
 
 export function StockItemList({ items, blocked = false, open = false, label }: { items: StockItem[]; blocked?: boolean; open?: boolean; label: string }) {
   return (
-    <div className={cx("overflow-hidden rounded-[16px] border bg-surface", blocked ? "border-[var(--bad-bd)]" : "border-line")}>
+    <div className={cx("overflow-hidden rounded-[8px] border bg-surface", blocked ? "border-[var(--bad-bd)]" : "border-line")}>
       <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_24px] gap-x-3 bg-surface-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted lg:grid" aria-hidden>
         <span>{label}</span>
         <span>Status</span>

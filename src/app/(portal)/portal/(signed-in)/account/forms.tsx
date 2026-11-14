@@ -45,7 +45,7 @@ export function TotpEnrolForm() {
         <>
           <div className="flex flex-col items-start gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL generated on the server */}
-            <img src={begin.qrDataUrl} alt="QR code for your authenticator app" width={180} height={180} className="rounded-[12px] border border-line" />
+            <img src={begin.qrDataUrl} alt="QR code for your authenticator app" width={180} height={180} className="rounded-[8px] border border-line" />
             <p className="text-[12px] text-muted">
               Cannot scan? Enter this key: <code className="break-all font-mono">{begin.secret}</code>
             </p>

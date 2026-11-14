@@ -39,7 +39,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
         actions={
           <>
             {ctx.can("masterdata.material.export") && (
-              <a href={`/api/v1/masterdata/export/materials${qs ? `?${qs}` : ""}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
+              <a href={`/api/v1/masterdata/export/materials${qs ? `?${qs}` : ""}`} className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
                 Export CSV
               </a>
             )}
@@ -64,7 +64,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
               ))}
             </Select>
           </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Search</button>
+          <button type="submit" className="min-h-[44px] rounded-[6px] bg-primary px-5 text-[14px] font-medium text-white">Search</button>
           <div className="w-full">
             <MoreDetails title="More filters">
               <div className="flex flex-wrap gap-3">

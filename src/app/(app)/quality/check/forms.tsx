@@ -48,7 +48,7 @@ function ConfirmStep({
     );
   }
   return (
-    <div className="rounded-[16px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4" role="alertdialog" aria-labelledby={`${testId}-q`} data-testid={`${testId}-confirm`}>
+    <div className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4" role="alertdialog" aria-labelledby={`${testId}-q`} data-testid={`${testId}-confirm`}>
       <p id={`${testId}-q`} className="text-[16px] font-semibold">
         {question}
       </p>

@@ -20,7 +20,7 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
         e.dataTransfer.effectAllowed = "move";
         onDragStart(c);
       }}
-      className="relative rounded-[14px] border border-line bg-surface p-3 shadow-sm"
+      className="relative rounded-[8px] border border-line bg-surface p-3 shadow-sm"
       aria-label={`Order ${c.orderNumber}`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
@@ -107,7 +107,7 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
     <div>
       {dialog && (
         <div role="dialog" aria-modal="true" aria-labelledby="order-board-dialog" className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 sm:items-center" onClick={() => setDialog(null)}>
-          <div className="w-full max-w-md rounded-[20px] bg-surface p-5 shadow-[var(--shadow-pop)]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-[8px] bg-surface p-5 shadow-[var(--shadow-pop)]" onClick={(e) => e.stopPropagation()}>
             <h2 id="order-board-dialog" className="font-display text-[17px] font-semibold">
               {dialog.title}
             </h2>
@@ -147,7 +147,7 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
               dragged.current = null;
             }}
             className={cx(
-              "relative flex w-full min-w-0 flex-col rounded-[16px] border bg-surface-2/60 p-2.5 lg:w-[270px] lg:shrink-0 lg:snap-start",
+              "relative flex w-full min-w-0 flex-col rounded-[8px] border bg-surface-2/60 p-2.5 lg:w-[270px] lg:shrink-0 lg:snap-start",
               col.cards.length === 0 && "hidden lg:flex", // stacked view: skip empty steps
               over === col.key ? (dragged.current?.moves[col.key]?.allowed ? "border-primary" : "border-[var(--warn-bd)]") : "border-line",
             )}

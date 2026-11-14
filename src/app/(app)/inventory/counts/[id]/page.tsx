@@ -157,7 +157,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
           {c.progress.linesCounted} of {c.progress.lines} counted
         </p>
         <div className="mt-2 h-4 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Count progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} data-testid="count-progress">
-          <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
+          <div className="h-full rounded-[6px] bg-[var(--primary)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
         </div>
         <p className="mt-1.5 text-[13px] text-muted">
           {c.progress.locationsCounted} of {c.progress.locations} {c.progress.locations === 1 ? "shelf" : "shelves"} done
@@ -282,7 +282,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
         {c.lines.length === 0 ? (
           <EmptyState title={c.status === "planned" ? "Not started yet" : "Nothing on these shelves"}>{c.status === "planned" ? "The list of sacks is made when the count starts." : "These shelves held no stock when the count started."}</EmptyState>
         ) : (
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Count lines">
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="Count lines">
             {c.lines.map((l) => (
               <li key={l.id} className="px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">

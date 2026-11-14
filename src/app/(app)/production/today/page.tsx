@@ -46,11 +46,11 @@ export default async function TodayPage() {
       ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-2 text-center">
-            <div className="rounded-[14px] border border-line bg-surface p-3">
+            <div className="rounded-[8px] border border-line bg-surface p-3">
               <p className="text-[12px] text-muted">Good pieces today</p>
               <p className="text-stat tabular">{pcs(good.toString())}</p>
             </div>
-            <div className="rounded-[14px] border border-line bg-surface p-3">
+            <div className="rounded-[8px] border border-line bg-surface p-3">
               <p className="text-[12px] text-muted">Rejects today</p>
               <p className="text-stat tabular">{pcs(rejects.toString())}</p>
             </div>

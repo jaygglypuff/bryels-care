@@ -37,7 +37,7 @@ export function CommandForm({
   if (needsPanel && !open) {
     return (
       <div className="flex flex-col gap-2">
-        <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center justify-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
           {label}
         </button>
         <FormMessage state={state} />
@@ -61,7 +61,7 @@ export function CommandForm({
           {label}
         </SubmitButton>
         {needsPanel && (
-          <button type="button" onClick={() => setOpen(false)} className="min-h-[44px] rounded-full px-4 text-[14px] text-primary-text hover:underline">
+          <button type="button" onClick={() => setOpen(false)} className="min-h-[44px] rounded-[6px] px-4 text-[14px] text-primary-text hover:underline">
             Cancel
           </button>
         )}
@@ -97,10 +97,10 @@ export function DecisionForm({
   const [state, run] = useActionState<ActionState, FormData>(action, null);
   const fe = state?.fieldErrors ?? {};
   return (
-    <form action={run} className="flex flex-col gap-3 rounded-[16px] border border-line bg-surface-2/60 p-4">
+    <form action={run} className="flex flex-col gap-3 rounded-[8px] border border-line bg-surface-2/60 p-4">
       <input type="hidden" name="id" value={id} />
       {ownerAloneNote && (
-        <p className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="owner-alone-note">
+        <p className="rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="owner-alone-note">
           {ownerAloneNote}
         </p>
       )}

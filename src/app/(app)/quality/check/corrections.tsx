@@ -61,7 +61,7 @@ function CorrectForm({ batchId, row, decided }: { batchId: string; row: ResultRo
       </Button>
     );
   return (
-    <form action={action} className="mt-2 grid gap-2 rounded-[14px] border border-line p-3">
+    <form action={action} className="mt-2 grid gap-2 rounded-[8px] border border-line p-3">
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="resultId" value={row.id} />
       <input type="hidden" name="decided" value={decided ? "1" : "0"} />
@@ -99,7 +99,7 @@ function PendingBox({ c }: { c: PendingCorrection }) {
   const [state, action] = useInPlaceAction(decideCorrectionAction);
   const [k] = useState(key);
   return (
-    <section className="rounded-[16px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3" data-testid="pending-correction">
+    <section className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3" data-testid="pending-correction">
       <p className="text-[15px] font-semibold">
         {c.by} asks to correct {c.test}: <span className="line-through">{c.oldResult}</span> → {c.value}
       </p>

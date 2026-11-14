@@ -81,9 +81,9 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
         <Card id="jobs">
           <CardTitle>Jobs</CardTitle>
           <nav aria-label="Job status" className="mb-3 flex flex-wrap gap-2">
-            <Link href="/admin/diagnostics#jobs" aria-current={!status ? "page" : undefined} className={cx("rounded-full border px-3 py-1 text-[13px]", !status ? "border-primary bg-primary-soft font-semibold" : "border-line")}>All</Link>
+            <Link href="/admin/diagnostics#jobs" aria-current={!status ? "page" : undefined} className={cx("rounded-[6px] border px-3 py-1 text-[13px]", !status ? "border-primary bg-primary-soft font-semibold" : "border-line")}>All</Link>
             {JOB_STATUSES.map((s) => (
-              <Link key={s} href={`/admin/diagnostics?status=${s}#jobs`} aria-current={status === s ? "page" : undefined} className={cx("rounded-full border px-3 py-1 text-[13px]", status === s ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
+              <Link key={s} href={`/admin/diagnostics?status=${s}#jobs`} aria-current={status === s ? "page" : undefined} className={cx("rounded-[6px] border px-3 py-1 text-[13px]", status === s ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
                 {s} · {counts[s]}
               </Link>
             ))}
@@ -93,7 +93,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
           ) : (
             <ul className="divide-y divide-line">
               {jobs.map((j) => (
-                <li key={j.id} id={`job-${j.id}`} className={cx("py-3", sp.job === j.id && "rounded-[12px] bg-[var(--warn-bg)]/40 px-2")}>
+                <li key={j.id} id={`job-${j.id}`} className={cx("py-3", sp.job === j.id && "rounded-[8px] bg-[var(--warn-bg)]/40 px-2")}>
                   <div className="flex flex-wrap items-center gap-2">
                     <Chip tone={JOB_TONE[j.status as keyof typeof JOB_TONE] ?? "neu"}>{j.status}</Chip>
                     {j.deadLetteredAt && <Chip tone="bad">dead-lettered</Chip>}
@@ -108,7 +108,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
                   {j.errorMessage && <p className="mt-1 break-words text-[13px] text-[var(--bad-fg)]">Last error: {j.errorMessage}</p>}
                   <details className="mt-1 text-[12px]">
                     <summary className="flex min-h-[44px] cursor-pointer items-center text-muted">Payload summary</summary>
-                    <pre className="mt-1 max-w-full overflow-x-auto rounded-[10px] bg-surface-2 p-2">{JSON.stringify(j.payloadSummary, null, 2)}</pre>
+                    <pre className="mt-1 max-w-full overflow-x-auto rounded-[6px] bg-surface-2 p-2">{JSON.stringify(j.payloadSummary, null, 2)}</pre>
                   </details>
                   {canAdmin && (j.status === "failed" || j.status === "cancelled" || j.status === "queued") && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -192,7 +192,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
                     ))}
                   </Table>
                   {canBalanceAdmin && diffs.some((d) => d.siteId === ctx.currentSiteId) && (
-                    <form action={rebuildBalancesAction} className="flex flex-wrap items-end gap-2 rounded-[14px] border border-line p-3">
+                    <form action={rebuildBalancesAction} className="flex flex-wrap items-end gap-2 rounded-[8px] border border-line p-3">
                       <input type="hidden" name="runId" value={focusRun.id} />
                       <label className="min-w-[240px] flex-1 text-[13px]">
                         Rebuild the {ctx.currentSite.code} balances of these lots from the ledger. Reason (required)

@@ -72,9 +72,9 @@ const minusOne = (d: string) => new Date(Date.parse(d + "T00:00:00Z") - 86_400_0
 
 export function ValueLabelChip({ label }: { label: string }) {
   return label === "actual" ? (
-    <span className="rounded-full border border-line px-1.5 py-0 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Actual</span>
+    <span className="rounded-[4px] border border-line px-1.5 py-0 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Actual</span>
   ) : (
-    <span className="rounded-full border border-dashed border-[var(--warn-bd)] bg-[var(--warn-bg)] px-1.5 py-0 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--warn-fg)]">{LABEL_TEXT[label] ?? label}</span>
+    <span className="rounded-[4px] border border-dashed border-[var(--warn-bd)] bg-[var(--warn-bg)] px-1.5 py-0 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--warn-fg)]">{LABEL_TEXT[label] ?? label}</span>
   );
 }
 
@@ -126,7 +126,7 @@ export function KpiCard({
   const pct = tile.current?.value ? Math.min(100, Number(tile.current.value) * 100) : 0;
   const asOf = tile.kind === "asof" ? `as of ${hhmm(tile.asOf)}` : periodText(period);
   return (
-    <Link href={tile.href} aria-label={`${tile.name}: ${value}. Open the records`} className="group block h-full rounded-[24px]">
+    <Link href={tile.href} aria-label={`${tile.name}: ${value}. Open the records`} className="group block h-full rounded-[8px]">
       <Card className="flex h-full flex-col gap-2 transition-shadow group-hover:shadow-[var(--shadow-pop)]">
         <div className="flex items-start justify-between gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{title ?? plainKpi(tile.code, tile.short)}</span>
@@ -229,22 +229,22 @@ export function ScopePeriodBar({ basePath, scope, period, sites, canAll, extra =
   const href = (p: Record<string, string>) => `${basePath}?${new URLSearchParams({ ...extra, scope: scope.key, period: period.key, ...p }).toString()}`;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <nav aria-label="Period" className="flex flex-wrap gap-1 rounded-[20px] border border-line-strong bg-surface p-0.5">
+      <nav aria-label="Period" className="flex flex-wrap gap-1 rounded-[8px] border border-line-strong bg-surface p-0.5">
         {PERIOD_KEYS.map((k) => (
-          <Link key={k} href={href({ period: k })} aria-current={period.key === k ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3 text-[12.5px] font-medium", period.key === k ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
+          <Link key={k} href={href({ period: k })} aria-current={period.key === k ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-3 text-[12.5px] font-medium", period.key === k ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
             {PERIOD_LABELS[k]}
           </Link>
         ))}
       </nav>
       {(sites.length > 1 || canAll) && (
-        <nav aria-label="Sites" className="flex flex-wrap gap-1 rounded-[20px] border border-line-strong bg-surface p-0.5">
+        <nav aria-label="Sites" className="flex flex-wrap gap-1 rounded-[8px] border border-line-strong bg-surface p-0.5">
           {canAll && (
-            <Link href={href({ scope: "all" })} aria-current={scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3 text-[12.5px] font-medium", scope.all ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
+            <Link href={href({ scope: "all" })} aria-current={scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-3 text-[12.5px] font-medium", scope.all ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
               All sites
             </Link>
           )}
           {sites.map((s) => (
-            <Link key={s.id} href={href({ scope: s.id })} aria-current={!scope.all && scope.siteIds[0] === s.id ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3 text-[12.5px] font-medium", !scope.all && scope.siteIds[0] === s.id ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
+            <Link key={s.id} href={href({ scope: s.id })} aria-current={!scope.all && scope.siteIds[0] === s.id ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-3 text-[12.5px] font-medium", !scope.all && scope.siteIds[0] === s.id ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
               {s.code}
             </Link>
           ))}
@@ -337,7 +337,7 @@ export function RecordList({ rows, showSite, empty, valueHeader, value }: { rows
       </div>
       <ul className="flex flex-col gap-2 md:hidden">
         {rows.map((r, i) => (
-          <li key={`${r.refId}-${i}`} className="rounded-[12px] border border-line p-3">
+          <li key={`${r.refId}-${i}`} className="rounded-[8px] border border-line p-3">
             <div className="flex items-start justify-between gap-2">
               <RecordRef r={r} />
               <CategoryChip category={r.category} />

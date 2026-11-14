@@ -17,7 +17,7 @@ export const metadata = { title: "Check a batch or delivery" };
 
 function Count({ n }: { n: number }) {
   return (
-    <span className="ml-2 inline-flex min-w-[24px] items-center justify-center rounded-full bg-surface-2 px-2 py-0.5 text-[12px] font-semibold text-fg-2 tabular" aria-label={`${n} items`}>
+    <span className="ml-2 inline-flex min-w-[24px] items-center justify-center rounded-[4px] bg-surface-2 px-2 py-0.5 text-[12px] font-semibold text-fg-2 tabular" aria-label={`${n} items`}>
       {n}
     </span>
   );
@@ -43,7 +43,7 @@ function OtherWork({ can }: { can: (p: string) => boolean }) {
         .filter(([, , ok]) => ok)
         .map(([href, label]) => (
           <li key={href}>
-            <Link href={href} className="flex min-h-[44px] items-center rounded-[10px] px-2 text-[14px] text-fg hover:bg-surface-2">
+            <Link href={href} className="flex min-h-[44px] items-center rounded-[6px] px-2 text-[14px] text-fg hover:bg-surface-2">
               {label}
             </Link>
           </li>

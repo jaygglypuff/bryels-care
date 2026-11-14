@@ -15,7 +15,7 @@ export function AcknowledgeForm({ id }: { id: string }) {
       {note ? (
         <Input name="note" placeholder="Note (optional)" maxLength={500} aria-label="Note for the others" className="w-full sm:w-48" autoFocus />
       ) : (
-        <button type="button" onClick={() => setNote(true)} className="inline-flex min-h-[44px] items-center rounded-full px-3 text-[13px] font-medium text-primary-text hover:bg-primary-soft" data-testid="add-note">
+        <button type="button" onClick={() => setNote(true)} className="inline-flex min-h-[44px] items-center rounded-[6px] px-3 text-[13px] font-medium text-primary-text hover:bg-primary-soft" data-testid="add-note">
           Add a note
         </button>
       )}

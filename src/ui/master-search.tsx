@@ -240,7 +240,7 @@ export function MasterSearchPanel({
 
   return (
     <div className={cx("flex min-h-0 flex-col", variant === "dialog" && "h-full sm:h-auto sm:max-h-[min(80dvh,640px)]")} data-testid="master-search">
-      <div className={cx("flex items-center gap-2 border-line px-3", variant === "dialog" ? "border-b" : "rounded-[14px] border bg-surface shadow-[var(--shadow-card)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]")}>
+      <div className={cx("flex items-center gap-2 border-line px-3", variant === "dialog" ? "border-b" : "rounded-[8px] border bg-surface shadow-[var(--shadow-card)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]")}>
         <Search size={18} aria-hidden className="shrink-0 text-muted" />
         <label htmlFor={`${ids}-input`} className="sr-only">Search anything</label>
         <input
@@ -265,7 +265,7 @@ export function MasterSearchPanel({
         />
         {pending && <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-primary" aria-label="Searching" />}
         {q && (
-          <button type="button" onClick={() => { setQ(""); inputRef.current?.focus(); }} className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:text-fg" aria-label="Clear the search">
+          <button type="button" onClick={() => { setQ(""); inputRef.current?.focus(); }} className="grid size-11 shrink-0 place-items-center rounded-[6px] text-muted hover:text-fg" aria-label="Clear the search">
             <X size={16} aria-hidden />
           </button>
         )}
@@ -273,37 +273,37 @@ export function MasterSearchPanel({
           <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted sm:inline">Esc</kbd>
         )}
         {variant === "dialog" && (
-          <button type="button" onClick={() => onClose?.()} className="grid min-h-11 shrink-0 place-items-center rounded-full px-3 text-[14px] font-medium text-primary-text sm:hidden">
+          <button type="button" onClick={() => onClose?.()} className="grid min-h-11 shrink-0 place-items-center rounded-[6px] px-3 text-[14px] font-medium text-primary-text sm:hidden">
             Close
           </button>
         )}
       </div>
       {/* Round 5 (B report #1): the search screen's first line is "Scan a label" (phones and tablets open the camera there). */}
       {variant === "dialog" && (
-        <Link href="/inventory/scan" onClick={() => onClose?.()} data-testid="search-scan-label" className="mx-2 mt-2 flex min-h-[52px] items-center gap-3 rounded-[12px] border border-line bg-surface-2 px-3 text-[15px] font-semibold text-fg hover:bg-surface">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-cta text-white" aria-hidden><ScanLine size={18} /></span>
+        <Link href="/inventory/scan" onClick={() => onClose?.()} data-testid="search-scan-label" className="mx-2 mt-2 flex min-h-[52px] items-center gap-3 rounded-[8px] border border-line bg-surface-2 px-3 text-[15px] font-semibold text-fg hover:bg-surface">
+          <span className="grid size-9 shrink-0 place-items-center rounded-[6px] bg-cta text-white" aria-hidden><ScanLine size={18} /></span>
           Scan a label
           <span className="ml-auto text-[12px] font-normal text-muted">camera or scanner</span>
         </Link>
       )}
 
       <div ref={listRef} id={`${ids}-list`} role="listbox" aria-label="Search results" aria-busy={pending} className={cx("min-h-0 overflow-y-auto", variant === "dialog" ? "px-2 py-2" : "mt-3 space-y-3")}>
-        {offline && <p role="alert" className="m-2 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">You&apos;re offline. Search needs a connection; try again when you&apos;re back online.</p>}
-        {res?.error && shown && <p role="alert" className="m-2 rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[13px] text-[var(--bad-fg)]">{res.error}</p>}
+        {offline && <p role="alert" className="m-2 rounded-[6px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">You&apos;re offline. Search needs a connection; try again when you&apos;re back online.</p>}
+        {res?.error && shown && <p role="alert" className="m-2 rounded-[6px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[13px] text-[var(--bad-fg)]">{res.error}</p>}
         {LABEL.test(text) && <p className="m-2 px-1 text-[13px] text-fg-2">This is a label. Press Enter to see what it is.</p>}
-        {!res && !offline && <div className="m-2 h-24 animate-pulse rounded-[14px] bg-surface-2" aria-label="Loading" />}
+        {!res && !offline && <div className="m-2 h-24 animate-pulse rounded-[8px] bg-surface-2" aria-label="Loading" />}
         {nothing && (
           <p className="m-2 px-1 py-3 text-[14px] text-fg-2" role="status">
             Nothing found for “{text}”. Try part of a name, or the last digits of the number (for example 4 or 0012).
           </p>
         )}
         {chooseHint && shown && rows.length > 0 && (
-          <p className="m-2 rounded-[10px] border border-[var(--info-bd)] bg-[var(--info-bg)] px-3 py-2 text-[13px] text-[var(--info-fg)]" role="status" data-testid="search-choose-hint">
+          <p className="m-2 rounded-[6px] border border-[var(--info-bd)] bg-[var(--info-bg)] px-3 py-2 text-[13px] text-[var(--info-fg)]" role="status" data-testid="search-choose-hint">
             More than one thing matches. Tap the one you want, or choose it with ↑ ↓ and press Enter.
           </p>
         )}
         {sections.map((s) => (
-          <div key={s.label} role="group" aria-labelledby={`${ids}-${s.label}`} className={cx(variant === "page" && "rounded-[14px] bg-surface p-2 shadow-[var(--shadow-card)]")}>
+          <div key={s.label} role="group" aria-labelledby={`${ids}-${s.label}`} className={cx(variant === "page" && "rounded-[8px] bg-surface p-2 border border-line")}>
             <div id={`${ids}-${s.label}`} className="px-2 pb-1 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted">{s.label}</div>
             {s.rows.map((r) => {
               index += 1;
@@ -311,7 +311,7 @@ export function MasterSearchPanel({
               const isActive = i === active && (moved || !text);
               const body = (
                 <>
-                  <span className={cx("grid size-9 shrink-0 place-items-center rounded-full", isActive ? "bg-white/15" : "bg-surface-2 text-fg-2")} aria-hidden>{ICON[r.icon]}</span>
+                  <span className={cx("grid size-9 shrink-0 place-items-center rounded-[6px]", isActive ? "bg-white/15" : "bg-surface-2 text-fg-2")} aria-hidden>{ICON[r.icon]}</span>
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-baseline gap-2">
                       <span className="truncate text-[14px] font-medium">{r.name}</span>
@@ -319,10 +319,10 @@ export function MasterSearchPanel({
                     </span>
                     {r.detail && <span className={cx("block truncate text-[12px]", isActive ? "text-white/85" : "text-fg-2")}>{r.detail}</span>}
                   </span>
-                  {r.exact && <span className={cx("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", isActive ? "bg-white/20" : "bg-[var(--ok-bg)] text-[var(--ok-fg)]")}>This number</span>}
+                  {r.exact && <span className={cx("shrink-0 rounded-[4px] px-2 py-0.5 text-[11px] font-semibold", isActive ? "bg-white/20" : "bg-[var(--ok-bg)] text-[var(--ok-fg)]")}>This number</span>}
                 </>
               );
-              const cls = cx("flex min-h-[52px] w-full items-center gap-3 rounded-[10px] px-2 py-1.5 text-left", isActive ? "bg-cta text-white" : "text-fg hover:bg-surface-2");
+              const cls = cx("flex min-h-[52px] w-full items-center gap-3 rounded-[6px] px-2 py-1.5 text-left", isActive ? "bg-cta text-white" : "text-fg hover:bg-surface-2");
               return r.query !== undefined ? (
                 <button key={r.key} type="button" id={optionId(i)} role="option" aria-selected={isActive} data-index={i} className={cls} onMouseEnter={() => { setActive(i); setMoved(true); }} onClick={() => choose(r)}>
                   {body}
@@ -414,20 +414,23 @@ export function MasterSearchLauncher({ search, userId, keysOnly = false, tight =
           aria-label="Search: a customer, product, person or number"
           title="Search (Ctrl+K or /)"
           className={cx(
-            "flex h-11 min-w-0 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3 text-left text-[13px] text-fg-2 shadow-[var(--shadow-card)] hover:border-line-strong hover:text-fg",
-            tight ? "md:w-[clamp(150px,15vw,240px)]" : "md:w-[clamp(180px,19vw,300px)]",
+            // ADR-136: a plain search field in the middle of the top bar (6 px corners, grey fill), the shortcut on the right.
+            "flex h-9 w-full min-w-0 items-center gap-2 rounded-[6px] border border-line bg-surface-2 px-3 text-left text-[14px] text-muted hover:border-line-strong pointer-coarse:h-11",
+            tight ? "max-w-[420px]" : "max-w-[520px]",
           )}
         >
-          <Search size={16} aria-hidden className="shrink-0" />
-          <span className="shrink-0 font-semibold text-fg">Search</span>
-          <span className="hidden min-w-0 flex-1 truncate text-muted md:inline">a customer, product or number</span>
-          <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted 2xl:inline">{mac ? "⌘K" : "Ctrl K"}</kbd>
+          <Search size={16} aria-hidden className="shrink-0 text-fg-2" />
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-fg-2">Search</span>
+            <span className="hidden md:inline"> a customer, product or number</span>
+          </span>
+          <kbd className="hidden shrink-0 rounded-[4px] border border-line bg-surface px-1.5 py-px font-sans text-[11px] text-muted lg:inline">{mac ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       )}
       {/* A portal: the sticky, blurred top bar would otherwise hold the overlay (it covered only the bar, round 5). */}
       {open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-0 sm:p-4 sm:pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <div role="dialog" aria-modal="true" aria-label="Search" className="flex h-dvh w-full max-w-2xl flex-col overflow-hidden bg-surface shadow-2xl sm:h-auto sm:rounded-[18px]">
+          <div role="dialog" aria-modal="true" aria-label="Search" className="flex h-dvh w-full max-w-2xl flex-col overflow-hidden bg-surface shadow-2xl sm:h-auto sm:rounded-[8px]">
             <MasterSearchPanel search={search} userId={userId} variant="dialog" autoFocus onClose={close} />
           </div>
         </div>

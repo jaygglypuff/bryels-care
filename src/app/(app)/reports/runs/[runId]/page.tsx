@@ -48,7 +48,7 @@ export default async function ReportRunPage({ params }: { params: Promise<{ runI
         ) : (
           <ul className="space-y-2">
             {r.files.map((f) => (
-              <li key={f.id} className="flex flex-col gap-2 rounded-[14px] border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
+              <li key={f.id} className="flex flex-col gap-2 rounded-[8px] border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-[13px]">
                   <p className="break-all font-medium">{f.fileName}</p>
                   <p className="text-muted">

@@ -268,13 +268,13 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
                   <PassForm batchId={v.batch.id} canPass={v.can.pass && v.blockers.length === 0} maker={v.independence.isMaker ? { what: v.independence.what, ownerOverride: v.independence.ownerOverride } : null} />
                   {/* ADR-110 C14: the same two rules as on the lot page, from the configuration. */}
                   <QaRules rules={{ lotTesterMayRelease: false, batchTesterMayRelease: !!v.testerMayRelease }} />
-                  <details className="rounded-[16px] border border-line p-3">
+                  <details className="rounded-[8px] border border-line p-3">
                     <summary className="min-h-[44px] cursor-pointer py-2 text-[15px] font-semibold">Not yet (check again later)</summary>
                     <div className="mt-3">
                       <NotYetForm batchId={v.batch.id} today={manilaToday()} />
                     </div>
                   </details>
-                  <details className="rounded-[16px] border border-line p-3">
+                  <details className="rounded-[8px] border border-line p-3">
                     <summary className="min-h-[44px] cursor-pointer py-2 text-[15px] font-semibold">Not OK – don&apos;t use</summary>
                     <div className="mt-3">
                       <FailForm batchId={v.batch.id} />

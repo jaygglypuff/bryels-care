@@ -24,7 +24,7 @@ export function OrderCards({ orders }: { orders: { id: string; orderNumber: stri
     <ul className="flex flex-col gap-2">
       {orders.map((o) => (
         <li key={o.id}>
-          <Link href={`/portal/orders/${o.id}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[18px] border border-line bg-surface px-4 py-3 transition-colors hover:border-[var(--brand-300)] hover:bg-[var(--lime-50)]">
+          <Link href={`/portal/orders/${o.id}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[8px] border border-line bg-surface px-4 py-3 transition-colors hover:border-[var(--brand-300)] hover:bg-[var(--lime-50)]">
             <span className="min-w-0">
               <span className="block font-semibold text-fg">{o.orderNumber}</span>
               <span className="block text-[12px] text-muted">

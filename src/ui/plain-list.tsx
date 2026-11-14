@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cx } from "./core";
+import { Tabs } from "./kit";
 
 /**
  * Grade-5 record list (ADR-088): one row per record, the name or product first, the record number small and
@@ -10,7 +11,7 @@ import { cx } from "./core";
  */
 export function PlainList({ children, label }: { children: ReactNode; label?: string }) {
   return (
-    <ul aria-label={label} className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+    <ul aria-label={label} className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
       {children}
     </ul>
   );
@@ -44,14 +45,14 @@ export function PlainRow({
       <Link
         href={href}
         className={cx(
-          "flex min-h-[56px] items-center gap-3 px-4 py-3 hover:bg-surface-2 focus-visible:bg-surface-2",
-          tone === "bad" && "border-l-4 border-l-[var(--bad-bd)]",
-          tone === "warn" && "border-l-4 border-l-[var(--warn-bd)]",
+          "flex min-h-[52px] items-center gap-3 px-4 py-2.5 hover:bg-surface-2 focus-visible:bg-surface-2",
+          tone === "bad" && "shadow-[inset_3px_0_0_var(--bad-fg)]",
+          tone === "warn" && "shadow-[inset_3px_0_0_var(--warn-fg)]",
         )}
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="min-w-0 break-words text-[15px] font-semibold text-fg">{title}</span>
+            <span className="min-w-0 break-words text-[15px] font-medium text-fg lg:text-[14px]">{title}</span>
             {status}
           </div>
           {(facts || code) && (
@@ -62,27 +63,27 @@ export function PlainRow({
           )}
         </div>
         {aside && <div className="shrink-0 text-right text-[13px] text-fg-2">{aside}</div>}
-        <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden />
+        <ChevronRight size={16} className="shrink-0 text-muted" aria-hidden />
       </Link>
     </li>
   );
 }
 
-/** Filter chips above a list: real links, 44 px tall, the chosen one marked for screen readers. */
+/**
+ * Filters above a list as underline tabs (ADR-136; were pill chips): real links, the chosen one marked for screen
+ * readers. A "(3)" count at the end of a label becomes the grey count pill.
+ */
 export function FilterTabs({ tabs, active, label }: { tabs: readonly (readonly [string, string, string])[]; active: string; label: string }) {
   return (
-    <nav className="mb-3 flex flex-wrap gap-2" aria-label={label}>
-      {tabs.map(([value, text, href]) => (
-        <Link
-          key={value}
-          href={href}
-          aria-current={active === value ? "page" : undefined}
-          className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", active === value ? "border-ring bg-primary-soft font-semibold" : "border-line hover:bg-surface-2")}
-        >
-          {text}
-        </Link>
-      ))}
-    </nav>
+    <Tabs
+      className="mb-3"
+      label={label}
+      active={active}
+      items={tabs.map(([value, text, href]) => {
+        const m = text.match(/^(.*?)\s*\((\d[\d,]*)\)$/);
+        return m ? { key: value, label: m[1], href, count: Number(m[2].replace(/,/g, "")) } : { key: value, label: text, href };
+      })}
+    />
   );
 }
 

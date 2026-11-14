@@ -50,7 +50,7 @@ export function NameAndCode({
       <Field label={nameLabel} htmlFor={`${idPrefix}name`} error={nameError}>
         <Input id={`${idPrefix}name`} name="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholder} />
       </Field>
-      <details className="rounded-[12px] border border-line px-3 sm:col-span-2" open={!!codeError}>
+      <details className="rounded-[8px] border border-line px-3 sm:col-span-2" open={!!codeError}>
         <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] text-fg-2">Technical name: {shown || "made from the name"}</summary>
         <div className="pb-3">
           <Field label="Technical name (made for you)" htmlFor={`${idPrefix}code`} error={codeError} hint={codeReadOnly ? "Cannot change after saving." : "Change it only if the IT person asks."}>

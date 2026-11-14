@@ -46,7 +46,7 @@ export function Saved({ show, title, children }: { show: boolean; title: string;
 export function RowCard({ href, title, code, meta, chips }: { href: string; title: string; code: string; meta?: ReactNode; chips?: ReactNode }) {
   return (
     <li>
-      <Link href={href} className="block rounded-[16px] border border-line bg-surface p-3 hover:bg-surface-2">
+      <Link href={href} className="block rounded-[8px] border border-line bg-surface p-3 hover:bg-surface-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <span className="min-w-0 break-words text-[16px] font-semibold text-fg">{title}</span>
           <span className="flex flex-wrap gap-1">{chips}</span>

@@ -15,7 +15,7 @@ export function LabelPreview({ kind, data, size = "full", sentence, className, l
   const w = LABEL_KIND_WORDS[kind];
   return (
     <figure className={cx("m-0 grid gap-2", className)} data-testid="label-preview" data-kind={kind}>
-      <div className={cx("overflow-hidden rounded-[14px] bg-surface-2 p-3", size === "small" && "max-w-[240px]")}>
+      <div className={cx("overflow-hidden rounded-[8px] bg-surface-2 p-3", size === "small" && "max-w-[240px]")}>
         <LabelFace face={data} />
       </div>
       <figcaption className="text-[16px] font-medium text-fg">

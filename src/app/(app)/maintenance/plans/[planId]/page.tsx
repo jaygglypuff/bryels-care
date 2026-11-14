@@ -81,7 +81,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
               ["Note", p.statusReason ?? "—"],
             ]}
           />
-          {p.instructions && <p className="mt-4 whitespace-pre-wrap rounded-[12px] border border-line bg-surface-2 p-3 text-[14px]">{p.instructions}</p>}
+          {p.instructions && <p className="mt-4 whitespace-pre-wrap rounded-[8px] border border-line bg-surface-2 p-3 text-[14px]">{p.instructions}</p>}
         </Card>
 
         <Card>

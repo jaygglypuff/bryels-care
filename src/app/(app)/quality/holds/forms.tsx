@@ -48,7 +48,7 @@ export function PlaceHoldForm({ locations, reasonCodes, defaultLot, lots }: { lo
       <fieldset className="flex flex-wrap gap-3">
         <legend className="mb-2 text-[14px] font-medium">What to stop</legend>
         {(["lot", "location"] as const).map((s) => (
-          <label key={s} className="flex min-h-[44px] items-center gap-2 rounded-full border border-line px-4 text-[14px]">
+          <label key={s} className="flex min-h-[44px] items-center gap-2 rounded-[6px] border border-line px-4 text-[14px]">
             <input type="radio" name="scopeChoice" checked={scope === s} onChange={() => setScope(s)} /> {s === "lot" ? "One lot" : "A whole place (every lot in it)"}
           </label>
         ))}

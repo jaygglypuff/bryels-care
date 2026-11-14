@@ -127,7 +127,7 @@ export function MoveFlow({ locations, initialSource, initialDestination, lots = 
     <div className="space-y-4">
       <ol className="flex flex-wrap gap-2 text-[12px] font-medium text-muted" aria-label="Steps">
         {["What", "How much", "Which shelf", "Confirm"].map((s, i) => (
-          <li key={s} className={`rounded-full border px-3 py-1 ${step === i + 1 ? "border-primary bg-primary-soft text-primary-text" : "border-line"}`}>
+          <li key={s} className={`rounded-[6px] border px-3 py-1 ${step === i + 1 ? "border-primary bg-primary-soft text-primary-text" : "border-line"}`}>
             {i + 1}. {s}
           </li>
         ))}
@@ -157,7 +157,7 @@ export function MoveFlow({ locations, initialSource, initialDestination, lots = 
               <ul className="flex flex-col gap-2" aria-label="Matching lots">
                 {matches.map((m) => (
                   <li key={m.lotNumber}>
-                    <button type="button" onClick={() => pickSource(`BC:LOT:${m.lotNumber}`)} className="flex min-h-[52px] w-full flex-col items-start rounded-[12px] border border-line px-3 py-2 text-left hover:bg-surface-2">
+                    <button type="button" onClick={() => pickSource(`BC:LOT:${m.lotNumber}`)} className="flex min-h-[52px] w-full flex-col items-start rounded-[8px] border border-line px-3 py-2 text-left hover:bg-surface-2">
                       <span className="text-[14px] font-semibold">{m.title} <span className="font-mono text-[12px] font-normal text-muted">{m.lotNumber}</span></span>
                       <span className="text-[13px] text-muted">{m.detail}</span>
                     </button>
@@ -272,7 +272,7 @@ export function MoveFlow({ locations, initialSource, initialDestination, lots = 
       )}
 
       {source && dest && !destWrongKind && (
-        <div className="sticky bottom-0 -mx-4 space-y-3 border-t border-line bg-surface px-4 py-3 sm:static sm:mx-0 sm:rounded-[24px] sm:border-0 sm:p-5 sm:shadow-[var(--shadow-card)]">
+        <div className="sticky bottom-0 -mx-4 space-y-3 border-t border-line bg-surface px-4 py-3 sm:static sm:mx-0 sm:rounded-[8px] sm:border-0 sm:p-5 sm:shadow-[var(--shadow-card)]">
           <p className="flex flex-wrap items-center gap-2 text-[15px]">
             Move <strong>{source.kind === "box" ? <span className="font-mono">{source.number}</span> : `${moveAmountText} of ${source.itemName}`}</strong>
             {source.kind === "lot" && fromLoc ? <> from {fromLoc.code}</> : source.kind === "box" ? <> from {source.location?.code}</> : null}

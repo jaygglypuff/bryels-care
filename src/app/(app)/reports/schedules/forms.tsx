@@ -69,7 +69,7 @@ export function ScheduleForm({
                 <Input id="runAtTime" name="runAtTime" type="time" defaultValue={value.runAtTime} required />
               </Field>
             </div>
-            <fieldset className="rounded-[14px] border border-line p-3">
+            <fieldset className="rounded-[8px] border border-line p-3">
               <legend className="px-1 text-[14px] font-medium">Who gets it</legend>
               {fe.recipientUserIds && <p className="mb-2 text-[13px] text-[var(--bad-fg)]">{fe.recipientUserIds}</p>}
               <div className="grid gap-1 sm:grid-cols-2">

@@ -56,7 +56,7 @@ export default async function PickingPage() {
         ) : (
           <ul className="flex flex-col gap-3">
             {waiting.map((o, i) => (
-              <li key={o.id} className="rounded-[16px] border border-line bg-surface p-4">
+              <li key={o.id} className="rounded-[8px] border border-line bg-surface p-4">
                 <Link href={`/sales/${o.id}`} className="flex min-h-[48px] items-center gap-2">
                   <span className="min-w-0 flex-1">
                     <span className="block text-[17px] font-semibold text-fg">{o.customerName}</span>

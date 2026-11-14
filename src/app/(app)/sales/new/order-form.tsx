@@ -172,11 +172,11 @@ export function NewOrderForm({
                   aria-current={step === s.n ? "step" : undefined}
                   disabled={s.n > step}
                   className={cx(
-                    "inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 font-medium disabled:cursor-default sm:px-2",
+                    "inline-flex min-h-[44px] items-center gap-1.5 rounded-[6px] px-1 font-medium disabled:cursor-default sm:px-2",
                     step === s.n ? "text-fg" : s.n < step ? "text-primary-text hover:underline" : "text-muted",
                   )}
                 >
-                  <span className={cx("inline-flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-semibold", step === s.n ? "bg-cta text-white" : s.n < step ? "bg-primary-soft text-primary-text" : "bg-surface-2 text-muted")}>{s.n}</span>
+                  <span className={cx("inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-[13px] font-semibold", step === s.n ? "bg-cta text-white" : s.n < step ? "bg-primary-soft text-primary-text" : "bg-surface-2 text-muted")}>{s.n}</span>
                   {s.label}
                 </button>
                 {i < STEPS.length - 1 && <span className="text-muted" aria-hidden>·</span>}
@@ -207,7 +207,7 @@ export function NewOrderForm({
                 }}
               />
             </Field>
-            <div className="rounded-[12px] border border-line bg-surface-2 px-3 py-2 text-[13px]" aria-live="polite">
+            <div className="rounded-[8px] border border-line bg-surface-2 px-3 py-2 text-[13px]" aria-live="polite">
               {customer ? (
                 <>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Deliver to</p>
@@ -288,7 +288,7 @@ export function NewOrderForm({
               const p = products.find((x) => x.id === l.productId);
               const over = p && l.qtyUnits && safeD(l.qtyUnits).gt(p.available);
               return (
-                <li key={l.key} className="rounded-[12px] border border-line p-3">
+                <li key={l.key} className="rounded-[8px] border border-line p-3">
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start">
                     <div className="col-span-2 md:col-span-1">
                       <Field label={`Product ${i + 1}`} htmlFor={`p-${l.key}`} error={fe[`lines.${i}.productId`]}>

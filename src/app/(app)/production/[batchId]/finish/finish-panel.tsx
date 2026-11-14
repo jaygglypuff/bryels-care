@@ -39,11 +39,11 @@ export function FinishPanel({ v }: { v: FinishView }) {
         </Banner>
       ) : v.finishCheck?.status === "waiting" ? (
         // ADR-133: the counts wait for the second person's "Looks right" on their own phone.
-        <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" data-testid="finish-check-waiting">
+        <section className="grid gap-3 rounded-[8px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" data-testid="finish-check-waiting">
           <p className="text-[18px] font-semibold" role="status">
             {v.finishCheck.words}
           </p>
-          <ul className="grid gap-1 rounded-[14px] bg-surface-2 p-3 text-[16px]">
+          <ul className="grid gap-1 rounded-[8px] bg-surface-2 p-3 text-[16px]">
             {finishCheckFacts(v.finishCheck.summary).map((f) => (
               <li key={f}>{f}</li>
             ))}
@@ -52,7 +52,7 @@ export function FinishPanel({ v }: { v: FinishView }) {
           {v.finishCheck.mine && <TakeBack batchId={v.batch.id} />}
         </section>
       ) : (
-        <section className="rounded-[20px] border border-line bg-surface p-4 sm:p-5">
+        <section className="rounded-[8px] border border-line bg-surface p-4 sm:p-5">
           <noscript>Finishing needs a connection and JavaScript.</noscript>
           {v.finishCheck?.status === "returned" && (
             <div className="mb-4" data-testid="finish-check-returned">

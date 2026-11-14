@@ -228,7 +228,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
           <CardTitle>Customers to tell</CardTitle>
           <details className="mb-3 text-[13px]">
             <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">What we tell them (company text)</summary>
-            <p className="mt-2 whitespace-pre-wrap rounded-[12px] border border-line bg-surface-2 p-3">{v.noticeText}</p>
+            <p className="mt-2 whitespace-pre-wrap rounded-[8px] border border-line bg-surface-2 p-3">{v.noticeText}</p>
             <p className="mt-1 text-[12px] text-muted">Setting quality.recall_case.notice_text; it must be approved by the company&apos;s QA and regulatory personnel before a real notification is sent.</p>
           </details>
           {v.customers.length === 0 ? (
@@ -236,7 +236,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
           ) : (
             <ul className="flex flex-col gap-3">
               {v.customers.map((cu) => (
-                <li key={cu.customerId} className="rounded-[16px] border border-line p-3">
+                <li key={cu.customerId} className="rounded-[8px] border border-line p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{cu.name}</span>
                     <span className="text-[12px] text-muted">{cu.code}</span>

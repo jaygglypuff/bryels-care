@@ -37,7 +37,7 @@ export function WizardSteps({ current }: { current: 1 | 2 | 3 | 4 }) {
       {STEP_NAMES.map((n, i) => {
         const k = i + 1;
         return (
-          <li key={n} aria-current={k === current ? "step" : undefined} className={cx("flex min-h-[40px] flex-col items-center justify-center rounded-[10px] border px-1 text-center leading-tight", k === current ? "border-ring bg-primary-soft font-semibold text-fg" : k < current ? "border-line text-fg-2" : "border-line text-muted")}>
+          <li key={n} aria-current={k === current ? "step" : undefined} className={cx("flex min-h-[40px] flex-col items-center justify-center rounded-[6px] border px-1 text-center leading-tight", k === current ? "border-ring bg-primary-soft font-semibold text-fg" : k < current ? "border-line text-fg-2" : "border-line text-muted")}>
             <span className="inline-flex items-center gap-1">
               {k < current ? <Check size={12} aria-hidden /> : `${k}.`} {n}
             </span>
@@ -208,7 +208,7 @@ export function NewOrderWizard({
               const lastPer = m && last ? startingPrice(m, r.unit, last).amount : "";
               const differs = prices && lastPer && isPrice(r.unitAmount) && !new Decimal(r.unitAmount).eq(lastPer);
               return (
-                <li key={r.key} className="rounded-[14px] border border-line p-3" data-testid="po-item">
+                <li key={r.key} className="rounded-[8px] border border-line p-3" data-testid="po-item">
                   {r.requestLineId && <input type="hidden" name={`lines.${i}.purchaseRequestLineId`} value={r.requestLineId} />}
                   <input type="hidden" name={`lines.${i}.expectedDate`} value={arriveOn} />
                   <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
@@ -359,7 +359,7 @@ export function NewOrderWizard({
         {/* Step 4: check and save */}
         <section hidden={step !== 4} aria-label="Check and save">
           <CardTitle>4. Check and save</CardTitle>
-          <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {chosen.map((r) => {
               const m = byId.get(r.materialId)!;
               const q = toBaseQty(r.qty, r.unit, m.baseUom);
@@ -405,7 +405,7 @@ export function NewOrderWizard({
         </section>
 
         {problem && (
-          <p role="alert" className="mt-3 rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[14px] text-[var(--bad-fg)]">
+          <p role="alert" className="mt-3 rounded-[6px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[14px] text-[var(--bad-fg)]">
             {problem}
           </p>
         )}

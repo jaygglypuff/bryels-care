@@ -35,10 +35,10 @@ export default async function DeviationsPage({ searchParams }: { searchParams: P
           ctx.can("quality.deviation.export") ? (
             <MoreMenu>
               <div className="flex flex-col gap-2">
-                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=csv`}>
+                <a className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=csv`}>
                   Download (CSV)
                 </a>
-                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=xlsx`}>
+                <a className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=xlsx`}>
                   Download (Excel)
                 </a>
               </div>

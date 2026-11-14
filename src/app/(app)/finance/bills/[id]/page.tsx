@@ -181,7 +181,7 @@ export default async function BillPage({ params, searchParams }: { params: Promi
           <p className="mb-2 text-[14px] text-fg-2">
             Checked against the order and the delivery:
           </p>
-          <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {d.lines.map((l) => {
               const det = (l.matchDetail ?? {}) as Record<string, string | null>;
               return (

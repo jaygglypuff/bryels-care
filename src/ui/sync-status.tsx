@@ -55,7 +55,7 @@ export function SyncChip({ userId }: { userId: string }) {
   return (
     <Link
       href="/sync"
-      className={cx("flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full bg-surface px-2.5 text-[12.5px] font-medium shadow-[var(--shadow-card)] hover:text-fg sm:px-3", TONE[l.tone])}
+      className={cx("flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-[6px] bg-surface px-2.5 text-[12.5px] font-medium shadow-[var(--shadow-card)] hover:text-fg sm:px-3", TONE[l.tone])}
       aria-label={`Sync status: ${l.text}. Open sync`}
       title={s.lastSyncAt ? `Last sync ${fmtDateTime(s.lastSyncAt)}` : "Sync status"}
       data-testid="sync-chip"
@@ -155,18 +155,18 @@ export function SignOutButton({ signOut, variant }: { signOut: () => Promise<voi
           <LogOut size={14} /> {busy ? "Signing out…" : "Sign out"}
         </button>
       ) : (
-        <button type="button" onClick={() => void start()} disabled={busy} className="mt-2 grid size-11 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" title="Sign out" aria-label="Sign out">
+        <button type="button" onClick={() => void start()} disabled={busy} className="mt-2 grid size-11 place-items-center rounded-[6px] bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" title="Sign out" aria-label="Sign out">
           <LogOut size={18} />
         </button>
       )}
       {unsent && (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="unsent-title">
-          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[20px] bg-surface p-5 shadow-[var(--shadow-pop)]">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[8px] bg-surface p-5 shadow-[var(--shadow-pop)]">
             <h2 id="unsent-title" className="font-display text-[18px] font-semibold text-fg">
               {unsent.length} change{unsent.length === 1 ? "" : "s"} not sent yet
             </h2>
             <p className="mt-1 text-[13px] text-muted">Signing out deletes this device&apos;s offline data. These changes have not reached the server and will be lost. Connect and sync first if you can.</p>
-            <ul className="mt-3 divide-y divide-line rounded-[12px] border border-line" data-testid="unsent-list">
+            <ul className="mt-3 divide-y divide-line rounded-[8px] border border-line" data-testid="unsent-list">
               {unsent.map((e) => (
                 <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[13px]">
                   <span className="min-w-0 break-words">{e.summary}</span>
@@ -175,7 +175,7 @@ export function SignOutButton({ signOut, variant }: { signOut: () => Promise<voi
               ))}
             </ul>
             {error && (
-              <p role="alert" className="mt-3 rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[13px] text-[var(--bad-fg)]">
+              <p role="alert" className="mt-3 rounded-[6px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[13px] text-[var(--bad-fg)]">
                 {error}
               </p>
             )}

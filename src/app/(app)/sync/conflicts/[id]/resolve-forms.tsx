@@ -32,7 +32,7 @@ export function ResolveForms({
     <Card>
       <CardTitle>Resolve</CardTitle>
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-[16px] border border-line p-4">
+        <section className="rounded-[8px] border border-line p-4">
           <h3 className="mb-2 font-medium">Keep the server&apos;s version</h3>
           <p className="mb-3 text-[13px] text-muted">The device&apos;s change is discarded and never applied. The note is kept in the audit trail.</p>
           <ActionForm action={resolveConflictAction} hidden={{ conflictId, choice: "discard" }} submit="Discard the device's change" variant="secondary" confirm="Discard this offline change? It will not be applied.">
@@ -40,7 +40,7 @@ export function ResolveForms({
           </ActionForm>
         </section>
         {!ownDiscardOnly && (
-          <section className="rounded-[16px] border border-line p-4">
+          <section className="rounded-[8px] border border-line p-4">
             <h3 className="mb-2 font-medium">Re-apply as a new change</h3>
             <p className="mb-3 text-[13px] text-muted">Runs again now, as the person who captured it, with their current permissions and the current stock and record state. Correct a value if needed.</p>
             <ActionForm action={resolveConflictAction} hidden={{ conflictId, choice: "reapply" }} submit="Re-apply">
@@ -58,7 +58,7 @@ export function ResolveForms({
           </section>
         )}
         {canEscalateDeviation && (
-          <section className="rounded-[16px] border border-line p-4">
+          <section className="rounded-[8px] border border-line p-4">
             <h3 className="mb-2 font-medium">Escalate to a deviation</h3>
             <p className="mb-3 text-[13px] text-muted">For production problems: QA investigates in the deviation; the offline change itself is not applied.</p>
             <ActionForm action={resolveConflictAction} hidden={{ conflictId, choice: "escalate_deviation" }} submit="Escalate to deviation" variant="secondary">
@@ -67,7 +67,7 @@ export function ResolveForms({
           </section>
         )}
         {canEscalateAdjustment && (
-          <section className="rounded-[16px] border border-line p-4">
+          <section className="rounded-[8px] border border-line p-4">
             <h3 className="mb-2 font-medium">Escalate to a stock adjustment</h3>
             <p className="mb-3 text-[13px] text-muted">Drafts an adjustment for this lot and location; it follows the normal approval before anything posts.</p>
             <ActionForm action={resolveConflictAction} hidden={{ conflictId, choice: "escalate_adjustment" }} submit="Draft adjustment" variant="secondary">

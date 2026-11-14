@@ -125,11 +125,11 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
       </Field>
 
       <div className="flex flex-col gap-3">
-        {rows.length === 0 && <p className="rounded-[12px] border border-dashed border-line-strong p-4 text-center text-[13px] text-muted">No ingredients yet. Add the first one.</p>}
+        {rows.length === 0 && <p className="rounded-[8px] border border-dashed border-line-strong p-4 text-center text-[13px] text-muted">No ingredients yet. Add the first one.</p>}
         {rows.map((r, i) => {
           const err = (k: string) => fe[`lines.${i}.${k}`];
           return (
-            <fieldset key={r.key} className="rounded-[16px] border border-line p-3" data-testid={`line-${i + 1}`}>
+            <fieldset key={r.key} className="rounded-[8px] border border-line p-3" data-testid={`line-${i + 1}`}>
               <legend className="px-1 text-[12px] font-semibold text-muted">{isPack(r) ? `Packaging ${i + 1} (pieces)` : `Ingredient ${i + 1}`}</legend>
               <div className="grid gap-3 sm:grid-cols-12">
                 <div className="sm:col-span-4">
@@ -195,26 +195,26 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
                       <Field label="Amount × " htmlFor={`altr-${r.key}-${j}`} error={err(`alternatives.${j}.ratio`)} hint="1 = same">
                         <Input id={`altr-${r.key}-${j}`} inputMode="decimal" value={a.ratio} onChange={(e) => update(r.key, { alts: r.alts.map((x, k) => (k === j ? { ...x, ratio: e.target.value } : x)) })} />
                       </Field>
-                      <button type="button" aria-label="Remove this alternative" onClick={() => update(r.key, { alts: r.alts.filter((_, k) => k !== j) })} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
+                      <button type="button" aria-label="Remove this alternative" onClick={() => update(r.key, { alts: r.alts.filter((_, k) => k !== j) })} className="inline-flex size-11 items-center justify-center rounded-[6px] text-[var(--bad-fg)] hover:bg-surface-2">
                         <Trash2 size={16} />
                       </button>
                     </div>
                   ))}
                   {r.alts.length < 5 && (
-                    <button type="button" onClick={() => update(r.key, { alts: [...r.alts, { materialId: "", ratio: "1" }] })} className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line px-3 text-[13px]">
+                    <button type="button" onClick={() => update(r.key, { alts: [...r.alts, { materialId: "", ratio: "1" }] })} className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-[6px] border border-line px-3 text-[13px]">
                       <Plus size={14} /> Add an alternative
                     </button>
                   )}
                 </details>
               )}
               <div className="mt-2 flex gap-1">
-                <button type="button" aria-label={`Move ingredient ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
+                <button type="button" aria-label={`Move ingredient ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-[6px] hover:bg-surface-2">
                   <ArrowUp size={16} />
                 </button>
-                <button type="button" aria-label={`Move ingredient ${i + 1} down`} onClick={() => move(i, 1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
+                <button type="button" aria-label={`Move ingredient ${i + 1} down`} onClick={() => move(i, 1)} className="inline-flex size-11 items-center justify-center rounded-[6px] hover:bg-surface-2">
                   <ArrowDown size={16} />
                 </button>
-                <button type="button" aria-label={`Remove ingredient ${i + 1}`} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
+                <button type="button" aria-label={`Remove ingredient ${i + 1}`} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} className="inline-flex size-11 items-center justify-center rounded-[6px] text-[var(--bad-fg)] hover:bg-surface-2">
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -227,13 +227,13 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
             setRows((rs) => [...rs, { key: nextKey, materialId: "", quantityG: "", tolMode: "pct", tol: "", phaseCode: "", scaling: "proportional", isCritical: true, requiresChecker: false, alts: [] }]);
             setNextKey((k) => k + 1);
           }}
-          className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
         >
           <Plus size={16} /> Add ingredient
         </button>
       </div>
 
-      <div className="rounded-[12px] border border-line bg-surface-2/60 p-3 text-[13px] tabular" aria-live="polite">
+      <div className="rounded-[8px] border border-line bg-surface-2/60 p-3 text-[13px] tabular" aria-live="polite">
         All ingredients together: <b>{sum.toString()} g</b> · batch weight: <b>{sizeD ? sizeD.toString() : "—"} g</b>
         {rows.some(isPack) && <span className="block text-[12px] text-muted">Packaging is counted in pieces and is not in the gram total.</span>}
         {diff && !diff.isZero() && <span className="block text-[12px] text-[var(--warn-fg)]">Difference {diff.toString()} g, shown exactly (rounding of the amounts, F-06). Check it is meant.</span>}

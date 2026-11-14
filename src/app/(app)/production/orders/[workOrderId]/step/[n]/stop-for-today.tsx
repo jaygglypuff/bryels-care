@@ -14,7 +14,7 @@ export function StopForToday({ batchId, stepNo, prefill, last, dayNo }: { batchI
   const [state, action] = useInPlaceAction(stopForTodayAction);
   const [key] = useState(() => `stop-${batchId}-${Date.now()}`);
   return (
-    <section className="mt-4 rounded-[20px] border border-line bg-surface p-4" data-testid="stop-for-today">
+    <section className="mt-4 rounded-[8px] border border-line bg-surface p-4" data-testid="stop-for-today">
       {(last || (dayNo && dayNo > 1)) && (
         <p className="mb-2 text-[15px] text-fg-2" data-testid="last-pause">
           {dayNo && dayNo > 1 ? `Day ${dayNo} of this batch. ` : ""}

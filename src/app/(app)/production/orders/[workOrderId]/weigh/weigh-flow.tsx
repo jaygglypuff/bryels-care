@@ -107,7 +107,7 @@ export function WeighFlow(p: {
               type="button"
               onClick={() => setIdx(i)}
               aria-current={i === idx}
-              className={cx("flex min-h-[56px] min-w-[150px] shrink-0 items-center gap-2 rounded-[14px] border px-3 text-left text-[15px] lg:min-w-0", i === idx ? "border-ring bg-primary-soft" : "border-line bg-surface")}
+              className={cx("flex min-h-[56px] min-w-[150px] shrink-0 items-center gap-2 rounded-[8px] border px-3 text-left text-[15px] lg:min-w-0", i === idx ? "border-ring bg-primary-soft" : "border-line bg-surface")}
             >
               {q ? (
                 <CloudOff size={20} className="text-[var(--warn-fg)]" aria-label="Saved on this phone" />
@@ -128,7 +128,7 @@ export function WeighFlow(p: {
       </nav>
       <div className="grid min-w-0 content-start gap-3">
         {saved && (
-          <p role="status" className="flex items-start gap-2 rounded-[14px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-3 text-[17px] font-semibold text-[var(--ok-fg)]" data-testid="weigh-saved">
+          <p role="status" className="flex items-start gap-2 rounded-[8px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-3 text-[17px] font-semibold text-[var(--ok-fg)]" data-testid="weigh-saved">
             <CheckCircle2 size={20} className="mt-0.5 shrink-0" aria-hidden /> {saved}
           </p>
         )}
@@ -136,7 +136,7 @@ export function WeighFlow(p: {
           <WeighSummary {...p} queuedCount={Object.keys(queued).length} waitingCount={waiting.length} />
         ) : card ? (
           queued[card.batchMaterialId] ? (
-            <p className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5 text-[17px]" data-testid="weigh-queued">
+            <p className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5 text-[17px]" data-testid="weigh-queued">
               <CloudOff size={20} className="mr-2 inline" aria-hidden />
               {queued[card.batchMaterialId]}
             </p>
@@ -266,7 +266,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
   const fe = state?.fieldErrors ?? {};
   const last4 = lot ? lot.lotNumber.replace(/[^A-Za-z0-9]/g, "").slice(-4) : "";
   return (
-    <section className="rounded-[20px] border border-line bg-surface p-4 sm:p-5" aria-label={`Weigh ${card.materialName}`} data-testid="weigh-card">
+    <section className="rounded-[8px] border border-line bg-surface p-4 sm:p-5" aria-label={`Weigh ${card.materialName}`} data-testid="weigh-card">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h2 className="text-title text-fg">{card.materialName}</h2>
         {card.needsCheck && <Chip tone="warn">Second check</Chip>}
@@ -279,11 +279,11 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
         {new Decimal(card.weighed).gt(0) ? ` · already ${show(card, card.weighed)}` : ""}
       </p>
       {card.insteadOf && (
-        <p className="mt-2 rounded-[12px] bg-[var(--info-bg,#eef4ff)] p-2 text-[14px]" data-testid="instead-of">Instead of {card.insteadOf.materialName} (for this batch only).</p>
+        <p className="mt-2 rounded-[8px] bg-[var(--info-bg,#eef4ff)] p-2 text-[14px]" data-testid="instead-of">Instead of {card.insteadOf.materialName} (for this batch only).</p>
       )}
       {/* Round 5 problem 4: the lot is shown ONCE: what to take and where, then the one way to confirm it. */}
       {lot ? (
-        <div className={cx("mt-3 rounded-[14px] p-3 text-[16px]", offPlan ? "border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "bg-surface-2")} data-testid="weigh-lot">
+        <div className={cx("mt-3 rounded-[8px] p-3 text-[16px]", offPlan ? "border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "bg-surface-2")} data-testid="weigh-lot">
           <p>
             Take lot <span className="font-mono text-[20px] font-bold">…{last4}</span> · {lot.place}
             {lot.expiresOn ? ` · expires ${fmtDate(lot.expiresOn)}` : ""}
@@ -300,7 +300,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
               <p className="text-[14px]">Why?</p>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Why another lot">
                 {p.reasons.map((r) => (
-                  <button key={r.code} type="button" role="radio" aria-checked={reason === r.code} onClick={() => setReason(r.code)} className={cx("min-h-[48px] rounded-full border px-4 text-[15px]", reason === r.code ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+                  <button key={r.code} type="button" role="radio" aria-checked={reason === r.code} onClick={() => setReason(r.code)} className={cx("min-h-[48px] rounded-[6px] border px-4 text-[15px]", reason === r.code ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
                     {r.label}
                   </button>
                 ))}
@@ -311,7 +311,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
           )}
         </div>
       ) : (
-        <p className="mt-3 rounded-[14px] border-2 border-[var(--bad-bd)] bg-[var(--bad-bg)] p-3 text-[16px] font-semibold text-[var(--bad-fg)]">
+        <p className="mt-3 rounded-[8px] border-2 border-[var(--bad-bd)] bg-[var(--bad-bg)] p-3 text-[16px] font-semibold text-[var(--bad-fg)]">
           <AlertTriangle size={18} className="mr-1 inline" aria-hidden />
           No usable lot of {card.materialName} here. Ask QA or the storekeeper.
         </p>
@@ -423,7 +423,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
             <Button type="button" variant="cta" size="lg" onClick={() => setQty("")}>
               Weigh again
             </Button>
-            <a href={`${p.moreHref}&line=${card.batchMaterialId}`} className="inline-flex min-h-[52px] items-center rounded-full border border-line px-5 text-[15px] text-fg">
+            <a href={`${p.moreHref}&line=${card.batchMaterialId}`} className="inline-flex min-h-[52px] items-center rounded-[6px] border border-line px-5 text-[15px] text-fg">
               Ask for approval
             </a>
           </div>
@@ -435,7 +435,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
               </p>
             )}
             {!p.canWeigh && p.block?.href && p.block.label && (
-              <Link href={p.block.href} className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-line px-5 text-[16px] font-medium text-fg" data-testid="weigh-block-fix">
+              <Link href={p.block.href} className="inline-flex min-h-[52px] items-center justify-center rounded-[6px] border border-line px-5 text-[16px] font-medium text-fg" data-testid="weigh-block-fix">
                 {p.block.label}
               </Link>
             )}
@@ -495,7 +495,7 @@ function DoneCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onNext: (()
   const names = next ? waitingForNames(next) : null;
   const iAmChecker = !!w && p.viewer.canCheck && p.viewer.userId !== w.operatorId;
   return (
-    <section className={cx("grid gap-3 rounded-[20px] border bg-surface p-5", w ? "border-2 border-[var(--warn-bd)]" : "border-line")} data-testid={w ? "second-check" : "weigh-done"}>
+    <section className={cx("grid gap-3 rounded-[8px] border bg-surface p-5", w ? "border-2 border-[var(--warn-bd)]" : "border-line")} data-testid={w ? "second-check" : "weigh-done"}>
       <p className="text-[18px] font-semibold text-fg">
         <CheckCircle2 size={22} className="mr-2 inline text-[var(--ok-fg)]" aria-hidden />
         {card.materialName}: {show(card, card.weighed)} weighed{w ? ` by ${firstName(w.operator)}` : ""}.
@@ -503,7 +503,7 @@ function DoneCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onNext: (()
       {w && iAmChecker && (
         <div className="grid gap-2" data-testid="own-weigh-check">
           <p className="text-[16px]">This weighing waits for your check.</p>
-          <Link href="/production/checks" className="inline-flex min-h-[56px] items-center justify-center rounded-full bg-cta px-6 text-[17px] font-semibold text-white">
+          <Link href="/production/checks" className="inline-flex min-h-[56px] items-center justify-center rounded-[6px] bg-cta px-6 text-[17px] font-semibold text-white">
             Open my list: Waiting for you to check
           </Link>
         </div>
@@ -539,14 +539,14 @@ function CheckHere({ batchId, weighing, materialName, amount, checkers }: { batc
       </Button>
     );
   return (
-    <form action={action} className="grid gap-3 rounded-[14px] bg-surface-2 p-3" data-testid="check-here-form">
+    <form action={action} className="grid gap-3 rounded-[8px] bg-surface-2 p-3" data-testid="check-here-form">
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="dispenseRecordId" value={weighing.id} />
       <input type="hidden" name="checkerId" value={who?.id ?? ""} />
       <p className="text-[16px] font-semibold">Who checks?</p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {checkers.map((c) => (
-          <button key={c.id} type="button" aria-pressed={who?.id === c.id} onClick={() => setWho(c)} className={cx("min-h-[52px] rounded-full border px-4 text-left text-[16px]", who?.id === c.id ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+          <button key={c.id} type="button" aria-pressed={who?.id === c.id} onClick={() => setWho(c)} className={cx("min-h-[52px] rounded-[6px] border px-4 text-left text-[16px]", who?.id === c.id ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
             {c.displayName}
           </button>
         ))}
@@ -579,7 +579,7 @@ function CheckHere({ batchId, weighing, materialName, amount, checkers }: { batc
 function WeighSummary(p: Parameters<typeof WeighFlow>[0] & { queuedCount: number; waitingCount: number }) {
   const [state, action] = useInPlaceAction(stepDoneAction);
   return (
-    <section className="rounded-[20px] border border-line bg-surface p-5" data-testid="weigh-summary">
+    <section className="rounded-[8px] border border-line bg-surface p-5" data-testid="weigh-summary">
       <h2 className="flex items-center gap-2 text-title text-fg">
         <CheckCircle2 size={24} className="text-[var(--ok-fg)]" aria-hidden /> {p.cards.length - p.queuedCount} of {p.cards.length} weighed
       </h2>
@@ -595,7 +595,7 @@ function WeighSummary(p: Parameters<typeof WeighFlow>[0] & { queuedCount: number
       )}
       {p.stepDone ? (
         p.nextHref && (
-          <Link href={p.nextHref} className="mt-4 inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white" data-testid="weigh-next-step">
+          <Link href={p.nextHref} className="mt-4 inline-flex min-h-[56px] w-full items-center justify-center rounded-[6px] bg-cta px-8 text-[17px] font-semibold text-white" data-testid="weigh-next-step">
             {p.nextLabel ?? "Next step"}
           </Link>
         )
@@ -619,7 +619,7 @@ function WaitingForQa({ batchId, card }: { batchId: string; card: Card }) {
   const w = card.waitingForQa!;
   const [state, action] = useInPlaceAction(withdrawAskAction);
   return (
-    <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4 sm:p-5" data-testid="waiting-for-qa">
+    <section className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4 sm:p-5" data-testid="waiting-for-qa">
       <h2 className="text-title text-fg">{card.materialName}</h2>
       <p className="mt-2 text-[18px] font-semibold">Waiting for QA{w.qaNames ? ` (${w.qaNames})` : ""} to say yes</p>
       <p className="mt-1 text-[16px]">
@@ -650,7 +650,7 @@ function OtherIngredient({ batchId, card, substitutes }: { batchId: string; card
   if (!card.alternatives.length && !card.canAskOther && !card.refusedByQa) return null;
   const fe = askState?.fieldErrors ?? {};
   return (
-    <section className="mt-3 rounded-[20px] border border-line bg-surface p-4" data-testid="other-ingredient">
+    <section className="mt-3 rounded-[8px] border border-line bg-surface p-4" data-testid="other-ingredient">
       <h3 className="text-[17px] font-semibold">No {card.materialName}? Use another ingredient</h3>
       {card.refusedByQa && (
         <p className="mt-1 text-[14px] text-[var(--bad-fg)]">

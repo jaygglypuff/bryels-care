@@ -162,7 +162,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
               {result.rows.map((r) => (
                 <li key={r.id} className="py-3">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-fg-2">{moduleLabel(actionModule(r.action))}</span>
+                    <span className="rounded-[4px] bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-fg-2">{moduleLabel(actionModule(r.action))}</span>
                     <span className="text-[12px] text-muted">{fmtDateTime(r.occurredAt)}</span>
                   </div>
                   <p className="mt-1 font-medium text-fg">{actionLabel(r.action)}</p>

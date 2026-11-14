@@ -183,7 +183,7 @@ export function ChoiceField({
         {options.map((o) => (
           <label
             key={o.value}
-            className="flex min-h-[56px] cursor-pointer items-start gap-3 rounded-[14px] border border-line-strong bg-surface p-3 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:checked]:bg-[var(--brand-50)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--lime-200)]"
+            className="flex min-h-[56px] cursor-pointer items-start gap-3 rounded-[8px] border border-line-strong bg-surface p-3 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:checked]:bg-[var(--brand-50)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--lime-200)]"
           >
             <input
               type="radio"

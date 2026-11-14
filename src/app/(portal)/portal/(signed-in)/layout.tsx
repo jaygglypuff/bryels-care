@@ -25,10 +25,10 @@ export default async function PortalLayout({ children }: { children: React.React
         <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link href="/portal" className="flex min-w-0 items-center gap-3" aria-label="Customer portal home">
             <Logo className="h-9 w-auto shrink-0" />
-            <span className="hidden rounded-full bg-[var(--lime-100)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--brand-800)] sm:inline">Customer portal</span>
+            <span className="hidden rounded-[4px] bg-[var(--lime-100)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--brand-800)] sm:inline">Customer portal</span>
           </Link>
           <div className="flex min-w-0 items-center gap-1.5">
-            <Link href="/portal/account" className="flex min-h-[40px] min-w-0 items-center gap-2 rounded-full px-3 text-[13px] text-fg-2 hover:bg-surface-2" aria-label={`Your account: ${ctx.displayName}, ${ctx.customerName}`}>
+            <Link href="/portal/account" className="flex min-h-[40px] min-w-0 items-center gap-2 rounded-[6px] px-3 text-[13px] text-fg-2 hover:bg-surface-2" aria-label={`Your account: ${ctx.displayName}, ${ctx.customerName}`}>
               <UserRound size={16} aria-hidden="true" className="shrink-0" />
               <span className="hidden min-w-0 flex-col leading-tight sm:flex">
                 <span className="truncate font-medium text-fg">{ctx.displayName}</span>
@@ -36,7 +36,7 @@ export default async function PortalLayout({ children }: { children: React.React
               </span>
             </Link>
             <form action={portalSignOut}>
-              <button type="submit" className="flex min-h-[40px] items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-fg-2 hover:bg-surface-2" aria-label="Sign out of the customer portal">
+              <button type="submit" className="flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium text-fg-2 hover:bg-surface-2" aria-label="Sign out of the customer portal">
                 <LogOut size={16} aria-hidden="true" />
                 <span className="hidden sm:inline">Sign out</span>
               </button>

@@ -78,7 +78,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
             <details className="mt-3">
               <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] text-muted">Settings (technical)</summary>
               <p className="font-mono text-[12px] text-muted">check number {v.definitionChecksum.slice(0, 8)}</p>
-              <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-[12px] bg-surface-2 p-3 text-[12px]">{JSON.stringify(v.definition, null, 2)}</pre>
+              <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-[8px] bg-surface-2 p-3 text-[12px]">{JSON.stringify(v.definition, null, 2)}</pre>
             </details>
           )}
 

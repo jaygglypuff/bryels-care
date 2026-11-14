@@ -86,7 +86,7 @@ export default async function StockCardPage({ params, searchParams }: { params: 
       />
       <PageIntro>This screen is for seeing everything that happened to one lot between two dates: what came in, what went out, and how much was left after each change.</PageIntro>
 
-      <form className="no-print grid grid-cols-2 gap-3 rounded-[20px] bg-surface p-4 shadow-[var(--shadow-card)] sm:grid-cols-[1fr_1fr_auto]">
+      <form className="no-print grid grid-cols-2 gap-3 rounded-[8px] bg-surface p-4 border border-line sm:grid-cols-[1fr_1fr_auto]">
         {locationId && <input type="hidden" name="location" value={locationId} />}
         <div>
           <label htmlFor="from" className="text-[13px] font-medium">From</label>
@@ -124,7 +124,7 @@ export default async function StockCardPage({ params, searchParams }: { params: 
           <EmptyState title="Nothing happened in these dates">At the start and at the end there was {fmtLotQty(card.opening, uom)}. Choose an earlier From date to see older stock changes.</EmptyState>
         </Card>
       ) : (
-        <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Stock changes of this lot">
+        <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="Stock changes of this lot">
           <li className="bg-surface-2/60 px-4 py-3 text-[14px]">At the start ({fmtDate(from)}): <strong className="tabular">{fmtLotQty(card.opening, uom)}</strong></li>
           {card.lines.map((l) => {
             const amount = l.qtyIn ? `+ ${fmtLotQty(l.qtyIn, uom)}` : l.qtyOut ? `− ${fmtLotQty(l.qtyOut, uom)}` : l.qtyMoved ? `moved ${fmtLotQty(l.qtyMoved, uom)}` : "";

@@ -37,12 +37,12 @@ export function FormSection({
 }) {
   return (
     <fieldset className={cx("min-w-0 border-t border-line pt-4 first-of-type:border-t-0 first-of-type:pt-0", className)} data-testid={testId ?? "form-section"}>
-      <legend className="float-left mb-1 w-full text-section font-semibold text-fg sm:text-section-lg">{title}</legend>
+      <legend className="float-left mb-1 w-full text-section font-semibold text-fg">{title}</legend>
       {hint && <p className="clear-both mb-1 text-meta text-muted">{hint}</p>}
       <div className="clear-both flex flex-col gap-4 pt-2">
         {children}
         {more && (
-          <details className="rounded-[12px] border border-line bg-surface-2/40 px-4 py-0.5" open={open}>
+          <details className="rounded-[8px] border border-line bg-surface px-4 py-0.5" open={open}>
             <summary className="flex min-h-[44px] cursor-pointer items-center py-2 text-[14px] font-medium text-fg-2">{moreTitle}</summary>
             <div className="flex flex-col gap-4 pb-3 pt-1">{more}</div>
           </details>
@@ -60,9 +60,9 @@ export function FormSection({
  */
 export function EditDetails({ title = "Change the details", hint, open = false, id = "edit", children }: { title?: string; hint?: ReactNode; open?: boolean; id?: string; children: ReactNode }) {
   return (
-    <details id={id} className="group rounded-[16px] bg-surface p-4 shadow-[var(--shadow-card)] sm:rounded-[20px] sm:p-6" open={open} data-testid="edit-details">
-      <summary className="-m-2 flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 rounded-[12px] p-2 hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
-        <span className="text-section font-semibold text-fg sm:text-section-lg">{title}</span>
+    <details id={id} className="group rounded-[8px] border border-line bg-surface p-4 sm:p-5" open={open} data-testid="edit-details">
+      <summary className="-m-2 flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] p-2 hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+        <span className="text-section font-semibold text-fg">{title}</span>
         <span className="text-meta font-medium text-primary-text group-open:hidden">Open</span>
         <span className="hidden text-meta font-medium text-muted group-open:inline">Close</span>
       </summary>

@@ -54,7 +54,7 @@ function BatchCard({ b, showSite, highlight }: { b: BoardCard; showSite: boolean
     <Link
       href={b.workOrderId ? `/production/orders/${b.workOrderId}` : `/production/${b.id}`}
       className={cx(
-        "group block rounded-[18px] p-3.5 transition-all",
+        "group block rounded-[8px] p-3.5 transition-all",
         highlight ? "bg-cta text-white shadow-[var(--shadow-pop)] hover:-translate-y-0.5" : "bg-surface shadow-[var(--shadow-card)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-pop)]",
       )}
     >
@@ -69,12 +69,12 @@ function BatchCard({ b, showSite, highlight }: { b: BoardCard; showSite: boolean
       </p>
       {running && (
         <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[var(--lime-100)]" role="img" aria-label={`${b.stepsDone} of ${b.stepsTotal} steps completed`}>
-          <i className="block h-full rounded-full" style={{ width: `${pct.toFixed(1)}%`, background: "linear-gradient(90deg, var(--brand-600), var(--lime-400))" }} />
+          <i className="block h-full rounded-[6px]" style={{ width: `${pct.toFixed(1)}%`, background: "linear-gradient(90deg, var(--brand-600), var(--lime-400))" }} />
         </div>
       )}
       <div className="mt-2.5 flex items-center justify-between">
         {highlight ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[12px] font-medium">Next: QA review</span>
+          <span className="inline-flex items-center gap-1 rounded-[4px] bg-white/15 px-2 py-0.5 text-[12px] font-medium">Next: QA review</span>
         ) : (
           <StatusChip status={b.status} />
         )}
@@ -99,7 +99,7 @@ function TeamRow({ team }: { team: NonNullable<OwnerDashboard["team"]> }) {
             {t.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
           </span>
           <span
-            className="absolute -bottom-1 left-1/2 grid min-w-[18px] -translate-x-1/2 place-items-center rounded-full px-1 text-[10px] font-semibold leading-[18px] text-white ring-2 ring-white"
+            className="absolute -bottom-1 left-1/2 grid min-w-[18px] -translate-x-1/2 place-items-center rounded-[6px] px-1 text-[10px] font-semibold leading-[18px] text-white ring-2 ring-white"
             style={{ background: i === 0 ? "var(--brand-600)" : i < 3 ? "var(--lime-500)" : "#9aa594" }}
           >
             {t.actions}
@@ -121,7 +121,7 @@ function Board({ board, showSite }: { board: NonNullable<OwnerDashboard["board"]
     <div className="-mx-1 flex snap-x snap-mandatory gap-5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
       {cols.map(([title, cards, empty], ci) => (
         <div key={title} className="relative flex w-[78%] min-w-0 shrink-0 snap-start flex-col sm:w-[46%] lg:w-auto">
-          <div className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-[22px] bg-surface-2 p-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-[8px] bg-surface-2 p-3">
             {cards.length === 0 && <p className="px-1.5 py-6 text-center text-[12px] text-muted">{empty}</p>}
             {cards.slice(0, BOARD_LIMIT).map((b, i) => (
               <BatchCard key={b.id} b={b} showSite={showSite} highlight={title === "Awaiting QC" && i === 0} />
@@ -191,7 +191,7 @@ function NearExpiry({ data, showSite }: { data: NonNullable<OwnerDashboard["near
       <ul className="flex flex-col gap-2 md:hidden">
         {data.rows.map((l) => (
           <li key={l.id}>
-            <Link href={`/inventory/${l.id}`} className="block rounded-[12px] border border-line p-3 hover:border-line-strong">
+            <Link href={`/inventory/${l.id}`} className="block rounded-[8px] border border-line p-3 hover:border-line-strong">
               <div className="flex items-start justify-between gap-2">
                 <span className="font-mono text-[13px] text-primary-text">{l.lotNumber}</span>
                 <StatusChip status={l.status} />
@@ -229,7 +229,7 @@ function Activity({ rows, showSite }: { rows: ActivityRow[]; showSite: boolean }
         const href = entityHref(r.entityType, r.entityId);
         return (
           <li key={r.id} className="flex items-start gap-3 py-2.5">
-            <span className="mt-0.5 w-[88px] shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-center text-[11px] font-semibold text-fg-2">{moduleLabel(actionModule(r.action))}</span>
+            <span className="mt-0.5 w-[88px] shrink-0 rounded-[4px] bg-surface-2 px-2 py-0.5 text-center text-[11px] font-semibold text-fg-2">{moduleLabel(actionModule(r.action))}</span>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] text-fg">
                 <span className="font-medium">{activitySentence(r).who}</span>{" "}
@@ -397,7 +397,7 @@ function SiteComparison({ kpi }: { kpi: OwnerKpis }) {
       </div>
       <ul className="flex flex-col gap-2 md:hidden">
         {kpi.comparison.map((r) => (
-          <li key={r.siteId} className="rounded-[12px] border border-line p-3">
+          <li key={r.siteId} className="rounded-[8px] border border-line p-3">
             <p className="font-semibold text-fg">
               {r.siteCode} <span className="text-[12px] font-normal text-muted">{r.siteName}</span>
             </p>
@@ -480,13 +480,13 @@ export function OwnerOverview({ data, kpi, canAudit }: { data: OwnerDashboard; k
             </div>
             {data.team && <TeamRow team={data.team} />}
             <div className="flex items-center gap-2">
-              <Link href="/production/orders/new" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="New order" aria-label="New production order">
+              <Link href="/production/orders/new" className="grid size-10 place-items-center rounded-[6px] border border-line bg-surface text-fg-2 hover:text-fg" title="New order" aria-label="New production order">
                 <Plus size={18} />
               </Link>
-              <Link href="/quality" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="QA queue" aria-label="QA queue">
+              <Link href="/quality" className="grid size-10 place-items-center rounded-[6px] border border-line bg-surface text-fg-2 hover:text-fg" title="QA queue" aria-label="QA queue">
                 <ClipboardCheck size={18} />
               </Link>
-              <Link href="/production/orders" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="Production orders" aria-label="Production orders">
+              <Link href="/production/orders" className="grid size-10 place-items-center rounded-[6px] border border-line bg-surface text-fg-2 hover:text-fg" title="Production orders" aria-label="Production orders">
                 <CalendarDays size={18} />
               </Link>
             </div>

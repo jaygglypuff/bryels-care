@@ -11,7 +11,7 @@ export function NumberingVersionForm({ documentType, current, today }: { documen
   const fe = state?.fieldErrors ?? {};
   const p = (k: string) => `${documentType}-${k}`;
   return (
-    <form action={action} className="mt-2 space-y-3 rounded-[14px] border border-line p-3">
+    <form action={action} className="mt-2 space-y-3 rounded-[8px] border border-line p-3">
       <input type="hidden" name="documentType" value={documentType} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Letters at the start" htmlFor={p("prefix")} error={fe.prefix} hint="1–8 capital letters or digits">

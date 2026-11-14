@@ -38,7 +38,7 @@ function DocList({ docs, receiptId, canVoid }: { docs: (Doc & { href: string | n
   return (
     <ul className="space-y-2">
       {docs.map((d) => (
-        <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-line px-3 py-2 text-[13px]">
+        <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[6px] border border-line px-3 py-2 text-[13px]">
           <span className="flex min-w-0 items-center gap-2">
             <FileText size={14} className="shrink-0" />
             {d.href ? (
@@ -219,7 +219,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
           <CardTitle>No purchase order yet</CardTitle>
           <p className="mb-3 text-[13px] text-muted">This was an urgent buy. Make the purchase order now from what was received: the items and quantities are filled in, you enter the prices. It goes for approval as usual and nothing more is expected from the supplier.</p>
           <details className="group">
-            <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium text-fg hover:bg-surface-2">Make the purchase order</summary>
+            <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium text-fg hover:bg-surface-2">Make the purchase order</summary>
             <ActionForm action={createPoFromReceiptAction} hidden={{ ...hidden, idempotencyKey: randomUUID() }} submit="Make the purchase order" variant="primary" pendingText="Making it…" className="mt-4 space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Supplier" htmlFor="atf-supplier">
@@ -236,7 +236,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
               </div>
               <ul className="space-y-2">
                 {atf.lines.map((l, i) => (
-                  <li key={l.id} className="grid grid-cols-1 items-end gap-3 rounded-[12px] border border-line p-3 sm:grid-cols-[1fr_200px]">
+                  <li key={l.id} className="grid grid-cols-1 items-end gap-3 rounded-[8px] border border-line p-3 sm:grid-cols-[1fr_200px]">
                     <input type="hidden" name={`lines.${i}.receiptLineId`} value={l.id} />
                     <label className="flex min-h-[44px] items-start gap-3 text-[14px]">
                       <input type="checkbox" name={`lines.${i}.include`} value="yes" defaultChecked className="mt-0.5 size-5 shrink-0" />
@@ -269,7 +269,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         <CardTitle>{gr.status === "draft" ? "What came" : "What came (one lot each)"}</CardTitle>
         <ul className="space-y-3">
           {lines.map((l) => (
-            <li key={l.id} className="rounded-[12px] border border-line p-3">
+            <li key={l.id} className="rounded-[8px] border border-line p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[16px] font-semibold">{l.materialName}</p>
@@ -308,7 +308,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                 </ul>
               )}
               {l.discrepancyKind && (
-                <div className="mt-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px]">
+                <div className="mt-2 rounded-[6px] bg-surface-2 px-3 py-2 text-[13px]">
                   <p className="font-medium">
                     {l.discrepancyLabel}: {l.discrepancyNote}
                   </p>

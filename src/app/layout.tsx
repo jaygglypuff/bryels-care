@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Poppins } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const poppins = Poppins({ subsets: ["latin"], weight: ["500", "600", "700"], style: ["normal", "italic"], variable: "--font-poppins", display: "swap" });
+// ADR-136: one family (Inter) for text and headings.
 
 export const metadata: Metadata = {
   // ADR-132 §7: every page sets its own title; the tab reads "<page> · Bryel's Care".
@@ -17,7 +17,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
+    // suppressHydrationWarning: the app layout sets data-sidebar on <html> before paint (collapsed sidebar, ADR-136).
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

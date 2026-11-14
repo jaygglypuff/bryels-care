@@ -40,7 +40,7 @@ export function FormMessage({ state }: { state: ActionState }) {
       role={state.ok ? "status" : "alert"}
       data-tone={state.ok ? "ok" : (state.tone ?? "bad")}
       className={cx(
-        "rounded-[10px] border px-3 py-2",
+        "rounded-[6px] border px-3 py-2",
         state.tone === "warn" && !state.ok ? "text-[15px]" : "text-[13px]",
         state.ok
           ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]"
@@ -158,7 +158,7 @@ export function ActionForm<S extends ActionState = ActionState>({
       {typeof children === "function" ? children(fe) : children}
       {!messageBelow && message}
       {asking ? (
-        <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-3 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3.5">
+        <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-3 rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3.5">
           <p className="text-[14px] font-medium text-fg">{confirm}</p>
           <div className="flex flex-wrap gap-2">
             <Button

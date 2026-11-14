@@ -125,7 +125,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
                   data-verified={p.verified ? "yes" : "no"}
                   data-next={isNext ? "yes" : "no"}
                   aria-current={isNext ? "step" : undefined}
-                  className={`flex flex-wrap items-center justify-between gap-2 rounded-[14px] border p-3 ${p.verified ? "border-[var(--ok-bd)] bg-[var(--ok-bg)]" : isNext ? "border-2 border-primary bg-primary-soft" : "border-line"}`}
+                  className={`flex flex-wrap items-center justify-between gap-2 rounded-[8px] border p-3 ${p.verified ? "border-[var(--ok-bd)] bg-[var(--ok-bg)]" : isNext ? "border-2 border-primary bg-primary-soft" : "border-line"}`}
                 >
                   <span className="min-w-0">
                     {isNext && <span className="mb-0.5 block text-[12px] font-semibold uppercase tracking-wide text-primary-text">Next to check</span>}
@@ -165,7 +165,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
           <CardTitle>What the customer ordered</CardTitle>
           <ul className="flex flex-col gap-2">
             {v.orderLines.map((l) => (
-              <li key={l.id} className={`rounded-[12px] border p-3 text-[14px] ${Number(l.tooMany) > 0 ? "border-[var(--bad-bd)] bg-[var(--bad-bg)]" : "border-line"}`} data-testid="order-line" data-over={Number(l.tooMany) > 0 ? "yes" : "no"}>
+              <li key={l.id} className={`rounded-[8px] border p-3 text-[14px] ${Number(l.tooMany) > 0 ? "border-[var(--bad-bd)] bg-[var(--bad-bg)]" : "border-line"}`} data-testid="order-line" data-over={Number(l.tooMany) > 0 ? "yes" : "no"}>
                 <div className="flex flex-wrap justify-between gap-2">
                   <span className="font-medium">{l.productName}</span>
                   <span className={Number(l.tooMany) > 0 ? "tabular font-semibold text-[var(--bad-fg)]" : "tabular"}>

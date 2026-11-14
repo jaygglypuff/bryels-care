@@ -48,7 +48,7 @@ export default async function WarehousePage({ params, searchParams }: { params: 
             const kind = SPECIAL_ROLE_KIND[role];
             const options = w.locations.filter((l) => l.kind === kind && l.status === "active");
             return (
-              <li key={role} className="rounded-[14px] border border-line p-3">
+              <li key={role} className="rounded-[8px] border border-line p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{SPECIAL_ROLE_LABELS[role]}</span>
                   <span className="text-[13px]">{current ? <span>{current.locationName} <span className="font-mono text-[11px] text-muted">{current.locationCode}</span></span> : <span className="text-[var(--warn-fg)]">Not set yet</span>}</span>
@@ -77,7 +77,7 @@ export default async function WarehousePage({ params, searchParams }: { params: 
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {w.locations.map((l) => (
-              <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-2.5 text-[13px]">
+              <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line p-2.5 text-[13px]">
                 <Link href={`/masterdata/locations/${l.id}`} className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline">{l.name}</Link>
                 <span className="text-muted">{LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind}</span>
                 <StateChip status={l.status} />

@@ -22,7 +22,7 @@ export default async function ChecksPage() {
   return (
     <div className="mx-auto max-w-2xl pb-24 text-[16px]" data-density="operator">
       <header className="mb-4 flex items-center gap-3">
-        <Link href="/dashboard" aria-label="Back to Home" className="inline-flex min-h-[52px] min-w-[52px] items-center justify-center rounded-full border border-line bg-surface text-fg hover:bg-surface-2">
+        <Link href="/dashboard" aria-label="Back to Home" className="inline-flex min-h-[52px] min-w-[52px] items-center justify-center rounded-[6px] border border-line bg-surface text-fg hover:bg-surface-2">
           <ArrowLeft size={22} aria-hidden />
         </Link>
         <div className="min-w-0 flex-1">

@@ -181,7 +181,7 @@ export function BillForm({
             {lines.map((l, i) => {
               const err = fe[`lines.${i}.qty`] ?? fe[`lines.${i}.unitAmount`] ?? fe[`lines.${i}.description`] ?? fe[`lines.${i}.goodsReceiptLineId`] ?? fe.taxCode;
               return (
-                <div key={l.key} className="flex flex-col gap-2 rounded-[12px] border border-line p-3" data-testid="bill-line">
+                <div key={l.key} className="flex flex-col gap-2 rounded-[8px] border border-line p-3" data-testid="bill-line">
                   {l.goodsReceiptLineId ? (
                     <LineName description={l.description} className="block font-medium" />
                   ) : (

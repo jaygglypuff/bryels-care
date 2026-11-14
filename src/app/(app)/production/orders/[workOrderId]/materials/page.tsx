@@ -75,7 +75,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
         </div>
       )}
       {v.lines.length > 0 && summary.kind !== "past_without_list" && !v.lines.some((l) => l.materialKind === "packaging") && (
-        <p className="mb-3 rounded-[14px] border border-line bg-surface-2/60 p-3 text-[15px] text-fg-2" data-testid="no-packaging-lines">
+        <p className="mb-3 rounded-[8px] border border-line bg-surface-2/60 p-3 text-[15px] text-fg-2" data-testid="no-packaging-lines">
           No wrappers or labels are on this list (this product has no packaging set up per piece). Take the wrappers or labels you need; on the packaging step you tap the one you took.
         </p>
       )}

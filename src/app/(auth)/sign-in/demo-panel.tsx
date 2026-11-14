@@ -31,7 +31,7 @@ export function DemoPanel({
   const shown = view === "sandbox" ? sandboxGroups : groups;
   const count = shown.reduce((n, g) => n + g.accounts.length, 0);
   return (
-    <section aria-labelledby={`${id}-title`} className="mt-5 rounded-[20px] bg-surface p-5 shadow-[var(--shadow-card)]">
+    <section aria-labelledby={`${id}-title`} className="mt-5 rounded-[8px] bg-surface p-5 border border-line">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 id={`${id}-title`} className="text-[15px] font-semibold text-fg">
@@ -54,7 +54,7 @@ export function DemoPanel({
       {open && (
         <div id={`${id}-list`} className="mt-4">
           {sandboxGroups.length > 0 && (
-            <div role="tablist" aria-label="Which company" className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-surface-2 p-1">
+            <div role="tablist" aria-label="Which company" className="mb-3 grid grid-cols-2 gap-1 rounded-[6px] bg-surface-2 p-1">
               {(
                 [
                   ["demo", "Sample company"],
@@ -67,14 +67,14 @@ export function DemoPanel({
                   role="tab"
                   aria-selected={view === v}
                   onClick={() => setView(v)}
-                  className={cx("min-h-[34px] rounded-full px-3 text-[13px] font-semibold transition-colors", view === v ? "bg-[var(--brand-600)] text-white" : "text-muted hover:text-fg")}
+                  className={cx("min-h-[34px] rounded-[6px] px-3 text-[13px] font-semibold transition-colors", view === v ? "bg-[var(--brand-600)] text-white" : "text-muted hover:text-fg")}
                 >
                   {label}
                 </button>
               ))}
             </div>
           )}
-          <p className="mb-3 rounded-[12px] bg-[var(--lime-100)] px-3 py-2 text-[12.5px] text-[var(--brand-800)]">
+          <p className="mb-3 rounded-[8px] bg-[var(--lime-100)] px-3 py-2 text-[12.5px] text-[var(--brand-800)]">
             {view === "sandbox" ? (
               <>
                 An <span className="font-semibold">empty practice company</span>: no materials, products, customers or stock. Build everything yourself, step by
@@ -126,7 +126,7 @@ export function DemoPanel({
                       <li key={a.email}>
                         <Link
                           href={`/portal/sign-in?email=${encodeURIComponent(a.email)}`}
-                          className="flex min-h-[34px] w-full items-center justify-between gap-2 rounded-full border border-line bg-surface px-3.5 text-[13px] font-medium text-fg hover:border-line-strong hover:bg-surface-2"
+                          className="flex min-h-[34px] w-full items-center justify-between gap-2 rounded-[6px] border border-line bg-surface px-3.5 text-[13px] font-medium text-fg hover:border-line-strong hover:bg-surface-2"
                           aria-label={`Open the customer portal sign-in as ${a.displayName}, ${a.roleName} at ${a.customerName}`}
                         >
                           <span className="min-w-0 truncate">

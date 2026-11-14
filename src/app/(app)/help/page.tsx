@@ -33,7 +33,7 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
             key={r.key}
             href={`/help?role=${r.key}`}
             aria-current={r.key === chosen.key ? "page" : undefined}
-            className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", r.key === chosen.key ? "border-ring bg-primary-soft font-semibold" : "border-line hover:bg-surface-2")}
+            className={cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[14px]", r.key === chosen.key ? "border-ring bg-primary-soft font-semibold" : "border-line hover:bg-surface-2")}
           >
             {r.label}
             {r.key === mine.key ? " (you)" : ""}
@@ -58,7 +58,7 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
       <section aria-labelledby="tasks-h" className="space-y-2">
         <h2 id="tasks-h" className="font-display text-[18px] font-semibold text-fg">Help for one task</h2>
         {tasks.map((g) => (
-          <details key={g.key} id={g.key} className="rounded-[14px] border border-line bg-surface px-3.5">
+          <details key={g.key} id={g.key} className="rounded-[8px] border border-line bg-surface px-3.5">
             <summary className="flex min-h-[48px] cursor-pointer items-center text-[15px] font-medium text-fg">{g.title}</summary>
             <div className="pb-4">
               <GuideView guide={g} />

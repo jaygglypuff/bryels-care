@@ -29,7 +29,7 @@ export default async function LegacyDocumentsPage({ searchParams }: { searchPara
         {docs.length === 0 ? (
           <EmptyState title="Nothing found">{q ? "Check the number, or try the product name." : "Scanned records appear here after they are loaded (see below)."}</EmptyState>
         ) : (
-          <ul aria-label="Old documents" className="flex flex-col divide-y divide-line rounded-[16px] border border-line">
+          <ul aria-label="Old documents" className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {docs.map((d) => (
               <li key={d.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">

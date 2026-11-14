@@ -180,7 +180,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
         <Card>
           <CardTitle action={can.seeTotal && po.totalAmount ? <Amount className="text-[18px]">{money(po.totalAmount, po.currency)}</Amount> : undefined}>What we ordered</CardTitle>
-          <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {v.lines.map((l) => (
               <li key={l.id} className="flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4" data-testid="po-line">
                 <div className="min-w-0">

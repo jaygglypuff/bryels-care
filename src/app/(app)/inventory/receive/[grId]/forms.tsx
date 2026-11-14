@@ -111,7 +111,7 @@ export function UploadWidget({ entityType, entityId, header = false, idPrefix }:
   }
 
   return (
-    <div className="space-y-3 rounded-[12px] border border-dashed border-line p-3">
+    <div className="space-y-3 rounded-[8px] border border-dashed border-line p-3">
       <div className="grid gap-3 sm:grid-cols-2">
         {!header && (
           <Field label="Document type" htmlFor={`${idPrefix}-kind`}>
@@ -132,7 +132,7 @@ export function UploadWidget({ entityType, entityId, header = false, idPrefix }:
         </Field>
       </div>
       {progress !== null && (
-        <div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-2 overflow-hidden rounded-full bg-surface-2">
+        <div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-2 overflow-hidden rounded-[6px] bg-surface-2">
           <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
       )}

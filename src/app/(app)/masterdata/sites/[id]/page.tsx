@@ -114,7 +114,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
           {depts.length === 0 && <p className="mb-3 text-[13px] text-muted">No teams yet. A making area&apos;s team is printed on the batch record.</p>}
           <ul className="space-y-3">
             {depts.map((d) => (
-              <li key={d.id} className="rounded-[14px] border border-line p-3">
+              <li key={d.id} className="rounded-[8px] border border-line p-3">
                 {canDept ? (
                   // Round 4 (UX re-audit C #7): one row per team; its form opens with "Change" (was one open form per team).
                   <details>

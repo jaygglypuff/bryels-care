@@ -27,7 +27,7 @@ export function InlineDecision({ kind, entityId, what, rejectLabel, primary = tr
           Approve
         </Button>
       ) : (
-        <form action={dispatch} className="flex flex-col gap-2 rounded-[12px] border border-line bg-surface-2 p-3">
+        <form action={dispatch} className="flex flex-col gap-2 rounded-[8px] border border-line bg-surface-2 p-3">
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="entityId" value={entityId} />
           <input type="hidden" name="decision" value="approve" />

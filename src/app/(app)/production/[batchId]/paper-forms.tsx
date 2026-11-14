@@ -152,7 +152,7 @@ export function StepFromPaperForm({ batchId, step, people, checkers, equipment, 
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-[14px] font-medium">Checklist: tick what the paper says</legend>
               {step.checklist.map((c) => (
-                <div key={c.id} className="rounded-[12px] border border-line p-2.5">
+                <div key={c.id} className="rounded-[8px] border border-line p-2.5">
                   <p className="text-[14px]">
                     {c.itemNo}. {c.text}
                   </p>
@@ -164,7 +164,7 @@ export function StepFromPaperForm({ batchId, step, people, checkers, equipment, 
                         ["na", "N/A"],
                       ] as const
                     ).map(([v, l]) => (
-                      <label key={v} className="flex min-h-[44px] min-w-[72px] cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-[14px]">
+                      <label key={v} className="flex min-h-[44px] min-w-[72px] cursor-pointer items-center gap-2 rounded-[6px] border border-line px-3 text-[14px]">
                         <input type="radio" name={`answer-${c.id}`} value={v} required /> {l}
                       </label>
                     ))}

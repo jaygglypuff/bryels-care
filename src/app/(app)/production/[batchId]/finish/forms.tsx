@@ -168,7 +168,7 @@ export function FinishForm(p: FinishFormProps) {
       <input type="hidden" name="rejectTypes" value={types.join("|")} />
       <input type="hidden" name="materialIds" value={p.packaging.filter((m) => !m.counted).map((m) => m.materialId).join(",")} />
 
-      <section className="rounded-[16px] border border-line p-4" aria-labelledby="fin-counts">
+      <section className="rounded-[8px] border border-line p-4" aria-labelledby="fin-counts">
         <h2 id="fin-counts" className="text-[16px] font-semibold">
           What was made
         </h2>
@@ -237,7 +237,7 @@ export function FinishForm(p: FinishFormProps) {
       </section>
 
       {p.packaging.length > 0 && (
-        <section className="rounded-[16px] border border-line p-4" aria-labelledby="fin-wrappers">
+        <section className="rounded-[8px] border border-line p-4" aria-labelledby="fin-wrappers">
           {/* ADR-106 §4: wrappers in plain words; labels are counted in the label panel, not here. */}
           <h2 id="fin-wrappers" className="text-[16px] font-semibold">
             Wrappers, bottles and boxes
@@ -294,10 +294,10 @@ export function FinishForm(p: FinishFormProps) {
                             </p>
                             {goodN > 0 && (
                               <div className="flex flex-wrap gap-2">
-                                <button type="button" aria-pressed={answer === "yes"} onClick={() => { setSure({ ...sure, [b.materialId]: "yes" }); setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: "0", leftOver: String(expectLeft) } }); }} className={cx("inline-flex min-h-[56px] flex-1 items-center justify-center rounded-full border text-[17px] font-semibold", answer === "yes" ? "border-transparent bg-primary text-white" : "border-line-strong bg-surface text-fg")} data-testid={`pkg-yes-${b.materialId}`}>
+                                <button type="button" aria-pressed={answer === "yes"} onClick={() => { setSure({ ...sure, [b.materialId]: "yes" }); setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: "0", leftOver: String(expectLeft) } }); }} className={cx("inline-flex min-h-[56px] flex-1 items-center justify-center rounded-[6px] border text-[17px] font-semibold", answer === "yes" ? "border-transparent bg-primary text-white" : "border-line-strong bg-surface text-fg")} data-testid={`pkg-yes-${b.materialId}`}>
                                   Yes{answer === "yes" ? " ✓" : ""}
                                 </button>
-                                <button type="button" onClick={() => { setSure({ ...sure, [b.materialId]: "no" }); setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: "", leftOver: "" } }); }} className="inline-flex min-h-[56px] flex-1 items-center justify-center rounded-full border border-line-strong bg-surface text-[17px] font-semibold text-fg" data-testid={`pkg-no-${b.materialId}`}>
+                                <button type="button" onClick={() => { setSure({ ...sure, [b.materialId]: "no" }); setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: "", leftOver: "" } }); }} className="inline-flex min-h-[56px] flex-1 items-center justify-center rounded-[6px] border border-line-strong bg-surface text-[17px] font-semibold text-fg" data-testid={`pkg-no-${b.materialId}`}>
                                   No, count them
                                 </button>
                               </div>
@@ -340,13 +340,13 @@ export function FinishForm(p: FinishFormProps) {
       )}
 
       {p.needsChecker && (
-        <fieldset className="grid gap-3 rounded-[16px] border border-line p-4 sm:grid-cols-2" data-testid="finish-checker">
+        <fieldset className="grid gap-3 rounded-[8px] border border-line p-4 sm:grid-cols-2" data-testid="finish-checker">
           <legend className="px-1 text-[14px] font-semibold">A second person checks your counts</legend>
           {p.checkers.length === 0 && <p className="text-[14px] text-[var(--bad-fg)] sm:col-span-2">Nobody else from production can check at this site yet. Ask the site manager to add a second person.</p>}
           {p.sameDevice && (
             <div className="flex flex-wrap gap-2 sm:col-span-2" role="radiogroup" aria-label="How does the second person check?">
               {(["here", "phone"] as const).map((m) => (
-                <button key={m} type="button" role="radio" aria-checked={checkMode === m} onClick={() => setCheckMode(m)} className={cx("min-h-[52px] flex-1 rounded-full border px-4 text-[16px]", checkMode === m ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")} data-testid={`check-mode-${m}`}>
+                <button key={m} type="button" role="radio" aria-checked={checkMode === m} onClick={() => setCheckMode(m)} className={cx("min-h-[52px] flex-1 rounded-[6px] border px-4 text-[16px]", checkMode === m ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")} data-testid={`check-mode-${m}`}>
                   {m === "here" ? "They are here (their password)" : "On their own phone"}
                 </button>
               ))}
@@ -385,7 +385,7 @@ export function FinishForm(p: FinishFormProps) {
         <span className="block text-[13px] text-fg-2">When QA says OK, it moves by itself to the finished-goods shelf.</span>
       </p>
 
-      <details className="rounded-[16px] border border-line p-4">
+      <details className="rounded-[8px] border border-line p-4">
         <summary className="cursor-pointer text-[15px] font-semibold">More details</summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Count id="rejectsWrapped" label="Rejects that were already wrapped" value={wrapped} onChange={setWrapped} error={fe.rejectsWrapped} hint="They used a wrapper, so they count as wrappers used." />
@@ -413,14 +413,14 @@ export function FinishForm(p: FinishFormProps) {
 
       <FormMessage state={state} />
       {problems.length > 0 && !confirming && (
-        <ul role="alert" className="list-disc rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] py-2 pl-8 pr-3 text-[14px] text-[var(--bad-fg)]" data-testid="finish-problems">
+        <ul role="alert" className="list-disc rounded-[6px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] py-2 pl-8 pr-3 text-[14px] text-[var(--bad-fg)]" data-testid="finish-problems">
           {problems.map((x) => (
             <li key={x}>{x}</li>
           ))}
         </ul>
       )}
       {confirming ? (
-        <div className="rounded-[16px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4" role="alertdialog" aria-labelledby="fin-confirm-title" data-testid="finish-confirm">
+        <div className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4" role="alertdialog" aria-labelledby="fin-confirm-title" data-testid="finish-confirm">
           <p id="fin-confirm-title" className="text-[16px] font-semibold">
             {onPhone ? `Send the counts of batch ${p.batchNumber} to ${who} to check?` : `Finish batch ${p.batchNumber}? You can't change the counts after this.`}
           </p>
@@ -470,7 +470,7 @@ export function ReturnWrappers({ batchId, items, canReturn }: { batchId: string;
   const [state, action] = useInPlaceAction(returnWrappersAction);
   const open = items.filter((x) => x.toLocationId && !x.returned);
   return (
-    <section className="grid gap-2 rounded-[16px] border border-line bg-surface p-4" aria-label="Left-over wrappers" data-testid="return-wrappers">
+    <section className="grid gap-2 rounded-[8px] border border-line bg-surface p-4" aria-label="Left-over wrappers" data-testid="return-wrappers">
       <h2 className="text-[16px] font-semibold">Left-over wrappers</h2>
       {open.length === 0 ? (
         <p className="text-[15px] text-[var(--ok-fg)]">The left-over wrappers are back on the shelf.</p>

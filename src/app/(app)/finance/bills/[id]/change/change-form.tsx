@@ -36,7 +36,7 @@ export function ChangeBillForm({ billId, lines: initial }: { billId: string; lin
       {(fe) => (
         <div className="flex flex-col gap-3">
           {rows.map((r, i) => (
-            <div key={r.key} className="flex flex-col gap-2 rounded-[12px] border border-line p-3" data-testid="change-bill-line">
+            <div key={r.key} className="flex flex-col gap-2 rounded-[8px] border border-line p-3" data-testid="change-bill-line">
               <LineName description={r.description} className="block font-medium" />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Field label="How many" htmlFor={`cb-q-${r.key}`} error={fe[`lines.${i}.qty`]}>

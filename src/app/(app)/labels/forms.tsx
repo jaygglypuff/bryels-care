@@ -33,7 +33,7 @@ function useOnPageConfirm(question: string | undefined) {
     setAsking(true);
   };
   const box = asking ? (
-    <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-2 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3">
+    <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-2 rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3">
       <p className="text-[14px] font-medium text-fg">{question}</p>
       <div className="flex flex-wrap gap-2">
         <Button

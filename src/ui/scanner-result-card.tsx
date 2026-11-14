@@ -101,7 +101,7 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
           {card.holdings.length === 0 ? (
             <p className="text-[13px] text-muted">{card.entity === "location" ? "Nothing stored here right now." : "No stock on hand."}</p>
           ) : (
-            <ul className="divide-y divide-line rounded-[12px] border border-line">
+            <ul className="divide-y divide-line rounded-[8px] border border-line">
               {card.holdings.map((h) => (
                 <li key={h.label} className="flex items-center justify-between gap-3 px-3 py-2 text-[13px]">
                   <span className="min-w-0 break-words">{h.href ? <Link href={h.href} className="text-primary-text hover:underline">{h.label}</Link> : h.label}</span>
@@ -117,7 +117,7 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
         <div className="text-[13px] text-fg-2">
           <p className="flex items-center gap-1.5"><Tag size={14} aria-hidden="true" /> Labels printed: {card.labels.printed} · reprints: {card.labels.reprints}</p>
           {card.labels.superseded.length > 0 && (
-            <div className="mt-2 rounded-[12px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[var(--bad-fg)]" data-testid="superseded-labels">
+            <div className="mt-2 rounded-[8px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[var(--bad-fg)]" data-testid="superseded-labels">
               <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={14} aria-hidden="true" /> Superseded label — destroy</p>
               <ul className="mt-1 list-disc pl-5">
                 {card.labels.superseded.map((s) => (
@@ -140,7 +140,7 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
           </div>
         )}
         {blocked.map((a) => (
-          <div key={a.key} className="flex min-h-[44px] items-start gap-2 rounded-[10px] border border-dashed border-line-strong px-3 py-2 text-[13px] text-muted" aria-disabled="true" data-blocked={a.key}>
+          <div key={a.key} className="flex min-h-[44px] items-start gap-2 rounded-[6px] border border-dashed border-line-strong px-3 py-2 text-[13px] text-muted" aria-disabled="true" data-blocked={a.key}>
             <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span><span className="font-medium">{a.label}</span>: {a.reason}</span>
           </div>
@@ -160,7 +160,7 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
 /** One plain line per result; the whole line is the link (44 px+ touch target). */
 function ResultLines({ hits, testId }: { hits: { title: string; detail: string; href: string }[]; testId?: string }) {
   return (
-    <ul className="divide-y divide-line rounded-[14px] border border-line" data-testid={testId}>
+    <ul className="divide-y divide-line rounded-[8px] border border-line" data-testid={testId}>
       {hits.map((m) => (
         <li key={m.href}>
           <Link href={m.href} className="flex min-h-[56px] items-center gap-3 px-3.5 py-2.5 hover:bg-surface-2">

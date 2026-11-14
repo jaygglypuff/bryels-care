@@ -106,7 +106,7 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
           ) : (
             <ul className="flex flex-col gap-3">
               {rows.map((r) => (
-                <li key={r.id} id={`s-${r.id}`} className="scroll-mt-24 rounded-[14px] border border-line p-3" data-testid="reorder-row">
+                <li key={r.id} id={`s-${r.id}`} className="scroll-mt-24 rounded-[8px] border border-line p-3" data-testid="reorder-row">
                   <p className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="font-semibold">{r.materialName}</span>
                     <span className="font-mono text-[12px] text-muted">{r.materialCode}</span>
@@ -153,7 +153,7 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
           {policies.length === 0 ? (
             <p className="text-[14px] text-fg-2">No items watched yet.</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+            <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
               {policies.map((p) => (
                 <li key={p.id} className="px-3 py-2.5 text-[14px]">
                   <span className="font-medium">{p.materialName ?? p.materialCode}</span>

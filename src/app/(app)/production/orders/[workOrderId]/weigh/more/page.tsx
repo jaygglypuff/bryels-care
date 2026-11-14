@@ -67,7 +67,7 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
       <div className="mx-auto max-w-3xl pb-24 text-[16px]">
         <FlowHeader title={`Other ways to weigh: ${ing.materialName}`} batchNumber={b.batchNumber} orderHref={backHref} />
         <PageIntro>Use this only when the normal Weigh card does not fit: weighing in a container, taking part from a second lot, a weight outside the allowed difference (needs an approver), or undoing a wrong weighing.</PageIntro>
-        <section className="mb-4 rounded-[16px] border border-line bg-surface p-4">
+        <section className="mb-4 rounded-[8px] border border-line bg-surface p-4">
           <p className="text-[17px] font-semibold text-fg">{ing.materialName}</p>
           <p className="text-[15px] text-fg-2 tabular">
             Target {fmtQty(ing.theoreticalQtyG, "g", 1)}
@@ -81,7 +81,7 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
           <section className="mb-4 grid gap-2" aria-label="Weighings of this ingredient">
             <h2 className="text-[17px] font-semibold">Weighings</h2>
             {ing.weighings.map((w) => (
-              <div key={w.id} className="rounded-[14px] border border-line bg-surface p-3 text-[15px]">
+              <div key={w.id} className="rounded-[8px] border border-line bg-surface p-3 text-[15px]">
                 <p className={w.voided ? "text-muted line-through" : ""}>
                   {fmtQty(w.qtyG, "g", 1)} · lot {w.lotNumber} · on <PlaceName name={w.locationName} code={w.locationCode} /> · by {w.operator} · {w.checker ? `checked by ${w.checker}` : "not checked yet"}
                 </p>
@@ -118,7 +118,7 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
           <p className="text-[15px] text-muted">This ingredient is weighed. Undo a weighing above to weigh it again.</p>
         ) : null}
         <p className="mt-6">
-          <Link href={weighHref} className="inline-flex min-h-[48px] items-center rounded-full border border-line bg-surface px-5 text-[15px] font-medium text-fg">
+          <Link href={weighHref} className="inline-flex min-h-[48px] items-center rounded-[6px] border border-line bg-surface px-5 text-[15px] font-medium text-fg">
             Back to Weigh
           </Link>
         </p>

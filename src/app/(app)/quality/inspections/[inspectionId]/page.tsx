@@ -140,7 +140,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
         <Card>
           <CardTitle action={v.missing.length ? <Chip tone="warn">{v.missing.length} still missing</Chip> : <Chip tone="ok">All typed</Chip>}>Tests and results</CardTitle>
           {v.can.sampleFirst && canSeeResults && (
-            <p className="mb-3 rounded-[10px] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="sample-first">
+            <p className="mb-3 rounded-[6px] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="sample-first">
               Record the sample first (above): how much you took and from where. Then type the results here.
             </p>
           )}
@@ -166,7 +166,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
                     {results.length > 0 && (
                       <ul className="mt-2 flex flex-col gap-1">
                         {results.map((r) => (
-                          <li key={r.id} className={cx("rounded-[10px] border px-3 py-2 text-[13px]", !r.live ? "border-line bg-surface-2 text-muted" : r.passed ? "border-[var(--ok-bd)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)]")}>
+                          <li key={r.id} className={cx("rounded-[6px] border px-3 py-2 text-[13px]", !r.live ? "border-line bg-surface-2 text-muted" : r.passed ? "border-[var(--ok-bd)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)]")}>
                             <span className={cx("font-medium", !r.live && "line-through")}>{r.result}</span> {r.live ? r.passed ? <Chip tone="ok">OK</Chip> : <Chip tone="bad">Not OK</Chip> : <Chip tone="neu">Replaced</Chip>}
                             <span className="ml-2 text-muted">
                               {r.testerName} · {fmtDateTime(r.testedAt)}

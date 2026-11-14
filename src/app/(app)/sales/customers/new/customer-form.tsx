@@ -60,7 +60,7 @@ export function CustomerForm({ segments, canSetTerms = false }: { segments: { va
             <Input {...bind("phone")} type="tel" maxLength={40} autoComplete="tel" placeholder="e.g. 0917 123 4567" />
           </Field>
           {askDifferent && (
-            <div role="status" className="flex flex-col gap-2 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="similar-customer">
+            <div role="status" className="flex flex-col gap-2 rounded-[6px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="similar-customer">
               {similar.length > 0 ? (
                 similar.map((s) => (
                   <p key={s.id}>

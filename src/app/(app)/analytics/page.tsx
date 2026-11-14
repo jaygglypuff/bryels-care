@@ -63,7 +63,7 @@ export default async function ReportsHome({ searchParams }: { searchParams: Prom
         subtitle={canDash ? `${all ? "All your sites" : ctx.currentSite.name} · last 4 weeks` : undefined}
         actions={
           ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view") ? (
-            <div className="flex rounded-full border border-line bg-surface p-1" role="group" aria-label="Sites">
+            <div className="flex rounded-[6px] border border-line bg-surface p-1" role="group" aria-label="Sites">
               <Pill href="/analytics" active={!all}>This site</Pill>
               <Pill href="/analytics?scope=all" active={all}>All my sites</Pill>
             </div>
@@ -111,7 +111,7 @@ export default async function ReportsHome({ searchParams }: { searchParams: Prom
 
       <section aria-labelledby="more-reports-h">
         <h2 id="more-reports-h" className="mb-2 font-display text-[18px] font-semibold text-fg">More reports</h2>
-        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
           {visible.map((l) => (
             <li key={l.href}>
               <Link href={l.href} className="flex min-h-[56px] items-center gap-3 px-4 py-3 hover:bg-surface-2">
@@ -160,7 +160,7 @@ async function load(ctx: Awaited<ReturnType<typeof requireContext>>, all: boolea
 
 function Pill({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
   return (
-    <Link href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
+    <Link href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-[6px] px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
       {children}
     </Link>
   );
@@ -174,9 +174,9 @@ const TONES = {
 
 function Tile({ title, icon, tone, href, value, children }: { title: string; icon: ReactNode; tone: keyof typeof TONES; href: string; value: ReactNode; children?: ReactNode }) {
   return (
-    <Link href={href} className={cx("group flex min-w-0 flex-col rounded-[18px] border p-4 transition-shadow hover:shadow-[var(--shadow-pop)]", TONES[tone])}>
+    <Link href={href} className={cx("group flex min-w-0 flex-col rounded-[8px] border p-4 transition-shadow hover:shadow-[var(--shadow-pop)]", TONES[tone])}>
       <span className="flex items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-fg-2" aria-hidden>
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-surface text-fg-2" aria-hidden>
           {icon}
         </span>
         <span className="min-w-0 flex-1 text-[14px] font-semibold text-fg">{title}</span>
@@ -282,7 +282,7 @@ function TopProductsCard({ top, ordersHref }: { top: NonNullable<Awaited<ReturnT
                   <span className="shrink-0 font-semibold tabular text-fg">{top.masked ? `${fmtQty(r.units, "", 0)} pcs` : peso(r.value ?? "0")}</span>
                 </div>
                 <span className="mt-1 block h-2 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                  <span className="block h-full rounded-full" style={{ width: `${Math.max(3, v.div(max).toNumber() * 100)}%`, background: slotColor(2) }} />
+                  <span className="block h-full rounded-[6px]" style={{ width: `${Math.max(3, v.div(max).toNumber() * 100)}%`, background: slotColor(2) }} />
                 </span>
                 <span className="mt-0.5 block text-[12px] text-fg-2">
                   {fmtQty(r.units, "", 0)} pieces · in {r.orders} {r.orders === 1 ? "order" : "orders"}

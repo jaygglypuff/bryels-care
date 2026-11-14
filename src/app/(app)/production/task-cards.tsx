@@ -10,12 +10,12 @@ import { LinkButton, cx } from "@/ui/core";
  */
 export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean }) {
   return (
-    <article className="flex min-w-0 flex-col gap-2.5 rounded-[18px] border border-line bg-surface p-4 sm:p-5" data-testid="floor-task" aria-label={`${t.title}: ${t.productName}, batch ${t.batchNumber}`}>
+    <article className="flex min-w-0 flex-col gap-2.5 rounded-[8px] border border-line bg-surface p-4 sm:p-5" data-testid="floor-task" aria-label={`${t.title}: ${t.productName}, batch ${t.batchNumber}`}>
       <div className="min-w-0">
         <p className="text-[19px] font-semibold leading-snug text-fg">{t.title}</p>
         <p className="mt-0.5 text-[14px] text-fg-2">
           {t.productName} · <span className="font-mono text-[13px]">{t.batchNumber}</span>
-          {t.assignedToMe && <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[12px] font-medium text-primary-text">Yours</span>}
+          {t.assignedToMe && <span className="ml-2 rounded-[4px] bg-primary-soft px-2 py-0.5 text-[12px] font-medium text-primary-text">Yours</span>}
         </p>
       </div>
       <div>
@@ -24,7 +24,7 @@ export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean })
           <span className="tabular text-muted">{t.percent}%</span>
         </p>
         <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={t.percent} aria-label={`${t.batchNumber} progress`}>
-          <div className={cx("h-full rounded-full", t.canDo ? "bg-primary" : "bg-line-strong")} style={{ width: `${Math.max(t.percent, 3)}%` }} />
+          <div className={cx("h-full rounded-[6px]", t.canDo ? "bg-primary" : "bg-line-strong")} style={{ width: `${Math.max(t.percent, 3)}%` }} />
         </div>
       </div>
       {t.canDo ? (
@@ -33,7 +33,7 @@ export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean })
           {t.buttonLabel}
         </LinkButton>
       ) : (
-        <div className="mt-1 rounded-[14px] bg-surface-2/70 px-3.5 py-3 text-[14px]">
+        <div className="mt-1 rounded-[8px] bg-surface-2/70 px-3.5 py-3 text-[14px]">
           <p className="flex items-center gap-1.5 font-medium text-fg">
             <Hourglass size={15} aria-hidden /> {t.waitingFor ? `Waiting for ${t.waitingFor}` : t.kind === "wait" ? "Nothing to do until then" : "Waiting"}
           </p>

@@ -21,7 +21,7 @@ export function PipelineStrip({ stages, compact = false }: { stages: PipelineSta
         const endXl = (idx + 1) % 5 === 0;
         return (
           <li key={s.key} className="relative min-w-0">
-            <div className="flex h-full flex-col rounded-[16px] border border-line bg-surface p-3.5">
+            <div className="flex h-full flex-col rounded-[8px] border border-line bg-surface p-3.5">
               <Link href={s.href} className="group flex min-h-[44px] items-start justify-between gap-2">
                 <span className="min-w-0">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">

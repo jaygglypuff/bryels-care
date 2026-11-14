@@ -76,7 +76,7 @@ export default async function FromPaperPage({ params }: { params: Promise<{ batc
             const todo = open && p.stepStatus !== "completed" && p.stepStatus !== "awaiting_check";
             return (
               <li key={p.paperRecordId}>
-                <details className="rounded-[16px] border border-line bg-surface px-4 py-1" open={todo && v.canEnter ? true : undefined} data-testid={`paper-page-${p.stepNo}`}>
+                <details className="rounded-[8px] border border-line bg-surface px-4 py-1" open={todo && v.canEnter ? true : undefined} data-testid={`paper-page-${p.stepNo}`}>
                   <summary className="flex min-h-[56px] cursor-pointer list-none flex-wrap items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                     <span className="font-mono text-[13px] text-muted">{p.reference}</span>
                     <span className="min-w-0 flex-1 break-words text-[15px] font-medium">
@@ -108,7 +108,7 @@ export default async function FromPaperPage({ params }: { params: Promise<{ batc
                               {w.status === "exception" && <Chip tone="warn">QA decides</Chip>}
                             </p>
                           ) : (
-                            <section key={w.batchMaterialId} aria-label={w.materialName} className="rounded-[14px] border border-line p-3">
+                            <section key={w.batchMaterialId} aria-label={w.materialName} className="rounded-[8px] border border-line p-3">
                               <h3 className="mb-2 text-[15px] font-semibold">
                                 {w.lineNo}. {w.materialName} <span className="font-mono text-[12px] font-normal text-muted">{w.materialCode}</span>
                               </h3>
@@ -117,7 +117,7 @@ export default async function FromPaperPage({ params }: { params: Promise<{ batc
                           ),
                         )}
                         {todo && (
-                          <section aria-label={`Step ${p.stepNo} done`} className="rounded-[14px] border border-line p-3">
+                          <section aria-label={`Step ${p.stepNo} done`} className="rounded-[8px] border border-line p-3">
                             <h3 className="mb-2 text-[15px] font-semibold">{p.weighings.length ? "When every line is typed: the weighing step is done" : "The step as written on the paper"}</h3>
                             <StepFromPaperForm
                               batchId={v.batch.id}

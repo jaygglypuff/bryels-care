@@ -38,7 +38,7 @@ function PermissionPicker({ catalogue, selected }: { catalogue: PermOpt[]; selec
       {[...sel].filter((c) => !groups.some(([, ps]) => ps.some((p) => p.code === c))).map((c) => (
         <input key={c} type="hidden" name="permissions" value={c} />
       ))}
-      <div className="max-h-[480px] overflow-y-auto rounded-[14px] border border-line p-3">
+      <div className="max-h-[480px] overflow-y-auto rounded-[8px] border border-line p-3">
         {groups.map(([mod, ps]) => (
           <section key={mod} className="mb-3">
             <h3 className="mb-1 text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{plainModule(mod)}</h3>

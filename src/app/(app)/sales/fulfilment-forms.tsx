@@ -173,7 +173,7 @@ export function ScanPanel({
         onEmit={onScan}
       />
       {lot && (
-        <div className="flex flex-col gap-2 rounded-[14px] border-2 border-primary bg-primary-soft p-3" data-testid="loose-qty">
+        <div className="flex flex-col gap-2 rounded-[8px] border-2 border-primary bg-primary-soft p-3" data-testid="loose-qty">
           <p className="text-[14px] text-fg-2">
             {lot.via === "typed" ? "Typed" : lot.via === "tap" ? "Chosen" : "Scanned"}: <strong className="text-fg">{lot.name}</strong> (loose pieces)
           </p>
@@ -213,7 +213,7 @@ export function ScanPanel({
               <legend className="text-[15px] font-medium">Label will not scan? Tap why, then tap the box in the list</legend>
               <div className="flex flex-wrap gap-2">
                 {["Label torn", "Scanner broken"].map((r) => (
-                  <button key={r} type="button" aria-pressed={manual === r} onClick={() => setManual(manual === r ? "" : r)} className={`min-h-[48px] rounded-full border px-4 text-[15px] ${manual === r ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface"}`}>
+                  <button key={r} type="button" aria-pressed={manual === r} onClick={() => setManual(manual === r ? "" : r)} className={`min-h-[48px] rounded-[6px] border px-4 text-[15px] ${manual === r ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface"}`}>
                     {r}
                   </button>
                 ))}
@@ -231,9 +231,9 @@ export function ScanPanel({
           )}
         </div>
       )}
-      {offline && <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">No internet. Checks need a connection: scan or type it again when the phone is back online.</p>}
+      {offline && <p role="alert" className="rounded-[6px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">No internet. Checks need a connection: scan or type it again when the phone is back online.</p>}
       {result && (
-        <p role={result.ok ? "status" : "alert"} className={`rounded-[10px] border px-3 py-2 text-[14px] ${tone}`} data-testid="scan-result">
+        <p role={result.ok ? "status" : "alert"} className={`rounded-[6px] border px-3 py-2 text-[14px] ${tone}`} data-testid="scan-result">
           {result.message}
         </p>
       )}
@@ -288,7 +288,7 @@ function SignaturePad({ ref }: { ref: React.Ref<SignaturePadHandle> }) {
         width={600}
         height={200}
         aria-label="Signature box: the person receiving signs here"
-        className="h-[140px] w-full touch-none rounded-[12px] border border-line bg-white"
+        className="h-[140px] w-full touch-none rounded-[8px] border border-line bg-white"
         data-testid="signature-pad"
         onPointerDown={(e) => {
           drawing.current = true;

@@ -613,3 +613,42 @@ export function isApprover(can: Can, roles: readonly string[], permissions: Iter
   for (const p of permissions) if (p.endsWith(".approve")) return true;
   return false;
 }
+
+/** The sidebar's entries of one area (ADR-136): its tabs, then its "More" entries, as one flat list (no dropdowns). */
+export function groupEntries(g: NavGroup): NavItem[] {
+  const { main, sections } = groupSections(g);
+  return [...main, ...sections.flatMap((s) => s.items)];
+}
+
+export type Crumb = { label: string; href?: string };
+
+/**
+ * The breadcrumb of the top bar (ADR-136): Section / Page, from the person's own menu first, else from the catalogue
+ * (a page outside their menu still says where it lives). `exact` is false on a page below the entry (a record, a
+ * form): the shell then adds the record's number or the page's own title as the last crumb.
+ */
+export function crumbsFor(nav: readonly NavGroup[], pathname: string): { crumbs: Crumb[]; exact: boolean } {
+  const { group, href } = activeEntry(nav, pathname);
+  let item = href ? group?.items.find((i) => i.href === href) : undefined;
+  let section = group?.label;
+  if (!item) {
+    let best = -1;
+    for (const g of NAV)
+      for (const i of g.items) {
+        const m = matchLen(pathname, i.href);
+        if (m > best) {
+          best = m;
+          item = i;
+          section = group?.label ?? g.label;
+        }
+      }
+  }
+  if (!item) return { crumbs: section ? [{ label: section }] : [], exact: false };
+  const path = item.href.split("?")[0];
+  const exact = pathname === path;
+  const crumbs: Crumb[] = [];
+  // "Home / Home" says nothing: an area with the same word as its page shows once.
+  if (section && section !== item.label) crumbs.push({ label: section });
+  crumbs.push({ label: item.label, href: exact ? undefined : item.href });
+  return { crumbs, exact };
+}

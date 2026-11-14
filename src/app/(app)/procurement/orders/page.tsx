@@ -54,7 +54,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <input type="hidden" name="status" value={status} />
           <label htmlFor="po-q" className="sr-only">Find an order</label>
           <input id="po-q" name="q" defaultValue={q ?? ""} placeholder="Find by supplier or order number" className="min-h-[44px] min-w-0 flex-1 rounded-[8px] border border-line bg-surface px-3 text-[15px]" />
-          <button type="submit" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
+          <button type="submit" className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
         </form>
         <FilterTabs label="Filter orders" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/procurement/orders?status=${v}`] as const)} />
         {rows.length === 0 ? (

@@ -29,7 +29,7 @@ export default async function ListsPage({ searchParams }: { searchParams: Promis
       <PageIntro>The choices people pick from, like material categories or customer types. Type a new choice and press Add; old records keep theirs.</PageIntro>
       <nav aria-label="Lists on this page" className="flex flex-wrap gap-2">
         {lists.map((l) => (
-          <a key={l.key} href={`#list-${l.key}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-4 text-[14px] font-medium hover:bg-surface-2">
+          <a key={l.key} href={`#list-${l.key}`} className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-4 text-[14px] font-medium hover:bg-surface-2">
             {l.title}
           </a>
         ))}
@@ -58,7 +58,7 @@ export default async function ListsPage({ searchParams }: { searchParams: Promis
                   {canAdmin && (
                     <details className="mt-2">
                       <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Change</summary>
-                      <div className="mt-2 grid gap-3 rounded-[12px] border border-line p-3">
+                      <div className="mt-2 grid gap-3 rounded-[8px] border border-line p-3">
                         <ActionForm action={renameLookupValueAction} hidden={{ listKey: l.key, code: v.code }} submit="Save name" variant="secondary" className="flex flex-wrap items-start gap-2">
                           <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-[13px]">
                             Name people see

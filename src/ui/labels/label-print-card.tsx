@@ -35,7 +35,7 @@ export function LabelPrintCard({
   const opt = preview.options.find((o) => o.templateId === templateId) ?? preview.options[0];
   const existing = preview.existing.find((x) => x.templateId === opt?.templateId) ?? null;
   return (
-    <section className="grid gap-4 rounded-[20px] border border-line bg-surface p-4 sm:p-5" aria-label={title ?? LABEL_KIND_WORDS[k].title} data-testid="label-print-card">
+    <section className="grid gap-4 rounded-[8px] border border-line bg-surface p-4 sm:p-5" aria-label={title ?? LABEL_KIND_WORDS[k].title} data-testid="label-print-card">
       {title !== null && <h2 className="text-[18px] font-semibold text-fg">{title ?? LABEL_KIND_WORDS[k].title}</h2>}
       {opt ? <LabelPreview kind={k} data={opt.face} sentence={sentence} layout={preview.showLayout ? opt.layout : null} /> : <p className="text-[15px] text-fg-2">No label is approved for this yet, so there is nothing to show.</p>}
       {opt && preview.printer && !preview.blocked && (

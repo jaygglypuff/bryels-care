@@ -40,7 +40,7 @@ export function RuleForm({ value, opts }: { value: RuleFormValue; opts: Opts }) 
   const fe = state?.fieldErrors ?? {};
   const p = (k: string) => `${value.id ?? "new"}-${k}`;
   return (
-    <form action={action} className="mt-2 space-y-3 rounded-[14px] border border-line p-3">
+    <form action={action} className="mt-2 space-y-3 rounded-[8px] border border-line p-3">
       {value.id && <input type="hidden" name="id" value={value.id} />}
       {value.version !== undefined && <input type="hidden" name="version" value={value.version} />}
       <div className="grid gap-3 sm:grid-cols-3">

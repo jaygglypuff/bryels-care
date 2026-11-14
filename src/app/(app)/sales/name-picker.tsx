@@ -82,7 +82,7 @@ export function NamePicker({
       {required && !disabled && <input tabIndex={-1} aria-hidden className="sr-only" required value={value} onChange={() => undefined} />}
 
       {!editing ? (
-        <div className="flex min-h-[52px] min-w-0 items-center justify-between gap-3 rounded-[14px] border border-line bg-surface px-4 py-2">
+        <div className="flex min-h-[52px] min-w-0 items-center justify-between gap-3 rounded-[8px] border border-line bg-surface px-4 py-2">
           <span className="min-w-0">
             <span className="flex items-center gap-2 text-[16px] font-semibold text-fg">
               <Check size={16} className="shrink-0 text-[var(--ok-fg)]" aria-hidden />
@@ -124,7 +124,7 @@ export function NamePicker({
               onKeyDown={onKey}
             />
           </div>
-          <ul id={listId} role="listbox" aria-label={placeholder} className="flex flex-col overflow-hidden rounded-[14px] border border-line bg-surface">
+          <ul id={listId} role="listbox" aria-label={placeholder} className="flex flex-col overflow-hidden rounded-[8px] border border-line bg-surface">
             {shown.length === 0 ? (
               <li className="px-4 py-3 text-[15px] text-fg-2" role="presentation">
                 Nothing matches “{q}”: try fewer letters.

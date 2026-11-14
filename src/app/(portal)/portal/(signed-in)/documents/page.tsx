@@ -22,7 +22,7 @@ export default async function PortalDocumentsPage({ searchParams }: { searchPara
             key={k.kind ?? "all"}
             href={k.kind ? `/portal/documents?kind=${k.kind}` : "/portal/documents"}
             aria-current={active === k.kind ? "page" : undefined}
-            className={cx("rounded-full border px-3.5 py-1.5 text-[13px] font-medium", active === k.kind ? "border-transparent bg-[var(--brand-600)] text-white" : "border-line bg-surface text-fg-2 hover:bg-[var(--lime-100)]")}
+            className={cx("rounded-[6px] border px-3.5 py-1.5 text-[13px] font-medium", active === k.kind ? "border-transparent bg-[var(--brand-600)] text-white" : "border-line bg-surface text-fg-2 hover:bg-[var(--lime-100)]")}
           >
             {k.label}
           </Link>
@@ -34,7 +34,7 @@ export default async function PortalDocumentsPage({ searchParams }: { searchPara
         <ul className="flex flex-col gap-2">
           {docs.map((d) => (
             <li key={`${d.kind}:${d.id}`}>
-              <Link href={d.href} className="flex flex-wrap items-center justify-between gap-2 rounded-[18px] border border-line bg-surface px-4 py-3 hover:border-[var(--brand-300)] hover:bg-[var(--lime-50)]">
+              <Link href={d.href} className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-surface px-4 py-3 hover:border-[var(--brand-300)] hover:bg-[var(--lime-50)]">
                 <span className="min-w-0">
                   <span className="block font-semibold">{d.title}</span>
                   <span className="block text-[12px] text-muted">

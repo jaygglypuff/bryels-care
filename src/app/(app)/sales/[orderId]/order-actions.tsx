@@ -22,7 +22,7 @@ export function LineChange({ lineId, productName, qty, sent }: { lineId: string;
     return (
       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="line-change">
         {done && (
-          <p role="status" className="w-full rounded-[10px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
+          <p role="status" className="w-full rounded-[6px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
             {done}
           </p>
         )}

@@ -71,7 +71,7 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
             timer.current = setTimeout(() => go(v), 400);
           }}
           className={cx(
-            "h-[48px] w-full rounded-full border border-line bg-surface pl-10 pr-10 text-[15px] text-fg outline-none placeholder:text-muted focus:border-[var(--ring)] focus:ring-2 focus:ring-[var(--ring)]/30 [&::-webkit-search-cancel-button]:hidden",
+            "h-[48px] w-full rounded-[6px] border border-line bg-surface pl-10 pr-10 text-[15px] text-fg outline-none placeholder:text-muted focus:border-[var(--ring)] focus:ring-2 focus:ring-[var(--ring)]/30 [&::-webkit-search-cancel-button]:hidden",
             pending && "opacity-70",
           )}
           aria-busy={pending}
@@ -80,7 +80,7 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
           <button
             type="button"
             aria-label="Clear search"
-            className="absolute right-1 top-1/2 inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-full text-muted hover:text-fg"
+            className="absolute right-1 top-1/2 inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-[6px] text-muted hover:text-fg"
             onClick={() => {
               setQ("");
               go("");

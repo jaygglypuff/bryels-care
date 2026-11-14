@@ -42,7 +42,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
           <Field label="To" htmlFor="to">
             <Input id="to" type="date" name="to" defaultValue={data?.to ?? sp.to ?? ""} />
           </Field>
-          <button type="submit" className="col-span-2 inline-flex min-h-[44px] items-center justify-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2 sm:col-span-1">
+          <button type="submit" className="col-span-2 inline-flex min-h-[44px] items-center justify-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2 sm:col-span-1">
             Show
           </button>
         </form>
@@ -51,7 +51,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
           (data.rows.length === 0 ? (
             <EmptyState title="No deliveries in these dates">Deliveries, finished orders and returns between {fmtDate(data.from)} and {fmtDate(data.to)} show here. Try wider dates.</EmptyState>
           ) : (
-            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line" aria-label="Suppliers">
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line" aria-label="Suppliers">
               {data.rows.map((r) => (
                 <li key={r.supplierId} className="px-4 py-3">
                   <p className="flex flex-wrap items-center gap-2">

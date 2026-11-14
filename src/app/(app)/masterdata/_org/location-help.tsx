@@ -3,7 +3,7 @@ import Link from "next/link";
 /** Plain-language help (ADR-075): sites far apart are separate Sites, each with its own warehouses and locations. */
 export function LocationHelp({ canSeeSites }: { canSeeSites: boolean }) {
   return (
-    <details className="rounded-[14px] border border-line bg-surface p-4 text-[14px]">
+    <details className="rounded-[8px] border border-line bg-surface p-4 text-[14px]">
       <summary className="min-h-[44px] cursor-pointer font-medium leading-[44px]">How do sites, warehouses and locations fit together?</summary>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-fg-2">
         <li><b>Site</b> = one address (a factory or a store room in another town). If your company works from places far apart, add one Site per address{canSeeSites ? <> under <Link className="text-primary-text underline" href="/masterdata/sites">Master data → Sites</Link></> : " (Master data → Sites)"}.</li>

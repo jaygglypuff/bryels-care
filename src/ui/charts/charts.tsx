@@ -232,7 +232,7 @@ export function BarList({ items, ariaLabel, empty = "Nothing to show." }: { item
               <span className="tabular shrink-0 font-semibold text-fg">{i.display}</span>
             </div>
             <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-              <i className="block h-full rounded-full" style={{ width: `${pct.toFixed(1)}%`, background: i.color }} />
+              <i className="block h-full rounded-[6px]" style={{ width: `${pct.toFixed(1)}%`, background: i.color }} />
             </div>
           </>
         );
@@ -283,7 +283,7 @@ export function Meter({ pct, ariaLabel, color = slotColor(1) }: { pct: number; a
   const w = Math.min(100, Math.max(0, pct));
   return (
     <div className="relative h-2.5 overflow-hidden rounded-full bg-primary-soft" role="img" aria-label={ariaLabel}>
-      <i className="block h-full rounded-full" style={{ width: `${w.toFixed(1)}%`, background: color }} />
+      <i className="block h-full rounded-[6px]" style={{ width: `${w.toFixed(1)}%`, background: color }} />
     </div>
   );
 }

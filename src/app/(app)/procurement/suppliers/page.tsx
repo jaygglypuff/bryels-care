@@ -42,7 +42,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             {canCreate && <LinkButton href="/masterdata/suppliers/new" variant="cta">Add a supplier</LinkButton>}
             {canExport && (
               <MoreMenu>
-                <a href="/api/v1/masterdata/suppliers/export" className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">Download the list (CSV)</a>
+                <a href="/api/v1/masterdata/suppliers/export" className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">Download the list (CSV)</a>
               </MoreMenu>
             )}
           </>
@@ -76,7 +76,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             <label htmlFor="s-q" className="sr-only">Find a supplier</label>
             <input id="s-q" name="q" defaultValue={q ?? ""} placeholder="Type part of the supplier's name" autoComplete="off" className="min-h-[44px] min-w-0 flex-1 rounded-[8px] border border-line bg-surface px-3 text-[15px]" />
             {showAll && <input type="hidden" name="all" value="1" />}
-            <button type="submit" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
+            <button type="submit" className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
           </form>
           <Link href={showAll ? `/procurement/suppliers${q ? `?q=${encodeURIComponent(q)}` : ""}` : `/procurement/suppliers?all=1${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="mb-2 inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text underline-offset-2 hover:underline">
             {showAll ? "Hide suppliers we stopped using" : "Show suppliers we stopped using too"}

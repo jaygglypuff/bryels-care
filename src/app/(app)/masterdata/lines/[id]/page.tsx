@@ -59,7 +59,7 @@ export default async function LinePage({ params, searchParams }: { params: Promi
         ) : (
           <ul className="space-y-3">
             {line.equipment.map((e) => (
-              <li key={e.id} className="rounded-[14px] border border-line p-3">
+              <li key={e.id} className="rounded-[8px] border border-line p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link href={`/masterdata/equipment/${e.id}`} className="inline-flex min-h-[44px] items-center font-semibold text-primary-text hover:underline">{e.name}</Link>
                   <span className="text-[13px] text-fg-2">{e.kind.replace(/_/g, " ")} · {e.status.replace(/_/g, " ")} <span className="font-mono text-[12px] text-muted">· {e.code}</span></span>

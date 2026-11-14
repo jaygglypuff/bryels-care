@@ -32,7 +32,7 @@ export default async function WorkFlowPage() {
       ) : (
         <>
           {red > 0 && (
-            <p className="flex items-center gap-2 rounded-[12px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-4 py-3 text-[14px] font-medium text-[var(--bad-fg)]" data-testid="flow-red-summary">
+            <p className="flex items-center gap-2 rounded-[8px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-4 py-3 text-[14px] font-medium text-[var(--bad-fg)]" data-testid="flow-red-summary">
               <BellOff size={16} aria-hidden /> {red === 1 ? "1 step has" : `${red} steps have`} work that nobody was told about.
             </p>
           )}
@@ -83,10 +83,10 @@ function StageCard({ s }: { s: FlowStage }) {
       aria-label={`${s.n}. ${s.title}`}
       data-testid={`flow-stage-${s.key}`}
       data-red={s.waitsOnNobody ? "yes" : "no"}
-      className={cx("rounded-[16px] border bg-surface p-4", s.waitsOnNobody ? "border-[var(--bad-bd)] border-l-4 bg-[var(--bad-bg)]/40" : "border-line")}
+      className={cx("rounded-[8px] border bg-surface p-4", s.waitsOnNobody ? "border-[var(--bad-bd)] border-l-4 bg-[var(--bad-bg)]/40" : "border-line")}
     >
       <div className="flex items-start gap-3">
-        <span className={cx("grid size-9 shrink-0 place-items-center rounded-full text-[15px] font-semibold tabular", s.total > 0 ? "bg-cta text-white" : "bg-surface-2 text-fg-2")} aria-hidden>
+        <span className={cx("grid size-9 shrink-0 place-items-center rounded-[6px] text-[15px] font-semibold tabular", s.total > 0 ? "bg-cta text-white" : "bg-surface-2 text-fg-2")} aria-hidden>
           {s.n}
         </span>
         <div className="min-w-0 flex-1">
@@ -103,7 +103,7 @@ function StageCard({ s }: { s: FlowStage }) {
           )}
         </div>
       </div>
-      <Link href={s.button.href} className="mt-3 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 text-[15px] font-semibold text-fg hover:bg-surface-2">
+      <Link href={s.button.href} className="mt-3 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[6px] border border-line bg-surface px-5 text-[15px] font-semibold text-fg hover:bg-surface-2">
         {s.button.label} <ArrowRight size={16} aria-hidden />
       </Link>
     </section>
@@ -112,7 +112,7 @@ function StageCard({ s }: { s: FlowStage }) {
 
 function StageTable({ stages }: { stages: FlowStage[] }) {
   return (
-    <table className="w-full border-collapse overflow-hidden rounded-[16px] border border-line bg-surface text-left text-[14px]" data-testid="flow-table">
+    <table className="w-full border-collapse overflow-hidden rounded-[8px] border border-line bg-surface text-left text-[14px]" data-testid="flow-table">
       <caption className="sr-only">Steps of the work, in order</caption>
       <thead className="bg-surface-2 text-[12px] uppercase tracking-wide text-muted">
         <tr>
@@ -130,7 +130,7 @@ function StageTable({ stages }: { stages: FlowStage[] }) {
           return (
             <tr key={s.key} data-testid={`flow-row-${s.key}`} data-red={s.waitsOnNobody ? "yes" : "no"} className={cx(s.waitsOnNobody && "bg-[var(--bad-bg)]/50 [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-[var(--bad-bd)]")}>
               <td className="px-3 py-2 align-top">
-                <span className={cx("grid size-8 place-items-center rounded-full text-[13px] font-semibold", s.total > 0 ? "bg-cta text-white" : "bg-surface-2 text-fg-2")}>{s.n}</span>
+                <span className={cx("grid size-8 place-items-center rounded-[6px] text-[13px] font-semibold", s.total > 0 ? "bg-cta text-white" : "bg-surface-2 text-fg-2")}>{s.n}</span>
               </td>
               <th scope="row" className="px-3 py-2 align-top font-semibold text-fg">
                 {s.title}
@@ -146,7 +146,7 @@ function StageTable({ stages }: { stages: FlowStage[] }) {
               </td>
               <td className="whitespace-nowrap px-3 py-2 align-top text-fg-2">{age ? (age === "today" ? "today" : age) : "—"}</td>
               <td className="px-3 py-2 text-right align-top">
-                <Link href={s.button.href} className="inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-full border border-line px-4 text-[14px] font-medium text-fg hover:bg-surface-2">
+                <Link href={s.button.href} className="inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-line px-4 text-[14px] font-medium text-fg hover:bg-surface-2">
                   {s.button.label} <ArrowRight size={14} aria-hidden />
                 </Link>
               </td>

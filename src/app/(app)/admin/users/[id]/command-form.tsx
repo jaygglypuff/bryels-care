@@ -42,7 +42,7 @@ export function CommandForm({
       )}
       <FormMessage state={state} />
       {state?.ok && state.manualLink && (
-        <div className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px] text-[var(--warn-fg)]">
+        <div className="rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px] text-[var(--warn-fg)]">
           <p className="font-semibold">Email is not set up, so nothing was sent.</p>
           <p className="mt-1">Give this one-time link to the person directly (not by group chat). It is shown only now:</p>
           <p className="mt-2 select-all break-all rounded bg-surface px-2 py-1 font-mono text-[12px] text-fg">{state.manualLink}</p>

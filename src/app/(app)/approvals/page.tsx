@@ -39,7 +39,7 @@ function Row({ a, decidable, first = false, pick, selected = false }: { a: Appro
   const inline = INLINE_DECISIONS[a.kind];
   const showInline = decidable && !!inline;
   return (
-    <li className={cx("flex flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between", pick && "xl:-mx-3 xl:rounded-[12px] xl:px-3", pick && selected && "xl:bg-primary-soft")} aria-current={pick && selected ? "true" : undefined}>
+    <li className={cx("flex flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between", pick && "xl:-mx-3 xl:rounded-[8px] xl:px-3", pick && selected && "xl:bg-primary-soft")} aria-current={pick && selected ? "true" : undefined}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={a.severity === "critical" ? "bad" : a.severity === "warning" ? "warn" : "info"}>{a.kindLabel}</Chip>
@@ -75,7 +75,7 @@ function Row({ a, decidable, first = false, pick, selected = false }: { a: Appro
         </LinkButton>
       </div>
       {pick && (
-        <Link href={pick} scroll={false} className={cx("hidden min-h-[44px] shrink-0 items-center rounded-full border px-4 text-[14px] font-medium xl:inline-flex", selected ? "border-transparent bg-transparent font-semibold text-primary-text" : "border-line bg-surface text-fg hover:bg-surface-2")}>
+        <Link href={pick} scroll={false} className={cx("hidden min-h-[44px] shrink-0 items-center rounded-[6px] border px-4 text-[14px] font-medium xl:inline-flex", selected ? "border-transparent bg-transparent font-semibold text-primary-text" : "border-line bg-surface text-fg hover:bg-surface-2")}>
           {selected ? "Shown on the right" : "Show here"}
         </Link>
       )}
@@ -185,7 +185,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
       {selected && <Detail a={selected} first={selected.id === decidable[0]?.id} />}
       </div>
       {waiting.length > 0 && (
-        <details className="rounded-[14px] border border-line bg-surface">
+        <details className="rounded-[8px] border border-line bg-surface">
           <summary className="flex min-h-[48px] cursor-pointer items-center justify-between gap-2 px-4 text-[15px] font-medium">
             <span>Waiting for others ({waiting.length})</span>
             <span className="text-[13px] font-normal text-muted">Show</span>

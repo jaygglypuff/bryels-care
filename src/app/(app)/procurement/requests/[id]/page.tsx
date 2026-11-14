@@ -102,7 +102,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       <div className="flex flex-col gap-5">
         <Card>
           <CardTitle action={v.can.seeTotal && r.estimatedTotalAmount ? <Amount>about {money(r.estimatedTotalAmount, r.currency)}</Amount> : undefined}>What is needed</CardTitle>
-          <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {v.lines.map((l) => (
               <li key={l.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-3">
                 <div className="min-w-0">

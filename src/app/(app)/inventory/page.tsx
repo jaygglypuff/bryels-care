@@ -130,7 +130,7 @@ async function StockList({ ctx, kind, q, status, section, locId, href }: { ctx: 
                   href={href({ status: c.key || undefined })}
                   aria-current={active ? "true" : undefined}
                   className={cx(
-                    "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-[14px] font-medium whitespace-nowrap",
+                    "inline-flex min-h-[44px] items-center gap-1.5 rounded-[6px] border px-4 text-[14px] font-medium whitespace-nowrap",
                     active ? "border-[var(--brand-600)] bg-[var(--brand-600)] text-white" : "border-line bg-surface text-fg-2 hover:border-line-strong hover:text-fg",
                   )}
                 >
@@ -173,7 +173,7 @@ async function StockList({ ctx, kind, q, status, section, locId, href }: { ctx: 
             </section>
           )}
           {r.items.length === 0 && status !== "do_not_use" && (
-            <p className="rounded-[12px] border border-dashed border-line-strong px-4 py-3 text-[13px] text-muted">Nothing usable matches. Only stock that must not be used is listed below.</p>
+            <p className="rounded-[8px] border border-dashed border-line-strong px-4 py-3 text-[13px] text-muted">Nothing usable matches. Only stock that must not be used is listed below.</p>
           )}
           {r.doNotUse.length > 0 && (
             <section aria-labelledby="do-not-use" data-testid="stock-do-not-use" className="space-y-2 pt-2">

@@ -31,7 +31,7 @@ export function ChartFrame({
   const [view, setView] = useState<"chart" | "table">(defaultView);
   const id = useId();
   return (
-    <section aria-labelledby={`${id}-h`} className={cx("min-w-0 rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6", className)}>
+    <section aria-labelledby={`${id}-h`} className={cx("min-w-0 rounded-[8px] bg-surface p-5 border border-line sm:p-6", className)}>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 id={`${id}-h`} className="font-display text-[17px] font-semibold text-fg">
@@ -39,14 +39,14 @@ export function ChartFrame({
           </h2>
           {subtitle && <p className="mt-0.5 text-[12px] text-muted">{subtitle}</p>}
         </div>
-        <div className="inline-flex shrink-0 rounded-full border border-line-strong bg-surface p-0.5" role="group" aria-label={`${title}: view`}>
+        <div className="inline-flex shrink-0 rounded-[6px] border border-line-strong bg-surface p-0.5" role="group" aria-label={`${title}: view`}>
           {(["chart", "table"] as const).map((v) => (
             <button
               key={v}
               type="button"
               aria-pressed={view === v}
               onClick={() => setView(v)}
-              className={cx("min-h-[44px] min-w-[44px] rounded-full px-3.5 text-[13px] font-medium", view === v ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}
+              className={cx("min-h-[44px] min-w-[44px] rounded-[6px] px-3.5 text-[13px] font-medium", view === v ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}
             >
               {v === "chart" ? "Chart" : "Table"}
             </button>
@@ -62,7 +62,7 @@ export function ChartFrame({
       </div>
       <p className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
         {stale && (
-          <span className="inline-flex items-center rounded-full border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-2 py-0.5 font-medium text-[var(--warn-fg)]" title={stale}>
+          <span className="inline-flex items-center rounded-[4px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-2 py-0.5 font-medium text-[var(--warn-fg)]" title={stale}>
             Stale
           </span>
         )}

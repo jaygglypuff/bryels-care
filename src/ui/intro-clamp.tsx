@@ -30,7 +30,7 @@ export function IntroClamp({ children }: { children: ReactNode }) {
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
-          className="-my-[11px] inline-flex min-h-[44px] shrink-0 items-center rounded-full px-2 font-medium text-primary-text hover:bg-primary-soft"
+          className="-my-[11px] inline-flex min-h-[44px] shrink-0 items-center rounded-[6px] px-2 font-medium text-primary-text hover:bg-surface-3"
         >
           {open ? "less" : "more"}
         </button>

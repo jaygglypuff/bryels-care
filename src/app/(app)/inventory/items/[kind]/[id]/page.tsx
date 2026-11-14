@@ -103,11 +103,11 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
       </div>
 
       {r.scope.canAll && (
-        <nav aria-label="Which sites" className="inline-flex rounded-full border border-line bg-surface p-1 text-[14px]">
-          <Link href={base} aria-current={!r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", !r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
+        <nav aria-label="Which sites" className="inline-flex rounded-[6px] border border-line bg-surface p-1 text-[14px]">
+          <Link href={base} aria-current={!r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-4", !r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
             This plant
           </Link>
-          <Link href={`${base}?all=1`} aria-current={r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
+          <Link href={`${base}?all=1`} aria-current={r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-4", r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
             All plants
           </Link>
         </nav>
@@ -139,7 +139,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
             </div>
             <TotalSentence totals={r.totals} lots={r.lots.length} where={where} />
             {r.orders && (
-              <div className="grid grid-cols-1 gap-2 rounded-[16px] border border-line bg-surface p-3 text-[14px] sm:grid-cols-3" data-testid="item-orders">
+              <div className="grid grid-cols-1 gap-2 rounded-[8px] border border-line bg-surface p-3 text-[14px] sm:grid-cols-3" data-testid="item-orders">
                 <p>
                   <span className="block text-[12px] text-muted">Promised to customer orders ({scopeTag})</span>
                   <b className="tabular">{r.totals.promised.text}</b>

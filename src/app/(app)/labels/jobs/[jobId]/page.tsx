@@ -126,7 +126,7 @@ export default async function LabelJobPage({ params, }: { params: Promise<{ jobI
 
       <section className="space-y-2">
         <h2 className="text-[16px] font-semibold">First print and prints again</h2>
-        <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+        <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
           {chain.map((h) => (
             <li key={h.id}>
               <Link href={`/labels/jobs/${h.id}`} className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 px-4 py-2 hover:bg-surface-2">

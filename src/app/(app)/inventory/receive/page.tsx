@@ -126,7 +126,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
           <ul className={cx("grid grid-cols-1 gap-3", orders.length > 1 && "md:grid-cols-2")} aria-label="Purchase orders to receive">
             {orders.map((o) => (
               <li key={o.purchaseOrderId} className="min-w-0">
-                <Link href={`/inventory/receive?po=${o.purchaseOrderId}`} className="flex min-h-[88px] items-center gap-3 rounded-[16px] border border-line p-4 hover:shadow-[var(--shadow-pop)] active:bg-surface-2" data-testid={`receive-po-${o.poNumber}`}>
+                <Link href={`/inventory/receive?po=${o.purchaseOrderId}`} className="flex min-h-[88px] items-center gap-3 rounded-[8px] border border-line p-4 hover:shadow-[var(--shadow-pop)] active:bg-surface-2" data-testid={`receive-po-${o.poNumber}`}>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-semibold">{o.supplierName}</span>
                     <span className="block text-[13px] text-muted">
@@ -146,7 +146,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
           </ul>
         </Card>
         <Card>
-          <Link href="/inventory/receive?nopo=1" className="flex min-h-[72px] items-center gap-3 rounded-[16px] p-1" data-testid="receive-no-po">
+          <Link href="/inventory/receive?nopo=1" className="flex min-h-[72px] items-center gap-3 rounded-[8px] p-1" data-testid="receive-no-po">
             <Zap size={20} className="shrink-0 text-[var(--warn-fg)]" aria-hidden />
             <span className="min-w-0 flex-1">
               <span className="block text-[16px] font-semibold">No purchase order (urgent buy)</span>

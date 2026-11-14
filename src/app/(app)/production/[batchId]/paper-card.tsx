@@ -42,7 +42,7 @@ export async function PaperRecordCard({ ctx, batchId }: { ctx: AuthContext; batc
               </LinkButton>
             )}
             {canMake && s.unused > 0 && (
-              <details className="rounded-[12px] border border-line px-3 py-1">
+              <details className="rounded-[8px] border border-line px-3 py-1">
                 <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium">The paper record was not used</summary>
                 <NotUsedForm batchId={batchId} />
               </details>

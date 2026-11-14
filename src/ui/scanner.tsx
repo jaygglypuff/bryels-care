@@ -242,7 +242,7 @@ export function Scanner({
   };
 
   return (
-    <div className={cx("space-y-3 rounded-[20px] transition-shadow", flash && "ring-4 ring-[var(--ok-bd)]")} data-testid="scanner">
+    <div className={cx("space-y-3 rounded-[8px] transition-shadow", flash && "ring-4 ring-[var(--ok-bd)]")} data-testid="scanner">
       {!cameraOnly && <div role="radiogroup" aria-label="Scan mode" className="flex flex-wrap gap-2">
         {(
           [
@@ -258,7 +258,7 @@ export function Scanner({
             aria-checked={mode === m}
             onClick={() => chooseMode(m)}
             className={cx(
-              "inline-flex min-h-[44px] items-center gap-2 rounded-full border px-4 text-[14px]",
+              "inline-flex min-h-[44px] items-center gap-2 rounded-[6px] border px-4 text-[14px]",
               mode === m ? "border-primary bg-primary-soft font-semibold text-primary-text" : "border-line bg-surface text-fg-2 hover:bg-surface-2",
             )}
           >
@@ -269,9 +269,9 @@ export function Scanner({
 
       {mode === "camera" && (
         <div className="space-y-2">
-          <div className="relative overflow-hidden rounded-[16px] bg-black">
+          <div className="relative overflow-hidden rounded-[8px] bg-black">
             <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline aria-label="Camera viewfinder" />
-            <div aria-hidden="true" className="pointer-events-none absolute inset-[18%] rounded-[12px] border-2 border-white/80" />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-[18%] rounded-[8px] border-2 border-white/80" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {torch.supported && (
@@ -287,12 +287,12 @@ export function Scanner({
             </p>
           </div>
           {cameraState === "denied" && (
-            <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
+            <p role="alert" className="rounded-[6px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
               {cameraOnly ? "Camera access is off. Use the handheld scanner, or type the number printed on the label." : "Camera access is off. Use the handheld scanner, or type what it is (for example coconut oil)."}
             </p>
           )}
           {cameraState === "unavailable" && (
-            <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
+            <p role="alert" className="rounded-[6px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
               {cameraOnly ? "The camera could not be opened on this device. Use the handheld scanner, or type the number printed on the label." : "The camera could not be opened on this device. Use the handheld scanner, or type what it is (for example coconut oil)."}
             </p>
           )}

@@ -151,7 +151,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
               {v.lines.map((l) => {
                 const exception = l.status === "exception" || l.dispenses.some((d) => !d.isWithinTolerance);
                 return (
-                  <li key={l.id} className={cx("flex flex-col gap-1 py-2.5 text-[14px]", exception && "-mx-2 rounded-[10px] bg-[var(--warn-bg)] px-2")}>
+                  <li key={l.id} className={cx("flex flex-col gap-1 py-2.5 text-[14px]", exception && "-mx-2 rounded-[6px] bg-[var(--warn-bg)] px-2")}>
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{l.materialName}</span>
                       {l.status === "pending" ? <Chip tone="neu">Not weighed</Chip> : exception ? <Chip tone="warn">Outside the limits</Chip> : <Chip tone="ok">OK</Chip>}
@@ -260,7 +260,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
           ) : (
             <ul className="flex flex-col divide-y divide-line">
               {v.tests.map((t) => (
-                <li key={t.id} className={cx("flex flex-col gap-0.5 py-2.5 text-[14px]", !t.live ? "text-muted" : !t.passed && "-mx-2 rounded-[10px] bg-[var(--bad-bg)] px-2")}>
+                <li key={t.id} className={cx("flex flex-col gap-0.5 py-2.5 text-[14px]", !t.live ? "text-muted" : !t.passed && "-mx-2 rounded-[6px] bg-[var(--bad-bg)] px-2")}>
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{t.testName}</span>
                     {!t.live ? <Chip tone="neu">Replaced by a newer result</Chip> : t.passed ? <Chip tone="ok">OK</Chip> : <Chip tone="bad">Not OK</Chip>}

@@ -19,8 +19,12 @@ export function FrameHelp({ load, withLabel = false, labelClass = "hidden 2xl:in
   const [state, setState] = useState<{ path: string; guide: Guide | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  // ADR-136: the page's "This screen is for…" sentence (PageIntro, hidden under the title where this "?" exists).
+  const [about, setAbout] = useState<string | null>(null);
 
   async function open() {
+    const intro = document.querySelector<HTMLElement>("main [data-page-intro] [data-testid=page-intro-text]");
+    setAbout(intro?.textContent?.trim() || null);
     ref.current?.showModal();
     if (state?.path === pathname) return;
     setLoading(true);
@@ -44,7 +48,7 @@ export function FrameHelp({ load, withLabel = false, labelClass = "hidden 2xl:in
         aria-label="Help for this screen"
         title="Help for this screen"
         data-testid="frame-help"
-        className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg"
+        className="flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-[6px] px-2 text-[13px] font-medium text-fg-2 hover:bg-surface-3 hover:text-fg pointer-coarse:h-11 pointer-coarse:min-w-11"
       >
         <HelpCircle size={18} aria-hidden />
         {withLabel && <span className={labelClass}>Help</span>}
@@ -52,7 +56,7 @@ export function FrameHelp({ load, withLabel = false, labelClass = "hidden 2xl:in
       <dialog
         ref={ref}
         aria-label={guide?.title ?? "Help"}
-        className="m-0 mt-auto w-full max-w-none rounded-t-[20px] border border-line bg-surface p-0 text-fg shadow-xl backdrop:bg-black/30 sm:m-auto sm:max-w-[560px] sm:rounded-[20px]"
+        className="m-0 mt-auto w-full max-w-none rounded-t-[8px] border border-line bg-surface p-0 text-fg shadow-xl backdrop:bg-black/30 sm:m-auto sm:max-w-[560px] sm:rounded-[8px]"
         onClick={(e) => {
           if (e.target === ref.current) ref.current?.close();
         }}
@@ -62,11 +66,17 @@ export function FrameHelp({ load, withLabel = false, labelClass = "hidden 2xl:in
             <h2 className="text-[16px] font-semibold">{guide?.title ?? "Help"}</h2>
             {guide && <p className="text-[12px] text-muted">Version {guide.version}{guide.updatedAt ? ` · updated ${guide.updatedAt}` : ""}</p>}
           </div>
-          <button type="button" onClick={() => ref.current?.close()} className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px]">
+          <button type="button" onClick={() => ref.current?.close()} className="inline-flex min-h-[36px] items-center rounded-[6px] border border-line-strong px-3 text-[14px] font-medium hover:bg-surface-2 pointer-coarse:min-h-[44px]">
             Close
           </button>
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-4 py-3">
+          {about && (
+            <section aria-label="About this screen" className="mb-3 border-b border-line pb-3" data-testid="help-about">
+              <h3 className="text-[13px] font-semibold text-fg-2">About this screen</h3>
+              <p className="mt-1 text-[14px] text-fg">{about}</p>
+            </section>
+          )}
           {loading ? (
             <p className="text-[14px] text-muted" role="status">Opening the guide…</p>
           ) : failed ? (

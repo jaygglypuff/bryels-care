@@ -26,15 +26,15 @@ export function ChecksList({ cards, viewerName }: { cards: CheckCard[]; viewerNa
   return (
     <div className="grid gap-4">
       {done && (
-        <p role="status" className="flex items-start gap-2 rounded-[16px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-4 text-[17px] font-semibold text-[var(--ok-fg)]" data-testid="check-done">
+        <p role="status" className="flex items-start gap-2 rounded-[8px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-4 text-[17px] font-semibold text-[var(--ok-fg)]" data-testid="check-done">
           <CheckCircle2 size={22} className="mt-0.5 shrink-0" aria-hidden /> {done}
         </p>
       )}
       {cards.length === 0 ? (
-        <div className="rounded-[20px] border border-dashed border-line-strong bg-surface-2/60 px-6 py-10 text-center" data-testid="checks-empty">
+        <div className="rounded-[8px] border border-dashed border-line-strong bg-surface-2/60 px-6 py-10 text-center" data-testid="checks-empty">
           <p className="text-[18px] font-medium text-fg">Nothing to check now, {viewerName}.</p>
           <p className="mt-1 text-[15px] text-muted">When someone needs your check, it shows here and on your Home.</p>
-          <Link href="/dashboard" className="mt-4 inline-flex min-h-[52px] items-center rounded-full border border-line bg-surface px-6 text-[16px] font-medium text-fg">
+          <Link href="/dashboard" className="mt-4 inline-flex min-h-[52px] items-center rounded-[6px] border border-line bg-surface px-6 text-[16px] font-medium text-fg">
             Back to Home
           </Link>
         </div>
@@ -65,7 +65,7 @@ function WeighingsCard({ card, confirm, notRight }: { card: WCard; confirm: Form
   const n = card.weighings.length;
   const who = card.operatorNames.join(" and ");
   return (
-    <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check weighings of ${card.batchNumber}`} data-testid="check-card-weighings">
+    <section className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check weighings of ${card.batchNumber}`} data-testid="check-card-weighings">
       <h2 className="flex items-center gap-2 text-title text-fg">
         <Scale size={24} aria-hidden /> {n === 1 ? `Check ${who}'s weighing` : `Check ${n} weighings`}
       </h2>
@@ -74,7 +74,7 @@ function WeighingsCard({ card, confirm, notRight }: { card: WCard; confirm: Form
       </p>
       <ul className="mt-3 grid gap-2">
         {card.weighings.map((w) => (
-          <li key={w.id} className="rounded-[14px] bg-surface-2 p-3">
+          <li key={w.id} className="rounded-[8px] bg-surface-2 p-3">
             <p className="text-[18px] font-semibold text-fg">{w.materialName}</p>
             <p className="text-[17px] tabular text-fg">{w.amount}</p>
             <p className="text-[14px] text-fg-2">Lot {w.lotNumber}</p>
@@ -104,7 +104,7 @@ function StepCheckCard({ card, confirm, notRight }: { card: SCard; confirm: Form
   const [state, action] = useInPlaceAction<ActionState>(confirm);
   const [open, setOpen] = useState(false);
   return (
-    <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check ${card.stepName} of ${card.batchNumber}`} data-testid="check-card-step">
+    <section className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check ${card.stepName} of ${card.batchNumber}`} data-testid="check-card-step">
       <h2 className="flex items-center gap-2 text-title text-fg">
         <ClipboardCheck size={24} aria-hidden /> Check &quot;{card.stepName}&quot;
       </h2>
@@ -112,7 +112,7 @@ function StepCheckCard({ card, confirm, notRight }: { card: SCard; confirm: Form
         {card.productName} · batch <span className="font-semibold tabular text-fg">{card.batchNumber}</span> · done by {card.doneBy}
       </p>
       {card.facts.length > 0 && (
-        <ul className="mt-3 grid gap-1 rounded-[14px] bg-surface-2 p-3 text-[17px] text-fg">
+        <ul className="mt-3 grid gap-1 rounded-[8px] bg-surface-2 p-3 text-[17px] text-fg">
           {card.facts.map((f) => (
             <li key={f}>{f}</li>
           ))}
@@ -149,14 +149,14 @@ function FinishCheckCard({ card, confirm, notRight }: { card: FCard; confirm: Fo
   const [state, action] = useInPlaceAction<ActionState>(confirm);
   const [open, setOpen] = useState(false);
   return (
-    <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check the counts of ${card.batchNumber}`} data-testid="check-card-finish">
+    <section className="rounded-[8px] border-2 border-[var(--warn-bd)] bg-surface p-4 sm:p-5" aria-label={`Check the counts of ${card.batchNumber}`} data-testid="check-card-finish">
       <h2 className="flex items-center gap-2 text-title text-fg">
         <PackageCheck size={24} aria-hidden /> Check the counts
       </h2>
       <p className="mt-1 text-[16px] text-fg-2">
         {card.productName} · batch <span className="font-semibold tabular text-fg">{card.batchNumber}</span> · counted by {card.sentBy}
       </p>
-      <ul className="mt-3 grid gap-1 rounded-[14px] bg-surface-2 p-3 text-[17px] text-fg">
+      <ul className="mt-3 grid gap-1 rounded-[8px] bg-surface-2 p-3 text-[17px] text-fg">
         {card.facts.map((f) => (
           <li key={f}>{f}</li>
         ))}
@@ -186,9 +186,9 @@ function NotRightForm({ hidden, pickOne, reasons, action: a, onCancel }: { hidde
   const [which, setWhich] = useState(pickOne && pickOne.length === 1 ? pickOne[0].value : "");
   const [reason, setReason] = useState("");
   const fe = state?.fieldErrors ?? {};
-  const chip = (on: boolean) => cx("min-h-[52px] rounded-full border px-4 text-[16px]", on ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface");
+  const chip = (on: boolean) => cx("min-h-[52px] rounded-[6px] border px-4 text-[16px]", on ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface");
   return (
-    <form action={action} className="mt-3 grid gap-3 rounded-[14px] border border-line p-3" data-testid="not-right-form">
+    <form action={action} className="mt-3 grid gap-3 rounded-[8px] border border-line p-3" data-testid="not-right-form">
       {Object.entries(hidden).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}

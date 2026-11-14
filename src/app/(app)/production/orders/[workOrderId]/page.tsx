@@ -99,7 +99,7 @@ function BatchRows({ v }: { v: ProductionOrderView }) {
       <CardTitle>Batches</CardTitle>
       <ul className="space-y-2">
         {v.batchActions.map((b) => (
-          <li key={b.batchId} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-line p-3.5">
+          <li key={b.batchId} className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-line p-3.5">
             <div className="min-w-0">
               <p className="font-mono text-[13px] font-semibold">{b.batchNumber}</p>
               <p className="text-[14px] text-fg-2">
@@ -120,7 +120,7 @@ function BatchRows({ v }: { v: ProductionOrderView }) {
 function LogEntry({ e, v, types, canCorrect }: { e: DailyLogRow; v: ProductionOrderView; types: string[]; canCorrect: boolean }) {
   const replaced = !!e.replacedById;
   return (
-    <li className={cx("rounded-[16px] border border-line p-3.5", replaced && "opacity-60")}>
+    <li className={cx("rounded-[8px] border border-line p-3.5", replaced && "opacity-60")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[14px] font-medium">
           {fmtDate(e.logDate)}
@@ -278,9 +278,9 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
-          <nav className="flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1" aria-label="Production order sections">
+          <nav className="flex gap-1 overflow-x-auto rounded-[6px] border border-line bg-surface p-1" aria-label="Production order sections">
             {TABS.map(([k, label]) => (
-              <Link key={k} href={`?tab=${k}`} aria-current={k === tab ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center whitespace-nowrap rounded-full px-4 text-[14px] font-medium", k === tab ? "bg-primary text-white" : "text-fg hover:bg-surface-2")}>
+              <Link key={k} href={`?tab=${k}`} aria-current={k === tab ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center whitespace-nowrap rounded-[6px] px-4 text-[14px] font-medium", k === tab ? "bg-primary text-white" : "text-fg hover:bg-surface-2")}>
                 {label}
               </Link>
             ))}
@@ -394,7 +394,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {v.batches.map((b) => (
-                    <Link key={b.id} href={["planned", "materials_staged", "in_process", "rework_approved"].includes(b.status) ? continueHref({ batchId: b.id, workOrderId: wo.id }) : batchRecordHref(b.id)} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
+                    <Link key={b.id} href={["planned", "materials_staged", "in_process", "rework_approved"].includes(b.status) ? continueHref({ batchId: b.id, workOrderId: wo.id }) : batchRecordHref(b.id)} className="block rounded-[8px] border border-line bg-surface p-3.5 hover:shadow-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-mono text-[13px] font-semibold">{b.batchNumber}</span>
                         <Chip tone={b.status === "closed" || b.status === "released" ? "ok" : b.status === "rejected" ? "rej" : "info"}>{b.word}</Chip>
@@ -416,19 +416,19 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
         <aside className="space-y-4">
           {v.canAssign && (
-            <div className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
+            <div className="rounded-[8px] bg-surface p-5 border border-line">
               <AssignForm workOrderId={wo.id} current={v.assignee?.id ?? null} people={people} />
             </div>
           )}
           {v.canCancel && (
-            <details className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
+            <details className="rounded-[8px] bg-surface p-5 border border-line">
               <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">Cancel this order</summary>
               <div className="mt-2">
                 <CancelOrderForm workOrderId={wo.id} />
               </div>
             </details>
           )}
-          <details className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
+          <details className="rounded-[8px] bg-surface p-5 border border-line">
             <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">More details</summary>
             <dl className="mt-2 space-y-1.5 text-[14px]">
               <div>

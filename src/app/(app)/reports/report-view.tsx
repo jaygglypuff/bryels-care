@@ -40,7 +40,7 @@ export function ReportTable({ out, screenCap }: { out: ReportOutput; screenCap: 
       ) : (
         <>
           {/* Phones and small tablets: one card per row, the first column as the title (no sideways scroll). */}
-          <ul aria-label="Rows" className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line md:hidden">
+          <ul aria-label="Rows" className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line md:hidden">
             {out.rows.map((r, i) => {
               // The row's "what" first (item, product, customer, title), not the site code; then the rest.
               const head = out.columns.find((c) => /^(item|product|customer|title|name|supplier)/i.test(c.key) || /^(item|product|customer|title|supplier)/i.test(c.header)) ?? out.columns[0];

@@ -37,7 +37,7 @@ export function MfaEnrolment() {
       <div className="flex flex-col gap-3" role="status">
         <p className="font-semibold text-[var(--ok-fg)]">Two-step sign-in is on.</p>
         <p className="text-[13px] text-fg-2">Save these recovery codes somewhere safe (printed, or in a password manager). Each works once if you lose your phone. They are shown only now.</p>
-        <ul className="grid grid-cols-1 gap-1.5 rounded-[12px] bg-surface-2 p-3 font-mono text-[13px] sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-1.5 rounded-[8px] bg-surface-2 p-3 font-mono text-[13px] sm:grid-cols-2">
           {done.codes.map((c) => (
             <li key={c}>{c}</li>
           ))}
@@ -69,7 +69,7 @@ export function MfaEnrolment() {
         <li>Enter the 6-digit code the app shows.</li>
       </ol>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={started.qr} alt="QR code for your authenticator app" width={220} height={220} className="rounded-[12px] border border-line" />
+      <img src={started.qr} alt="QR code for your authenticator app" width={220} height={220} className="rounded-[8px] border border-line" />
       <p className="break-all font-mono text-[13px]">Key: {started.secret?.replace(/(.{4})/g, "$1 ").trim()}</p>
       <form action={confirm} className="flex flex-wrap items-end gap-3">
         <Field label="Code from the app" htmlFor="enrol-code" error={done?.fieldErrors?.code}>

@@ -156,7 +156,7 @@ export default async function CapaPage({ params, searchParams }: { params: Promi
           ) : (
             <ol className="flex flex-col gap-3">
               {v.actions.map((a) => (
-                <li key={a.id} className="rounded-[16px] border border-line p-3">
+                <li key={a.id} className="rounded-[8px] border border-line p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{a.actionNo}.</span>
                     <Chip tone={a.actionKind === "corrective" ? "info" : "appr"}>{a.actionKind === "corrective" ? "Fix now" : "So it does not happen again"}</Chip>

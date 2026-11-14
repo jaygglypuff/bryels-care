@@ -55,7 +55,7 @@ export function PlanTestEditor({ init }: { init: { planId: string; name: string;
       {tests.map((t, i) => {
         const err = (k: string) => fe[`tests.${i}.${k}`];
         return (
-          <fieldset key={i} className="rounded-[16px] border border-line p-3" data-testid={`plan-test-${i + 1}`}>
+          <fieldset key={i} className="rounded-[8px] border border-line p-3" data-testid={`plan-test-${i + 1}`}>
             <legend className="px-1 text-[12px] font-semibold text-muted">Test {i + 1}</legend>
             <div className="grid gap-3 sm:grid-cols-6">
               <div className="sm:col-span-4">
@@ -107,7 +107,7 @@ export function PlanTestEditor({ init }: { init: { planId: string; name: string;
                   <Input id={`tc-${i}`} value={t.testCode} onChange={(e) => set(i, { testCode: e.target.value })} className="font-mono uppercase" />
                 </Field>
               </details>
-              <button type="button" aria-label={`Remove test ${i + 1}`} onClick={() => setTests((ts) => ts.filter((_, j) => j !== i))} className="rounded-full p-2 text-[var(--bad-fg)] hover:bg-surface-2">
+              <button type="button" aria-label={`Remove test ${i + 1}`} onClick={() => setTests((ts) => ts.filter((_, j) => j !== i))} className="rounded-[6px] p-2 text-[var(--bad-fg)] hover:bg-surface-2">
                 <Trash2 size={16} />
               </button>
             </div>
@@ -117,7 +117,7 @@ export function PlanTestEditor({ init }: { init: { planId: string; name: string;
       <button
         type="button"
         onClick={() => setTests((ts) => [...ts, { testCode: "", name: "", method: "", valueKind: "numeric", uom: "", specMin: "", specMax: "", specText: "", isRequired: true }])}
-        className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
+        className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
       >
         <Plus size={16} /> Add test
       </button>

@@ -175,7 +175,7 @@ function CandidateButton({ c, pressed, disabled, onTap, done }: { c: PickCandida
     </>
   );
   const cls = cx(
-    "flex min-h-[56px] w-full items-center gap-3 rounded-[14px] border px-3 py-2 text-left",
+    "flex min-h-[56px] w-full items-center gap-3 rounded-[8px] border px-3 py-2 text-left",
     pressed || done ? "border-primary bg-primary-soft" : "border-line bg-surface",
     !off && onTap ? "hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2" : "opacity-80",
   );
@@ -437,7 +437,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
       {hint && <p className="-mt-1 text-[13px] text-muted">{hint}</p>}
 
       {single ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-primary bg-primary-soft px-3 py-2" data-testid="pick-chosen">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-primary bg-primary-soft px-3 py-2" data-testid="pick-chosen">
           <span className="flex min-w-0 items-start gap-2">
             <Check size={20} className="mt-0.5 shrink-0 text-primary-text" aria-hidden />
             <span className="min-w-0">
@@ -454,7 +454,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
           {multiple && chosen.length > 0 && (
             <ul className="flex flex-col gap-1" aria-label={`Chosen ${words.many}`} data-testid="pick-chosen">
               {chosen.map((c) => (
-                <li key={c.value} className="flex min-h-[48px] items-center justify-between gap-2 rounded-[12px] border border-primary bg-primary-soft px-3">
+                <li key={c.value} className="flex min-h-[48px] items-center justify-between gap-2 rounded-[8px] border border-primary bg-primary-soft px-3">
                   <span className="min-w-0 text-[14px]">
                     <span className="font-semibold">{c.title}</span> {c.detail && <span className="text-fg-2">· {c.detail}</span>}
                   </span>
@@ -563,7 +563,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
         </>
       )}
       {err && (
-        <p id={`${id}-err`} role="alert" className="rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[14px] text-[var(--bad-fg)]" data-testid="pick-error">
+        <p id={`${id}-err`} role="alert" className="rounded-[6px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[14px] text-[var(--bad-fg)]" data-testid="pick-error">
           {err}
         </p>
       )}

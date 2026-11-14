@@ -16,7 +16,7 @@ export function WhatIs({ children, label = "What is this?" }: { children: ReactN
       <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 text-[13px] font-medium text-primary-text [&::-webkit-details-marker]:hidden">
         <HelpCircle size={14} aria-hidden /> {label}
       </summary>
-      <p className="mt-1 max-w-[46ch] rounded-[12px] border border-line bg-surface p-3 text-[14px] font-normal text-fg-2">{children}</p>
+      <p className="mt-1 max-w-[46ch] rounded-[8px] border border-line bg-surface p-3 text-[14px] font-normal text-fg-2">{children}</p>
     </details>
   );
 }

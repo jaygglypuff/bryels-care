@@ -39,7 +39,7 @@ export default async function RecipesPage() {
           {canWizard ? "Press New recipe. QA and a manager approve it before batches can use it." : "The planner makes recipes; QA and a manager approve them before batches can use them."}
         </EmptyState>
       ) : (
-        <ul aria-label="Recipes" className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" data-testid="recipe-list">
+        <ul aria-label="Recipes" className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" data-testid="recipe-list">
           {rows.map((f) => {
             const action = recipeRowAction(f, can, f.formulaId);
             return (

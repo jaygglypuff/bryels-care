@@ -27,7 +27,7 @@ export function RequestForm({ materials, suppliers, prices, neededBy, today, pre
             {rows.map((r, i) => {
               const m = byId.get(r.materialId);
               return (
-                <li key={r.key} className="grid min-w-0 gap-3 rounded-[14px] border border-line p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,220px)]" data-testid="pr-item">
+                <li key={r.key} className="grid min-w-0 gap-3 rounded-[8px] border border-line p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,220px)]" data-testid="pr-item">
                   <Field label={i === 0 ? "What do you need?" : "Another item"} htmlFor={`m-${r.key}`} error={fe[`lines.${i}.materialId`]}>
                     <Select id={`m-${r.key}`} name={`lines.${i}.materialId`} value={r.materialId} required={i === 0} onChange={(e) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, materialId: e.target.value } : x)))}>
                       <option value="">Pick an item…</option>

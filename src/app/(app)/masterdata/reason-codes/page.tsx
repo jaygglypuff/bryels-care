@@ -38,7 +38,7 @@ export default async function ReasonCodesPage({ searchParams }: { searchParams: 
           <label className="flex items-center gap-2 pb-3 text-[13px]">
             <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="size-4" /> Switched-off too
           </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
+          <button type="submit" className="min-h-[44px] rounded-[6px] bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
         </form>
       </Card>
       {rows.length === 0 ? (
@@ -49,7 +49,7 @@ export default async function ReasonCodesPage({ searchParams }: { searchParams: 
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((r) => (
             <li key={r.id}>
-              <Link href={`/masterdata/reason-codes/${r.id}`} className="block h-full rounded-[16px] border border-line bg-surface p-3 hover:bg-surface-2">
+              <Link href={`/masterdata/reason-codes/${r.id}`} className="block h-full rounded-[8px] border border-line bg-surface p-3 hover:bg-surface-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <span className="min-w-0 break-words text-[16px] font-semibold text-fg">{r.name}</span>
                   <ActiveChip active={r.isActive} />

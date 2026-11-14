@@ -146,7 +146,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
           {ingredients.length === 0 ? (
             <p className="text-[14px] text-fg-2">No ingredients yet.</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-line rounded-[16px] border border-line" aria-label="Ingredients">
+            <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line" aria-label="Ingredients">
               {ingredients.map((l) => (
                 <li key={l.id} className="px-4 py-3" data-testid={`ingredient-${l.lineNo}`}>
                   <p className="break-words text-[15px] font-semibold">
@@ -182,7 +182,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
         <Card>
           <CardTitle>Packaging per batch</CardTitle>
           <p className="mb-2 text-[14px] text-fg-2">Counted in pieces, not weighed, and not part of the gram total. Set aside with the ingredients at Get materials.</p>
-          <ul className="flex flex-col divide-y divide-line rounded-[16px] border border-line" aria-label="Packaging per batch" data-testid="packaging-per-batch">
+          <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line" aria-label="Packaging per batch" data-testid="packaging-per-batch">
             {packaging.map((l) => (
               <li key={l.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
                 <span className="break-words text-[15px] font-semibold">{l.materialName}</span>

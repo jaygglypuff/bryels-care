@@ -96,7 +96,7 @@ export default async function NumberingPage() {
             .filter((v) => v.status === "submitted")
             .map((v) =>
               canAdmin ? (
-                <div key={v.id} className="mt-3 rounded-[14px] border border-[var(--brand-200)] bg-[var(--brand-50)] p-3 text-[14px]">
+                <div key={v.id} className="mt-3 rounded-[8px] border border-[var(--brand-200)] bg-[var(--brand-50)] p-3 text-[14px]">
                   <p className="font-medium">
                     Waiting for OK: <span className="font-mono">{v.pattern.replace("{PREFIX}", v.prefix)}</span> from {v.effectiveFrom} (asked by {v.submitterName})
                   </p>

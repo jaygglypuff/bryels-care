@@ -26,8 +26,8 @@ describe("one help door per page", () => {
     const shell = readFileSync(path.join(root, "src/app/(app)/shell.tsx"), "utf8");
     expect(shell).toMatch(/<main[^>]*data-frame-help=\{loadHelp && !floor \? "on" : undefined\}/);
     const css = readFileSync(path.join(root, "src/app/globals.css"), "utf8");
-    expect(css).toMatch(/@media \(min-width: 640px\) \{ \[data-frame-help\] \[data-page-help\] \{ display: none; \} \}/);
-    // The frame's "?" shows from the same width (sm = 640 px).
-    expect(shell).toMatch(/loadHelp && !floor && \(\s*<div className="hidden sm:block">/);
+    // ADR-136: the frame's "?" shows at every width, so the page's own door is hidden at every width.
+    expect(css).toMatch(/^\[data-frame-help\] \[data-page-help\] \{ display: none; \}/m);
+    expect(shell).toMatch(/loadHelp && !floor && \(\s*<div className="block">/);
   });
 });

@@ -12,7 +12,7 @@ export function SignInForm({ notice }: { notice?: string | null }) {
       <h1 className="font-display text-title sm:text-title-lg">Welcome back</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">Sign in to continue to your site.</p>
       {notice && (
-        <p role="status" className="mb-4 rounded-[10px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[13px] text-[var(--ok-fg)]">
+        <p role="status" className="mb-4 rounded-[6px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[13px] text-[var(--ok-fg)]">
           {notice}
         </p>
       )}

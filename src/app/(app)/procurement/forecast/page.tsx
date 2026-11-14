@@ -49,7 +49,7 @@ export default async function ForecastPage() {
           {f.rows.length === 0 ? (
             <EmptyState title="No sales history yet">A guess appears once customers have confirmed orders for a product at your sites.</EmptyState>
           ) : (
-            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line">
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line">
               {f.rows.map((r) => (
                 <li key={`${r.siteId}-${r.productId}`} className="px-4 py-3">
                   <p className="flex flex-wrap items-baseline justify-between gap-2">
@@ -79,7 +79,7 @@ export default async function ForecastPage() {
                     <p className="mt-1 text-[14px] text-fg-2">{r.forecast.text}</p>
                   )}
                   {r.overrides.map((o) => (
-                    <div key={o.id} className="mt-2 rounded-[10px] bg-surface-2 p-3 text-[14px]">
+                    <div key={o.id} className="mt-2 rounded-[6px] bg-surface-2 p-3 text-[14px]">
                       <p>
                         <Chip tone={o.status === "approved" ? "ok" : o.status === "submitted" ? "appr" : "neu"}>Changed · {OVERRIDE_WORD[o.status] ?? o.status}</Chip> {monthName(o.periodStart)}: <strong>{Number(o.overrideQty).toLocaleString("en-PH")}</strong> (guess was {o.baselineQty !== null ? Number(o.baselineQty).toLocaleString("en-PH") : "none"}) — {o.reason}
                       </p>

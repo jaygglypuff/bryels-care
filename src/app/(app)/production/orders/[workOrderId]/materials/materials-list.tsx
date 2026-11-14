@@ -84,7 +84,7 @@ export function MaterialsList({
           <section
             key={section}
             aria-label={section}
-            className="rounded-[20px] border border-line bg-surface p-3 sm:p-4"
+            className="rounded-[8px] border border-line bg-surface p-3 sm:p-4"
           >
             <h2 className="mb-2 px-1 text-[15px] font-semibold uppercase tracking-wide text-muted">
               {section}
@@ -143,7 +143,7 @@ function PickRow({
       className={cx(
         "py-3",
         risk && !taken
-          ? "rounded-[12px] border-2 border-[var(--bad-bd)] bg-[var(--bad-bg)] px-2"
+          ? "rounded-[8px] border-2 border-[var(--bad-bd)] bg-[var(--bad-bg)] px-2"
           : "",
       )}
       data-testid="pick-row"
@@ -206,7 +206,7 @@ function PickRow({
           <button
             type="button"
             onClick={() => setMore(true)}
-            className="inline-flex min-h-[52px] min-w-[120px] items-center justify-center gap-2 rounded-full border border-line-strong bg-surface px-6 text-[16px] font-medium text-fg"
+            className="inline-flex min-h-[52px] min-w-[120px] items-center justify-center gap-2 rounded-[6px] border border-line-strong bg-surface px-6 text-[16px] font-medium text-fg"
             disabled={!!risk}
           >
             <Circle size={20} aria-hidden /> Scan
@@ -242,7 +242,7 @@ function PickRow({
         ) : (
           <span
             className={cx(
-              "inline-flex min-h-[52px] items-center gap-1 rounded-full border px-4 text-[15px]",
+              "inline-flex min-h-[52px] items-center gap-1 rounded-[6px] border px-4 text-[15px]",
               taken
                 ? "border-[var(--ok-bd)] text-[var(--ok-fg)]"
                 : "border-line text-muted",
@@ -301,7 +301,7 @@ function MoreDetails({
   const [state, action] = useInPlaceAction(pickAction);
   const fe = state?.fieldErrors ?? {};
   return (
-    <div className="mt-2 grid gap-3 rounded-[12px] bg-surface-2 p-3">
+    <div className="mt-2 grid gap-3 rounded-[8px] bg-surface-2 p-3">
       {!line.packaging && line.moreHref && (
         <div className="grid gap-1" data-testid="second-lot">
           <p className="text-[15px] font-semibold">Container almost empty?</p>
@@ -374,7 +374,7 @@ function AllTaken({ batchId, open }: { batchId: string; open: number }) {
   // ADR-083: one tap must not mark every material taken by accident; ask on the page first.
   const [sure, setSure] = useState(false);
   return (
-    <div className="z-10 mt-4 rounded-[20px] border border-line bg-surface p-3 shadow-[var(--shadow-pop)]">
+    <div className="z-10 mt-4 rounded-[8px] border border-line bg-surface p-3 shadow-[var(--shadow-pop)]">
       <form action={action} className="flex flex-wrap items-center gap-3">
         <input type="hidden" name="batchId" value={batchId} />
         <input type="hidden" name="all" value="1" />

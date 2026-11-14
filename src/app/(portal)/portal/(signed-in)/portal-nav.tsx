@@ -26,7 +26,7 @@ export function PortalNav({ canCatalog }: { canCatalog: boolean }) {
             href={i.href}
             aria-current={active ? "page" : undefined}
             className={cx(
-              "flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[14px] px-2 text-[11.5px] font-medium transition-colors sm:flex-row sm:gap-2 sm:rounded-full sm:px-4 sm:text-[14px]",
+              "flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[8px] px-2 text-[11.5px] font-medium transition-colors sm:flex-row sm:gap-2 sm:rounded-[6px] sm:px-4 sm:text-[14px]",
               active ? "bg-[var(--brand-600)] text-white" : "bg-surface text-fg-2 hover:bg-[var(--lime-100)]",
             )}
           >

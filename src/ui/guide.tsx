@@ -1,22 +1,25 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowDown, ArrowRight, HelpCircle, Hourglass } from "lucide-react";
-import { buttonClass, cx } from "./core";
+import { ArrowDown, ArrowRight, HelpCircle } from "lucide-react";
+import { buttonClass } from "./core";
 import { IntroClamp } from "./intro-clamp";
+import { Callout } from "./kit";
 
 /**
- * The "spoon-feeding" building blocks (ADR-088, grade-5 standard). Every screen uses the same few:
- * - `PageIntro`: one sentence under the title — what this screen is for.
- * - `NextStep`: the one thing to do now, with one green button; or who we are waiting for.
+ * The "spoon-feeding" building blocks (ADR-088, grade-5 standard; ADR-136 look). Every screen uses the same few:
+ * - `PageIntro`: one sentence — what this screen is for. ADR-136: where the frame has its Help "?" (office roles), the
+ *   sentence is not printed under the title any more; the "?" panel shows it first ("About this screen"). Floor roles,
+ *   who have no frame "?", still read it under the title.
+ * - `NextStep`: the one thing to do now, as one compact line with one green button; or who we are waiting for.
  * - `MoreDetails`: everything that is not needed on most days, folded away.
  * - `Explain`: "What is this?" for the few industry words we keep (lot, batch, quality check, batch record, INCI, version).
  * Server-safe (no hooks): <details> does the folding.
  */
 
-/** Harmony pass (owner 2026-11-08): small and one line ("more" opens the rest), so the task shows on the first phone screen. */
+/** Harmony pass (owner 2026-11-08): small and one line ("more" opens the rest). ADR-136: hidden where the frame "?" holds it. */
 export function PageIntro({ children }: { children: ReactNode }) {
   return (
-    <div className="page-intro -mt-2 mb-4 max-w-[70ch] text-[14px] leading-[20px] text-fg-2">
+    <div className="page-intro -mt-3 mb-4 max-w-[70ch] text-[14px] leading-[20px] text-fg-2" data-page-intro>
       <IntroClamp>{children}</IntroClamp>
     </div>
   );
@@ -37,38 +40,33 @@ export function NextStep({
   className?: string;
 }) {
   return (
-    // Below 480 px the button sits under the sentence (full width) so the words never squeeze to one per line;
-    // from 480 px it goes beside the sentence and wraps under it when the sentence needs the room (UX audit R2).
-    <section aria-label="What to do next" className={cx("mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 py-3 min-[480px]:flex-row min-[480px]:flex-wrap min-[480px]:items-center", className)}>
-      <div className="min-w-0 min-[480px]:flex-[1_1_16rem]">
-        <p className="text-label font-semibold text-primary-text">What to do next</p>
-        <p className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{text}</p>
-        {waitingFor && (
-          <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-2">
-            <Hourglass size={14} aria-hidden /> {waitingFor}
-          </p>
-        )}
-      </div>
-      {action &&
+    <Callout
+      className={className}
+      waitingFor={waitingFor}
+      action={
+        action &&
         (action.href.startsWith("#") ? (
           // ADR-123: a jump to the form further down this page is not a second green button: the form's own button
           // (Decide, Record service…) is the one green button, so the jump is an outlined button with a down arrow.
-          <Link href={action.href} className={cx(buttonClass("secondary"), "w-full font-semibold min-[480px]:w-auto")} data-jump="true">
-            {action.label} <ArrowDown size={16} aria-hidden />
+          <Link href={action.href} className={buttonClass("secondary", "sm")} data-jump="true">
+            {action.label} <ArrowDown size={14} aria-hidden />
           </Link>
         ) : (
-          <Link href={action.href} className={cx(buttonClass("cta"), "w-full font-semibold min-[480px]:w-auto")}>
-            {action.label} <ArrowRight size={16} aria-hidden />
+          <Link href={action.href} className={buttonClass("cta", "sm")}>
+            {action.label} <ArrowRight size={14} aria-hidden />
           </Link>
-        ))}
-    </section>
+        ))
+      }
+    >
+      {text}
+    </Callout>
   );
 }
 
 export function MoreDetails({ title = "More details (you can skip this)", open = false, children }: { title?: string; open?: boolean; children: ReactNode }) {
   return (
-    <details className="rounded-[12px] border border-line bg-surface-2/40 px-4 py-0.5" open={open}>
-      <summary className="flex min-h-[44px] cursor-pointer items-center py-2 text-[14px] font-medium text-fg-2">{title}</summary>
+    <details className="rounded-[8px] border border-line bg-surface px-4 py-0.5" open={open}>
+      <summary className="flex min-h-[40px] cursor-pointer items-center py-2 text-[14px] font-medium text-fg-2 pointer-coarse:min-h-[44px]">{title}</summary>
       <div className="flex flex-col gap-4 pb-3 pt-1">{children}</div>
     </details>
   );
@@ -89,10 +87,10 @@ export function Explain({ term, label }: { term: keyof typeof EXPLAIN | string; 
   if (!text) return null;
   return (
     <details className="inline-block align-middle">
-      <summary className="-ml-1 inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 rounded-full px-2 text-[14px] font-medium text-primary-text hover:bg-primary-soft [&::-webkit-details-marker]:hidden">
+      <summary className="-ml-1 inline-flex min-h-[36px] cursor-pointer list-none items-center gap-1.5 rounded-[6px] px-2 text-[14px] font-medium text-primary-text hover:bg-surface-3 pointer-coarse:min-h-[44px] [&::-webkit-details-marker]:hidden">
         <HelpCircle size={14} aria-hidden /> {label ?? "What is this?"}
       </summary>
-      <p className="mt-1 max-w-[46ch] rounded-[12px] border border-line bg-surface p-3 text-[14px] text-fg-2">{text}</p>
+      <p className="mt-1 max-w-[46ch] rounded-[8px] border border-line bg-surface p-3 text-[14px] text-fg-2">{text}</p>
     </details>
   );
 }

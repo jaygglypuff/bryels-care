@@ -84,7 +84,7 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
           {recent.length === 0 ? (
             <p className="text-[14px] text-fg-2">No moves yet. Moves at this site show here.</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Recent moves">
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="Recent moves">
               {recent.map((t) => (
                 <li key={t.id} className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 px-4 py-3">
                   <div className="min-w-0">

@@ -21,11 +21,12 @@ const { EditDetails, FormSection } = await import("@/ui/form-section");
 const ROOT = join(__dirname, "../..");
 const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
-describe("item 1: the desktop menu row fits at 1280 px", () => {
-  it("from 1280 to 1535 px the top bar shows the logo mark, the full logo from 1536 px (156 px → 36 px, the row was 74 px short)", () => {
+describe("item 1: the desktop menu fits (ADR-136: a left sidebar replaced the top-bar menu row)", () => {
+  it("from 1024 px the menu is a sidebar with the logo mark and the name; below, the mark sits in the top bar", () => {
     const shell = src("src/app/(app)/shell.tsx");
-    expect(shell).toMatch(/<LogoMark className="[^"]*\bxl:block\b[^"]*\b2xl:hidden\b/);
-    expect(shell).toMatch(/<Logo className="[^"]*\bxl:hidden\b[^"]*\b2xl:block\b/);
+    expect(shell).toMatch(/data-testid="sidebar" className="[^"]*\blg:flex\b/);
+    expect(shell).toMatch(/<LogoMark className="size-7 shrink-0" \/>/);
+    expect(shell).toMatch(/<Link href=\{homeHref\} className="[^"]*\blg:hidden\b[^"]*" aria-label="Bryel's Care home">\s*<LogoMark/);
   });
   it("the master search launcher and the site selector stay in the bar", () => {
     const shell = src("src/app/(app)/shell.tsx");

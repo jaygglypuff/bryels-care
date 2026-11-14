@@ -102,10 +102,10 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
                 <p className="text-[13px] text-muted">{k.available ? k.description : k.unavailableReason}</p>
               </div>
               <div className="flex gap-2 text-[14px]">
-                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-primary-text" href={`/api/v1/imports/templates/${k.kind}?format=xlsx`}>
+                <a className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-primary-text" href={`/api/v1/imports/templates/${k.kind}?format=xlsx`}>
                   Excel
                 </a>
-                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-primary-text" href={`/api/v1/imports/templates/${k.kind}?format=csv`}>
+                <a className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-primary-text" href={`/api/v1/imports/templates/${k.kind}?format=csv`}>
                   CSV
                 </a>
               </div>

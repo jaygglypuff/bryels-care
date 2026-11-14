@@ -108,7 +108,7 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
   const [t, lots] = await Promise.all([traceGenealogy(ctx, { lotNumber, batchNumber, supplierLot }), lotChoices(ctx)]);
   const shownCode = t.query.lotNumber ?? t.query.batchNumber ?? "";
   const exportQuery = t.query.lotNumber ? `lotNumber=${encodeURIComponent(t.query.lotNumber)}` : t.query.batchNumber ? `batchNumber=${encodeURIComponent(t.query.batchNumber)}` : `supplierLot=${encodeURIComponent(t.query.supplierLot ?? "")}`;
-  const linkCls = "inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
+  const linkCls = "inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
 
   return (
     <>

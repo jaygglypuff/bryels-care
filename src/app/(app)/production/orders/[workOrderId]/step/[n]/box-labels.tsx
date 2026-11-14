@@ -46,7 +46,7 @@ export function BoxLabels(p: BoxLabelsProps & { withPieceLabels?: boolean }) {
   }, [state, router]);
   if (p.plan?.boxed) {
     return (
-      <section className="grid gap-2 rounded-[16px] border border-line bg-surface p-4" aria-label="Boxes" data-testid="box-labels">
+      <section className="grid gap-2 rounded-[8px] border border-line bg-surface p-4" aria-label="Boxes" data-testid="box-labels">
         <h2 className="flex items-center gap-2 text-[17px] font-semibold text-fg">
           <Boxes size={18} aria-hidden /> Boxes
         </h2>
@@ -57,7 +57,7 @@ export function BoxLabels(p: BoxLabelsProps & { withPieceLabels?: boolean }) {
     );
   }
   return (
-    <section className="grid gap-3 rounded-[16px] border border-line bg-surface p-4" aria-label="Box labels" data-testid="box-labels">
+    <section className="grid gap-3 rounded-[8px] border border-line bg-surface p-4" aria-label="Box labels" data-testid="box-labels">
       <h2 className="flex items-center gap-2 text-[17px] font-semibold text-fg">
         <Boxes size={18} aria-hidden /> Box labels
       </h2>
@@ -98,7 +98,7 @@ export function BoxLabels(p: BoxLabelsProps & { withPieceLabels?: boolean }) {
       )}
       <FormMessage state={state} />
       {href && (same || state?.ok) && (
-        <Link href={href} className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-primary px-5 text-[16px] font-semibold text-white" data-testid="open-box-labels">
+        <Link href={href} className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-[6px] bg-primary px-5 text-[16px] font-semibold text-white" data-testid="open-box-labels">
           <Printer size={18} aria-hidden /> {p.plan?.printed && !state?.ok ? "See the box labels" : "Open the box labels and print"}
         </Link>
       )}

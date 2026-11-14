@@ -82,7 +82,7 @@ export function ApprovalPanel({ approval, status, children, what }: ApprovalProp
           const d = approval.decisions.find((x) => x.step === p.step);
           const waiting = status === "pending_approval" && approval.nextStep?.step === p.step;
           return (
-            <li key={p.step} className="flex flex-wrap items-start justify-between gap-2 rounded-[12px] border border-line px-3 py-2">
+            <li key={p.step} className="flex flex-wrap items-start justify-between gap-2 rounded-[8px] border border-line px-3 py-2">
               <div className="min-w-0">
                 <p className="text-[13px] font-medium">
                   Step {p.step}: {p.label}

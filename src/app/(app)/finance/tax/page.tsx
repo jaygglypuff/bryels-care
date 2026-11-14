@@ -41,7 +41,7 @@ export default async function TaxPage() {
           {rows.length === 0 ? (
             <EmptyState title="No tax rates yet">Until the accountant&apos;s rates are typed in and checked, invoices and bills have no tax line.{admin ? " Add one with the form." : " Ask finance."}</EmptyState>
           ) : (
-            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Tax rates">
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="Tax rates">
               {rows.map((r) => (
                 <li key={r.id} id={`t-${r.id}`} className="scroll-mt-24 px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">

@@ -22,7 +22,7 @@ const ICONS: Record<string, LucideIcon> = {
 export function BlockIcon({ block, className, size = 20 }: { block: string; className?: string; size?: number }) {
   const I = ICONS[block] ?? Wrench;
   return (
-    <span aria-hidden className={cx("inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-primary-text", className)}>
+    <span aria-hidden className={cx("inline-flex h-9 w-9 items-center justify-center rounded-[6px] bg-primary-soft text-primary-text", className)}>
       <I size={size} />
     </span>
   );

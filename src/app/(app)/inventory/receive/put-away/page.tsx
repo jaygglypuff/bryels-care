@@ -100,7 +100,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
           <ul className="space-y-2">
             {matches.map((m) => (
               <li key={m.id}>
-                <Link href={`/inventory/receive/put-away?lot=${m.id}`} className="flex min-h-[56px] items-center justify-between gap-3 rounded-[12px] border border-line px-3 py-2 hover:border-primary">
+                <Link href={`/inventory/receive/put-away?lot=${m.id}`} className="flex min-h-[56px] items-center justify-between gap-3 rounded-[8px] border border-line px-3 py-2 hover:border-primary">
                   <span className="min-w-0">
                     <span className="block font-medium">{m.title}</span>
                     <span className="block text-[13px] text-muted">{m.detail}</span>
@@ -139,7 +139,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
           <p className="mb-2 text-[14px]">
             Lot <span className="font-mono text-[13px] text-muted">{opts.lot.lotNumber}</span>{opts.lot.supplierLotNumber ? <span className="text-muted"> · supplier&apos;s code on the sack {opts.lot.supplierLotNumber}</span> : null}
           </p>
-          <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2 text-[14px]" data-testid="putaway-suggested-section">
+          <p className="mb-3 rounded-[6px] bg-surface-2 px-3 py-2 text-[14px]" data-testid="putaway-suggested-section">
             Belongs in: <strong>{opts.suggestedSectionLabel}</strong>
             {opts.suggestedCodes.length
               ? <> · {opts.destinations.filter((d) => d.section === opts!.suggestedSection).map((d, i) => <span key={d.id}>{i ? ", " : ""}<PlaceName name={d.name} code={d.code} /></span>)}</>

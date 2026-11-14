@@ -117,7 +117,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
           {q || itemKind ? "Try fewer words or another kind." : `Items show here once stock is received or made at ${ctx.currentSite.name}.`}
         </EmptyState>
       ) : (
-        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="What we can deliver" data-testid="availability-list">
+        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="What we can deliver" data-testid="availability-list">
           {items.map((it) => (
             <li key={`${it.code}:${it.uom}`}>
               <details className="group">

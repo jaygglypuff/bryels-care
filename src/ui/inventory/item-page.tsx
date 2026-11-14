@@ -50,7 +50,7 @@ export function TotalSentence({ totals, lots, where }: { totals: ItemStock["tota
 /** Two short lists: how much per supplier, how much per brand (each adds up to the total). */
 export function SupplierBrandTotals({ bySupplier, byBrand }: { bySupplier: ItemStock["bySupplierTotal"]; byBrand: ItemStock["byBrandTotal"] }) {
   const list = (title: string, rows: ItemStock["bySupplierTotal"], none: string) => (
-    <div className="rounded-[16px] border border-line" data-testid={`item-totals-${title.toLowerCase().replace(/\W+/g, "-")}`}>
+    <div className="rounded-[8px] border border-line" data-testid={`item-totals-${title.toLowerCase().replace(/\W+/g, "-")}`}>
       <p className="border-b border-line bg-surface-2 px-4 py-2 text-[13px] font-semibold">{title}</p>
       <ul className="divide-y divide-line text-[14px]">
         {rows.map((r) => (
@@ -107,7 +107,7 @@ const TONE: Record<"ok" | "q" | "hold" | "bad" | "warn" | "neu", string> = {
 /** One big number. */
 export function BigNumber({ label, scope, value, hint, tone = "neu", testId }: { label: string; scope?: string; value: string; hint?: ReactNode; tone?: keyof typeof TONE; testId?: string }) {
   return (
-    <div className={cx("flex min-h-[112px] flex-col rounded-[20px] border p-4", TONE[tone])} data-testid={testId}>
+    <div className={cx("flex min-h-[112px] flex-col rounded-[8px] border p-4", TONE[tone])} data-testid={testId}>
       <p className="text-[13px] font-semibold text-fg-2">
         {label}
         {scope && <span className="block text-[11px] font-normal text-muted">{scope}</span>}
@@ -134,13 +134,13 @@ export function Section({ id, title, hint, children, action }: { id: string; tit
 }
 
 export function Quiet({ children }: { children: ReactNode }) {
-  return <p className="rounded-[14px] border border-dashed border-line-strong px-4 py-4 text-center text-[14px] text-muted">{children}</p>;
+  return <p className="rounded-[8px] border border-dashed border-line-strong px-4 py-4 text-center text-[14px] text-muted">{children}</p>;
 }
 
 /** "Who we bought it from" (materials) or "Which batch made it" (products). */
 export function SupplierList({ rows, kind }: { rows: SupplierRow[]; kind: "material" | "product" }) {
   return (
-    <ul className="divide-y divide-line rounded-[16px] border border-line">
+    <ul className="divide-y divide-line rounded-[8px] border border-line">
       {rows.map((s, i) => {
         const title = kind === "material" ? (s.supplierName ?? "Supplier not written down") : s.batchNumber ? `Batch ${s.batchNumber}` : "No batch number (older stock)";
         const sub = kind === "material" ? (s.brand ? `Brand: ${s.brand}` : "Brand not written down") : s.madeOn ? `Made on ${fmtDate(s.madeOn)}` : "Date not written down";
@@ -187,7 +187,7 @@ export function ExpiringList({ buckets, kind }: { buckets: ExpiryBucket[]; kind:
             {b.label} · {b.total.text}
             {b.key === "expired" && <span className="font-normal text-fg-2"> (do not use)</span>}
           </h3>
-          <ul className="divide-y divide-line rounded-[16px] border border-line">
+          <ul className="divide-y divide-line rounded-[8px] border border-line">
             {b.lots.map((l) => (
               <li key={l.lotId}>
                 <Link href={`/inventory/${l.lotId}`} className="flex min-h-[52px] items-center gap-3 px-4 py-2.5 hover:bg-surface-2">
@@ -213,7 +213,7 @@ export function PlacesList({ places, showSite }: { places: PlaceRow[]; showSite:
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {places.map((p) => (
-        <div key={p.section} className="rounded-[16px] border border-line" data-testid="item-place">
+        <div key={p.section} className="rounded-[8px] border border-line" data-testid="item-place">
           <div className="flex items-center justify-between gap-2 border-b border-line bg-surface-2 px-4 py-2.5 text-[14px]">
             <span className="font-semibold">{p.sectionLabel}</span>
             <span className="font-semibold tabular">{p.total.text}</span>
@@ -244,13 +244,13 @@ export function PlacesList({ places, showSite }: { places: PlaceRow[]; showSite:
 
 export function LotList({ lots, kind, showSite, offset = 0 }: { lots: ItemLot[]; kind: "material" | "product"; showSite: boolean; offset?: number }) {
   return (
-    <ol start={offset + 1} className="divide-y divide-line rounded-[16px] border border-line" data-testid="item-lots">
+    <ol start={offset + 1} className="divide-y divide-line rounded-[8px] border border-line" data-testid="item-lots">
       {lots.map((l, i) => {
         const blocked = l.state === "expired" || l.state === "rejected" || l.state === "recalled";
         return (
           <li key={l.lotId} className={cx(blocked && "bg-[var(--bad-bg)]/40")}>
             <Link href={`/inventory/${l.lotId}`} className="grid min-h-[56px] grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2 lg:grid-cols-[auto_minmax(0,1.6fr)_minmax(0,1.1fr)_minmax(0,1.3fr)_auto] lg:items-center">
-              <span className="mt-0.5 inline-flex size-7 items-center justify-center rounded-full bg-surface-2 text-[12px] font-semibold tabular text-fg-2" aria-label={`Number ${offset + i + 1} in the order to use`}>
+              <span className="mt-0.5 inline-flex size-7 items-center justify-center rounded-[6px] bg-surface-2 text-[12px] font-semibold tabular text-fg-2" aria-label={`Number ${offset + i + 1} in the order to use`}>
                 {offset + i + 1}
               </span>
               <span className="min-w-0">
@@ -283,7 +283,7 @@ export function LotList({ lots, kind, showSite, offset = 0 }: { lots: ItemLot[];
 
 export function MovementList({ movements, showLink }: { movements: ItemMovement[]; showLink: boolean }) {
   return (
-    <ul className="divide-y divide-line rounded-[16px] border border-line" data-testid="item-movements">
+    <ul className="divide-y divide-line rounded-[8px] border border-line" data-testid="item-movements">
       {movements.map((m) => (
         <li key={m.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-4 py-2.5">
           <span className="min-w-0 text-[14px] text-fg">
@@ -312,7 +312,7 @@ export function ShowMore<T>({ items, first, render, noun }: { items: T[]; first:
     <div className="space-y-2">
       {render(items.slice(0, first), 0)}
       <details className="group">
-        <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-full border border-line px-4 text-[14px] font-medium text-primary-text hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+        <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-[6px] border border-line px-4 text-[14px] font-medium text-primary-text hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
           <span className="group-open:hidden">Show {rest} more {noun}</span>
           <span className="hidden group-open:inline">Show fewer</span>
         </summary>

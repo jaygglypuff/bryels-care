@@ -1,33 +1,60 @@
 @import "tailwindcss";
 
-/* Design tokens from docs/ux-system.md §2 and docs/design/style-tile.html (light theme for the MVP). */
+/* Design tokens (docs/ux-system.md §2; ADR-136 "standard business system" pass, 2026-11-14). Neutral greys carry the
+   surfaces and the text; the brand green is kept for the primary button, the active menu entry, links and focus. */
 :root {
-  /* Brand: leaf green and light green from the Bryel's Care logo */
+  /* Brand: leaf green from the Bryel's Care logo (primary actions, active navigation, links, focus). */
   --brand-50: #f1f8ec; --brand-100: #ddefd2; --brand-200: #bfe0a8; --brand-300: #96cb76; --brand-400: #6db34d;
-  --brand-500: #4f9d34; --brand-600: #367a24; --brand-700: #316f21; --brand-800: #27581c; --brand-900: #173512;
+  --brand-500: #4f9d34; --brand-600: #367a24; --brand-700: #2f6b1f; --brand-800: #27581c; --brand-900: #173512;
   --lime-50: #f5fbec; --lime-100: #e8f5d3; --lime-200: #d3ecaf; --lime-300: #b5dc7e; --lime-400: #8dc63f; --lime-500: #74ad2c;
   --gold-400: #e3b54a;
-  /* Surfaces: soft green-grey workspace with white cards (Dribbble reference) */
-  --bg: #eef2ea; --surface: #ffffff; --surface-2: #f5f7f2; --surface-3: #e9eee4; --border: #e2e8dc; --border-strong: #c8d1bf;
-  --fg: #172014; --fg-2: #4d5947; --fg-muted: #6b7565; --cta: var(--brand-700); /* ADR-083: primary actions and the active tab are green (brief Part IV §12) */
-  --primary: var(--brand-600); --primary-hover: var(--brand-700); --primary-text: var(--brand-700); --primary-soft: var(--lime-100); --ring: var(--brand-600);
-  --shadow-card: 0 1px 2px rgba(23, 32, 20, 0.04), 0 8px 24px -12px rgba(23, 32, 20, 0.10);
-  --shadow-pop: 0 12px 32px -8px rgba(23, 32, 20, 0.22);
-  /* Status (pastel fill + dark text + border; never colour alone) */
-  --ok-bg: #e2f3d6; --ok-fg: #1f5a12; --ok-bd: #b9df9a;
-  --warn-bg: #fdf0cf; --warn-fg: #6b4400; --warn-bd: #f0cf7d;
-  --bad-bg: #fbe3e1; --bad-fg: #8a1c1c; --bad-bd: #f0aaa6;
-  --info-bg: #e0ecfa; --info-fg: #1c4a80; --info-bd: #b3cff0;
-  --neu-bg: #edf0e9; --neu-fg: #434b3e; --neu-bd: #d5dccd;
-  --q-bg: #fdead2; --q-fg: #703d00; --q-bd: #f2c184;
-  --hold-bg: #ece5fa; --hold-fg: #43307a; --hold-bd: #cdbff0;
-  --exp-bg: #eee9e1; --exp-fg: #514738; --exp-bd: #d3cbbd;
-  --rej-bg: #f9e2e9; --rej-fg: #7a1f3a; --rej-bd: #eaaabd;
-  --appr-bg: #d9f0ec; --appr-fg: #114b47; --appr-bd: #a2d8d1;
+  /* Surfaces and text: neutral greys (ADR-136). */
+  --bg: #f7f8fa; --surface: #ffffff; --surface-2: #f9fafb; --surface-3: #f2f4f7; --border: #e4e7ec; --border-strong: #d0d5dd;
+  --fg: #101828; --fg-2: #475467; --fg-muted: #667085;
+  --cta: var(--brand-700); /* one primary action per page, green (ADR-083, ADR-136) */
+  --primary: var(--brand-700); --primary-hover: var(--brand-800); --primary-text: var(--brand-700); --primary-soft: #eef6ea; --ring: var(--brand-600);
+  --nav-active-bg: #eef6ea; --nav-active-fg: var(--brand-800);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-pop: 0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+  /* Status (muted tint + text + icon; never colour alone). Borders are hairlines for the few banners that use them. */
+  --ok-bg: #ecfdf3; --ok-fg: #067647; --ok-bd: #abefc6;
+  --warn-bg: #fffaeb; --warn-fg: #b54708; --warn-bd: #fedf89;
+  --bad-bg: #fef3f2; --bad-fg: #b42318; --bad-bd: #fecdca;
+  --info-bg: #eff8ff; --info-fg: #175cd3; --info-bd: #b2ddff;
+  --neu-bg: #f2f4f7; --neu-fg: #344054; --neu-bd: #e4e7ec;
+  --q-bg: #fef6ee; --q-fg: #b93815; --q-bd: #f9dbaf;
+  --hold-bg: #f4f3ff; --hold-fg: #5925dc; --hold-bd: #d9d6fe;
+  --exp-bg: #f5f5f4; --exp-fg: #57534e; --exp-bd: #e7e5e4;
+  --rej-bg: #fff1f3; --rej-fg: #c01048; --rej-bd: #fecdd6;
+  --appr-bg: #f0fdf9; --appr-fg: #107569; --appr-bd: #99f6e0;
   --font: var(--font-inter), Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: var(--font-poppins), Poppins, var(--font);
+  /* ADR-136: one family. Headings are Inter semibold (the rounded display face read as a template). */
+  --font-display: var(--font);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sidebar-w: 240px;
   color-scheme: light;
+}
+/* The collapsed sidebar (icons only), remembered on the device (src/app/(app)/shell.tsx). */
+html[data-sidebar="collapsed"] { --sidebar-w: 64px; }
+
+/* Dark theme (docs/ux-system.md §2.1 and §2.3 dark column): applied with data-theme="dark" on <html>. Not switched on
+   from the operating system yet: screens still hold a few fixed light colours (phase 2 of ADR-136 removes them). */
+:root[data-theme="dark"] {
+  --bg: #0c111d; --surface: #161b26; --surface-2: #1f242f; --surface-3: #252b37; --border: #2a303c; --border-strong: #3c4350;
+  --fg: #f5f5f6; --fg-2: #cecfd2; --fg-muted: #94969c;
+  --brand-600: #5fb27e; --cta: #3f8f5c; --primary: #3f8f5c; --primary-hover: #4ea46b; --primary-text: #8bd0a3; --primary-soft: #1c3a28; --ring: #8bd0a3;
+  --nav-active-bg: #1c3a28; --nav-active-fg: #b6e6c6;
+  --ok-bg: #0f2e1f; --ok-fg: #75e0a7; --ok-bd: #1f5135;
+  --warn-bg: #3a2a0a; --warn-fg: #fdb022; --warn-bd: #6b4f12;
+  --bad-bg: #3d1716; --bad-fg: #fda29b; --bad-bd: #7a2a26;
+  --info-bg: #102a4c; --info-fg: #84caff; --info-bd: #1d4a80;
+  --neu-bg: #252b37; --neu-fg: #cecfd2; --neu-bd: #3c4350;
+  --q-bg: #3b2210; --q-fg: #f7b27a; --q-bd: #6b3a17;
+  --hold-bg: #251c4a; --hold-fg: #bdb4fe; --hold-bd: #4a3a8a;
+  --exp-bg: #292524; --exp-fg: #d6d3d1; --exp-bd: #44403c;
+  --rej-bg: #3f1424; --rej-fg: #fea3b4; --rej-bd: #7a2140;
+  --appr-bg: #0c2f2b; --appr-fg: #5fe9d0; --appr-bd: #155e56;
+  color-scheme: dark;
 }
 
 /* ADR-135: the floor TV's dark background option (/floor?theme=dark). Only the floor screen sets this attribute; the
@@ -63,37 +90,41 @@
   --font-sans: var(--font);
   --font-display: var(--font-display);
   --font-mono: var(--mono);
-  --radius-card: 20px;
+  --radius-card: 8px;
   /* Type scale (docs/ux-system.md §2.8, harmony pass 2026-11-08). Pages use these names, never text-[NNpx] above 20 px.
      `text-id` is the record identifier (the hero of a record page); `text-title` the page title of lists and forms. */
-  --text-id: 26px; --text-id--line-height: 32px; --text-id--font-weight: 600;
-  --text-id-lg: 30px; --text-id-lg--line-height: 36px; --text-id-lg--font-weight: 600;
-  --text-title: 22px; --text-title--line-height: 28px; --text-title--font-weight: 600;
-  --text-title-lg: 26px; --text-title-lg--line-height: 32px; --text-title-lg--font-weight: 600;
-  --text-subtitle: 16px; --text-subtitle--line-height: 22px; --text-subtitle--font-weight: 500;
-  --text-section: 16px; --text-section--line-height: 22px; --text-section--font-weight: 600;
-  --text-section-lg: 17px; --text-section-lg--line-height: 24px; --text-section-lg--font-weight: 600;
+  /* ADR-136: page titles 20–22 px semibold; the record identifier 22–24 px; section titles 15–16 px. */
+  --text-id: 22px; --text-id--line-height: 28px; --text-id--font-weight: 600;
+  --text-id-lg: 24px; --text-id-lg--line-height: 30px; --text-id-lg--font-weight: 600;
+  --text-title: 20px; --text-title--line-height: 28px; --text-title--font-weight: 600;
+  --text-title-lg: 22px; --text-title-lg--line-height: 30px; --text-title-lg--font-weight: 600;
+  --text-subtitle: 15px; --text-subtitle--line-height: 22px; --text-subtitle--font-weight: 500;
+  --text-section: 15px; --text-section--line-height: 22px; --text-section--font-weight: 600;
+  --text-section-lg: 16px; --text-section-lg--line-height: 24px; --text-section-lg--font-weight: 600;
   --text-body: 15px; --text-body--line-height: 22px;
   --text-meta: 13px; --text-meta--line-height: 18px;
   --text-label: 12px; --text-label--line-height: 16px; --text-label--font-weight: 500;
   --text-value: 18px; --text-value--line-height: 24px; --text-value--font-weight: 600;
-  --text-stat: 26px; --text-stat--line-height: 30px; --text-stat--font-weight: 600;
+  --text-stat: 24px; --text-stat--line-height: 30px; --text-stat--font-weight: 600;
   --text-readout: 40px; --text-readout--line-height: 44px; --text-readout--font-weight: 600;
 }
 
 html, body { background: var(--bg); color: var(--fg); font-family: var(--font); }
 body { font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 @media (min-width: 1024px) { body { font-size: 14px; } } /* body 15 on phones and tablets, 14 on desktop (ux-system §2.8) */
-@layer base { h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; } }
-.font-display { letter-spacing: -0.01em; }
+@layer base { h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.011em; } }
+.font-display { letter-spacing: -0.011em; }
 .scroll-x-hidden { scrollbar-width: none; }
 .scroll-x-hidden::-webkit-scrollbar { display: none; }
 .tabular { font-variant-numeric: tabular-nums; }
-:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-/* ADR-132 §5 (round 5 C B22): one help door per page. Where the frame shows its "?" (office roles from 640 px; the
-   Shell sets data-frame-help on <main>), the page's plain "?" for the same screen is hidden. */
-@media (min-width: 640px) { [data-frame-help] [data-page-help] { display: none; } }
+/* ADR-132 §5 (round 5 C B22): one help door per page. Where the frame shows its "?" (office roles at every width since
+   ADR-136; the Shell sets data-frame-help on <main>), the page's plain "?" for the same screen is hidden. */
+[data-frame-help] [data-page-help] { display: none; }
+/* ADR-136: "This screen is for…" moves into the frame's "?" panel ("About this screen", src/ui/help/frame-help.tsx);
+   floor roles, who have no frame "?", still read it under the title. */
+[data-frame-help] .page-intro { display: none; }
 
 /* Touch targets (UX audit R2, brief: large targets, 44 px). Checkboxes and radios are drawn at 20 px in the
    brand colour; a label that wraps one is the hit area and is at least 44 px tall wherever it is a block
@@ -175,5 +206,5 @@ input,
 select,
 textarea,
 [role="alert"] {
-  scroll-margin-top: 120px;
+  scroll-margin-top: 88px;
 }

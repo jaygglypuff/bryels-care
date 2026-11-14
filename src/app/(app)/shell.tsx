@@ -3,26 +3,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, BarChart3, Bell, Boxes, Building2, CalendarDays, ChevronDown, ClipboardList, Clock, Cloud, CloudOff, CloudUpload, Database, Factory, FlaskConical, GitBranch, GitMerge, HelpCircle, Home,
-  ListChecks, Menu, PackagePlus, PhilippinePeso, ScanLine, ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, UserRound, Warehouse, Wrench, X,
+  AlertTriangle, BarChart3, Bell, Boxes, Building2, CalendarDays, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardList, Clock, Cloud, CloudOff, CloudUpload, Database, Factory, FlaskConical, GitBranch, GitMerge,
+  HelpCircle, Home, ListChecks, Menu, PackagePlus, PhilippinePeso, ScanLine, ScrollText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Truck, UserRound, Warehouse, Wrench, X,
 } from "lucide-react";
-import { activeEntry, groupHref, groupSections, MORE, type NavBadges, type NavGroup, type NavItem, type Tab } from "./nav";
+import { activeEntry, crumbsFor, groupEntries, groupHref, type NavBadges, type NavGroup, type NavItem, type Tab } from "./nav";
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
 import { SavedLanding } from "@/ui/saved-landing";
 import { DemoBanner } from "@/ui/demo-banner";
+import { RowClicks } from "@/ui/kit-client";
 import { SignOutButton, SyncChip, useSync } from "@/ui/sync-status";
 import { FrameHelp, type FrameHelpResult } from "@/ui/help/frame-help";
 import { MasterSearchLauncher, type SearchFn } from "@/ui/master-search";
 import type { SyncState } from "@/lib/offline/agent";
 
 const ICONS: Record<string, React.ReactNode> = {
-  home: <Home size={18} />, boxes: <Boxes size={18} />, factory: <Factory size={18} />, shield: <ShieldCheck size={18} />,
-  truck: <Truck size={18} />, warehouse: <Warehouse size={18} />, wrench: <Wrench size={18} />, database: <Database size={18} />, settings: <Settings size={18} />, clock: <Clock size={18} />,
-  scan: <ScanLine size={19} />, receive: <PackagePlus size={19} />, batch: <FlaskConical size={19} />, qa: <ClipboardList size={19} />,
-  order: <ShoppingCart size={19} />, trace: <GitBranch size={19} />, audit: <ScrollText size={19} />, approve: <ListChecks size={19} />,
-  money: <PhilippinePeso size={18} />, customer: <UserRound size={18} />, supplier: <Building2 size={18} />, alert: <AlertTriangle size={18} />, chart: <BarChart3 size={18} />,
+  home: <Home size={16} />, boxes: <Boxes size={16} />, factory: <Factory size={16} />, shield: <ShieldCheck size={16} />,
+  truck: <Truck size={16} />, warehouse: <Warehouse size={16} />, wrench: <Wrench size={16} />, database: <Database size={16} />, settings: <Settings size={16} />, clock: <Clock size={16} />,
+  scan: <ScanLine size={16} />, receive: <PackagePlus size={16} />, batch: <FlaskConical size={16} />, qa: <ClipboardList size={16} />,
+  order: <ShoppingCart size={16} />, trace: <GitBranch size={16} />, audit: <ScrollText size={16} />, approve: <ListChecks size={16} />,
+  money: <PhilippinePeso size={16} />, customer: <UserRound size={16} />, supplier: <Building2 size={16} />, alert: <AlertTriangle size={16} />, chart: <BarChart3 size={16} />,
 };
 
 const TAB_ICONS: Record<Tab["icon"], React.ReactNode> = {
@@ -34,43 +35,42 @@ const TAB_ICONS: Record<Tab["icon"], React.ReactNode> = {
 
 type Props = {
   nav: NavGroup[];
-  /** Bottom bar per role (tabsFor in nav.ts); floor roles see these four doors as the top-bar menu from 1280 px. */
+  /** Bottom bar per role (tabsFor in nav.ts), below 1024 px. */
   tabs: Tab[];
   user: { id: string; name: string; roles: string };
   sites: { id: string; code: string; name: string }[];
   currentSiteId: string;
-  /** Where Home is for this person (the logo and the Home pill). */
+  /** Where Home is for this person (the logo and the Home entry). */
   homeHref?: string;
-  /** Floor role (A report): no tab rows, no menu button, no Help "?" in the bar; the bottom bar holds Help. */
+  /** Floor role (A report): below 1024 px no menu button and no Help "?" in the bar; the bottom bar holds their doors. */
   floor?: boolean;
   /** Owner, site manager and the roles that share their menu: "Needs me" replaces the To approve and Messages buttons. */
   needsMeArea?: boolean;
-  /** Set-up screens this person may open (the avatar menu shows "Set-up"). */
+  /** Set-up screens this person may open (the sidebar's foot and the avatar menu show "Set-up"). */
   hasSetup?: boolean;
-  /** Open QA queue items at the current site (QA users only): badge on the QA tab and the QA entries. */
+  /** The person may open Settings (/admin/settings): a second entry in the sidebar's foot. */
+  hasSettings?: boolean;
+  /** Open QA queue items at the current site (QA users only): count on the QA entries. */
   qaCount: number | null;
   /** Open, unread in-app notifications of the signed-in user (US-2-03). */
   unreadCount: number;
-  /** ADR-075: approvals waiting for the signed-in user (the "To approve" badge). */
+  /** ADR-075: approvals waiting for the signed-in user (the "To approve" count). */
   approvalCount?: number;
-  /** ADR-132 §1: things waiting for this person (approvals + checks + action messages); the "Needs me" badge. */
+  /** ADR-132 §1: things waiting for this person (approvals + checks + action messages); the "Needs me" count. */
   needsMeCount?: number;
-  /** ADR-082: show the "To approve" button only to people who approve something. */
+  /** ADR-082: show "To approve" only to people who approve something. */
   showApprovals?: boolean;
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
   /** Round 4: the frame's Help "?" loads the guide of the current screen (server action). Without it, no button. */
   loadHelp?: (pathname: string) => Promise<FrameHelpResult>;
-  /** Master search (ADR-121, round 5): a labelled "Search" at every width, Ctrl/⌘+K and "/". Without it, no search. */
+  /** Master search (ADR-121, round 5): the box in the middle of the top bar, Ctrl/⌘+K and "/". Without it, no search. */
   search?: SearchFn;
-  /**
-   * ADR-126 setting `ui.wide_screen_top_bar`: "search" (default) shows the Search box; "scan" shows the Scan button in its
-   * place at every width (Ctrl/⌘K and "/" still open the search).
-   */
+  /** ADR-126 setting `ui.wide_screen_top_bar`: "scan" shows the Scan button in the search box's place. */
   wideTopBar?: "search" | "scan";
   /** ADR-126 (`scan.search_open_to_everyone` off and no stock access): no Scan button (the screen would refuse). */
   showScan?: boolean;
-  /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
+  /** Demo mode (ADR-055): the slim line above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
   demo?: { canReset: boolean; sandbox?: boolean } | null;
   children: React.ReactNode;
 };
@@ -81,20 +81,20 @@ function DeletedNotice({ pathname }: { pathname: string }) {
   useEffect(() => setShow(new URLSearchParams(window.location.search).get("deleted") === "1"), [pathname]);
   if (!show) return null;
   return (
-    <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-[14px] border border-line bg-surface px-4 py-3 text-[14px]">
+    <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-[8px] border border-line bg-surface px-4 py-2 text-[14px]">
       <span>Draft deleted. A copy is kept in the audit log.</span>
-      <button type="button" onClick={() => setShow(false)} className="grid min-h-[44px] min-w-[44px] place-items-center px-2 text-primary-text" aria-label="Dismiss">
+      <button type="button" onClick={() => setShow(false)} className="grid min-h-[36px] min-w-[36px] place-items-center rounded-[6px] text-fg-2 hover:bg-surface-3 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]" aria-label="Dismiss">
         <X size={16} />
       </button>
     </div>
   );
 }
 
-/** Small count badge; hidden at zero. */
-function CountBadge({ n, className }: { n: number | undefined; className?: string }) {
+/** Small count; hidden at zero. `tone="alert"` (red) for things waiting for the person. */
+function CountBadge({ n, className, tone = "alert" }: { n: number | undefined; className?: string; tone?: "alert" | "muted" }) {
   if (!n) return null;
   return (
-    <span className={cx("grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white", className)} aria-hidden="true">
+    <span className={cx("grid h-[18px] min-w-[18px] place-items-center rounded-[9px] px-1 text-[11px] font-semibold tabular", tone === "alert" ? "bg-[var(--bad-fg)] text-white" : "bg-surface-3 text-fg-2", className)} aria-hidden="true">
       {n > 99 ? "99+" : n}
     </span>
   );
@@ -124,26 +124,83 @@ const SYNC_TONE: Record<string, string> = {
 function DrawerSync({ userId }: { userId: string }) {
   const s = useSync(userId);
   const w = syncWords(s);
-  const icon = w.tone === "ok" ? <Cloud size={18} aria-hidden /> : w.tone === "bad" ? (s.stats.conflict ? <GitMerge size={18} aria-hidden /> : <CloudOff size={18} aria-hidden />) : s.online ? <CloudUpload size={18} aria-hidden /> : <CloudOff size={18} aria-hidden />;
+  const icon = w.tone === "ok" ? <Cloud size={16} aria-hidden /> : w.tone === "bad" ? (s.stats.conflict ? <GitMerge size={16} aria-hidden /> : <CloudOff size={16} aria-hidden />) : s.online ? <CloudUpload size={16} aria-hidden /> : <CloudOff size={16} aria-hidden />;
   return (
-    <Link href="/sync" className={cx("flex min-h-[44px] items-center gap-2 rounded-[12px] border px-3 text-[14px] font-medium", SYNC_TONE[w.tone])} data-testid="drawer-sync">
+    <Link href="/sync" className={cx("flex min-h-[44px] items-center gap-2 rounded-[6px] border px-3 text-[14px] font-medium", SYNC_TONE[w.tone])} data-testid="drawer-sync">
       {icon}
       <span>{w.text}</span>
     </Link>
   );
 }
 
+const SIDEBAR_KEY = "bc.sidebar";
+const CLOSED_KEY = "bc.sidebar.closed";
+const readStore = (k: string): string | null => {
+  try {
+    return window.localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const writeStore = (k: string, v: string) => {
+  try {
+    window.localStorage.setItem(k, v);
+  } catch {
+    /* private mode or storage full: the choice is not remembered, nothing else changes */
+  }
+};
+
+/** Arrow keys move between the links and buttons of a menu (sidebar and drawer); Home/End jump to the ends. */
+function arrowKeys(e: React.KeyboardEvent<HTMLElement>) {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>("a[href], button:not([disabled])")].filter((el) => el.offsetParent !== null);
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  if (at < 0) return;
+  e.preventDefault();
+  const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : (at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+  items[next]?.focus();
+}
+
 /**
- * The app frame (round 5, ADR-129; docs/NEW_NAVIGATION.md). Top bar: menu (owner and office roles from 1280 px: one
- * pill per area), then the labelled Search, then To approve / Messages / Help where the role has them, then the avatar
- * (My account, Help, Set-up, All screens, sign out). Under it the open area's tabs (at most five, then one flat "More").
- * Phones and tablets: one ☰ (not for floor roles) and the role's bottom bar. Esc closes the drawer and the menus.
+ * The app frame (ADR-136, replaces the pill menus of ADR-129's top bar; the menus per job in nav.ts are unchanged).
+ *
+ * From 1024 px: a fixed left sidebar (240 px, or 64 px icons only, remembered on the device) with the whole two-level
+ * menu always visible: each area (Home, Needs me, Sell, Make, Buy & stock, Money …) with its pages listed under it, no
+ * "More" dropdowns; Set-up, Settings and Help at the foot. The open page has a tinted background and a green bar. The
+ * 56 px top bar holds the breadcrumb (Section / Page / record), the Search box in the middle (Ctrl/⌘K, "/"), the site
+ * switcher, Help "?" and the avatar menu. Below 1024 px: office roles open the same menu in a drawer from ☰; every
+ * role keeps its bottom bar (floor roles: their four doors, no ☰). Esc closes the drawer and the menus.
  */
-export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dashboard", floor = false, needsMeArea = false, hasSetup = false, qaCount, unreadCount, approvalCount = 0, needsMeCount, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dashboard", floor = false, needsMeArea = false, hasSetup = false, hasSettings = false, qaCount, unreadCount, approvalCount = 0, needsMeCount, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [closed, setClosed] = useState<string[]>([]);
   const accountRef = useRef<HTMLDetailsElement>(null);
+  const sideRef = useRef<HTMLElement>(null);
   useEffect(() => setDrawer(false), [pathname]);
+  // The sidebar's width and the areas folded by hand, remembered on this device (the layout's script set the width before paint).
+  useEffect(() => {
+    setCollapsed(readStore(SIDEBAR_KEY) === "collapsed");
+    try {
+      const v = JSON.parse(readStore(CLOSED_KEY) ?? "[]");
+      if (Array.isArray(v)) setClosed(v.filter((x) => typeof x === "string"));
+    } catch {
+      /* a broken value: every area open */
+    }
+  }, []);
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    writeStore(SIDEBAR_KEY, next ? "collapsed" : "open");
+    if (next) document.documentElement.dataset.sidebar = "collapsed";
+    else delete document.documentElement.dataset.sidebar;
+  };
+  const toggleArea = (label: string) => {
+    const next = closed.includes(label) ? closed.filter((x) => x !== label) : [...closed, label];
+    setClosed(next);
+    writeStore(CLOSED_KEY, JSON.stringify(next));
+  };
   // B report bug B12: Esc closes the drawer (and any open menu of the frame).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -154,33 +211,32 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  // Close the frame's menus after navigating.
+  // Close the frame's menus after navigating; keep the open page in view in the sidebar.
   useEffect(() => {
     document.querySelectorAll<HTMLDetailsElement>("details[data-frame-menu][open]").forEach((d) => d.removeAttribute("open"));
+    const cur = sideRef.current?.querySelector<HTMLElement>("[aria-current=page]");
+    cur?.scrollIntoView({ block: "nearest" });
   }, [pathname]);
 
-  // Phone/tablet tab row: a fade at the right edge while more tabs are hidden, and the open tab scrolled into view.
-  const rowRef = useRef<HTMLUListElement>(null);
-  const [fade, setFade] = useState(false);
+  // The record or page title as the breadcrumb's last part (read from the page's H1 once it is shown).
+  const { crumbs, exact } = crumbsFor(nav, pathname);
+  const [tail, setTail] = useState<string | null>(null);
   useEffect(() => {
-    const el = rowRef.current;
-    if (!el) return;
-    const update = () => setFade(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-    const cur = el.querySelector<HTMLElement>("[aria-current=page]");
-    if (cur) {
-      const r = cur.getBoundingClientRect();
-      const box = el.getBoundingClientRect();
-      if (r.right > box.right - 48) el.scrollLeft += r.right - box.right + 48;
-      else if (r.left < box.left) el.scrollLeft -= box.left - r.left;
-    }
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
+    setTail(null);
+    if (exact) return;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const read = () => {
+      const h = document.querySelector<HTMLElement>("main [data-testid=record-number]") ?? document.querySelector<HTMLElement>("main h1");
+      const t = h?.textContent?.trim().replace(/\s+/g, " ") ?? "";
+      if (t) setTail(t.length > 48 ? `${t.slice(0, 46)}…` : t);
+      else if (tries++ < 10) timer = setTimeout(read, 150);
     };
-  }, [pathname]);
+    read();
+    return () => clearTimeout(timer);
+  }, [pathname, exact]);
+  const last = crumbs[crumbs.length - 1];
+  const trail = [...crumbs, ...(!exact && tail && tail !== last?.label ? [{ label: tail }] : [])];
 
   const { group: activeGroup, href: activeHref } = activeEntry(nav, pathname);
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
@@ -195,11 +251,10 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
     const m = pathname === path ? path.length + 1000 : pathname.startsWith(path + "/") ? path.length : -1;
     return m > best.m ? { href: t.href, m } : best;
   }, { href: null, m: -1 }).href;
-  const tightTopBar = sites.length > 1;
   // ADR-126: the Scan button in the search box's place (setting ui.wide_screen_top_bar = "scan").
   const scanFirst = wideTopBar === "scan" && showScan;
   const withCount = (label: string, n: number | undefined) => (n ? `${label}, ${n} open` : label);
-  const topButton = "relative flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg";
+  const topButton = "relative flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-[6px] px-2 text-[13px] font-medium text-fg-2 hover:bg-surface-3 hover:text-fg pointer-coarse:h-11 pointer-coarse:min-w-11";
 
   // Round 4 (UX re-audit C N4): the site's NAME, never cut ("North Fields Plant"); the code is in the tooltip only.
   const siteSwitcher = (wide: boolean) => (
@@ -213,7 +268,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
         title={site ? `${site.name} (${site.code})` : undefined}
         data-testid={wide ? "site-switch-drawer" : "site-switch"}
-        className={cx("h-11 cursor-pointer rounded-full border border-line bg-surface pl-3 pr-8 text-[13px] font-medium text-fg shadow-[var(--shadow-card)]", wide ? "w-full" : "w-auto")}
+        className={cx("h-9 cursor-pointer rounded-[6px] border border-line-strong bg-surface pl-3 pr-8 text-[13px] font-medium text-fg pointer-coarse:h-11", wide ? "w-full" : "w-auto")}
       >
         {sites.map((s) => (
           <option key={s.id} value={s.id}>{s.name}</option>
@@ -222,220 +277,274 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
     </form>
   );
 
-  /** One entry of the flat "More" list (desktop). */
-  const dropItem = (i: NavItem) => (
-    <li key={i.href}>
-      <Link href={i.href} aria-current={i.href === activeHref ? "page" : undefined} className={cx("flex min-h-[44px] items-center justify-between gap-2 rounded-[10px] px-3 py-2 text-[14px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
-        {i.label}
-        <CountBadge n={badges[i.href]} />
-      </Link>
-    </li>
-  );
-
-  // Top-bar menu from 1280 px: the areas (owner and office roles) or the four floor doors (floor roles).
-  const pills: { key: string; label: string; href: string; icon: React.ReactNode; active: boolean; badge: number | undefined; title?: string }[] = floor
-    ? tabs.map((t) => ({ key: t.href, label: t.label, href: t.href, icon: TAB_ICONS[t.icon], active: t.href === activeTab, badge: tabBadge(t) }))
-    : nav.map((g) => ({ key: g.label, label: g.label, href: groupHref(g), icon: ICONS[g.icon], active: g === activeGroup, badge: areaBadge(g), title: g.description }));
-
   const scanButton = (
     <Link
       href="/inventory/scan"
       data-testid="top-bar-scan"
-      className={cx(topButton, pathname.startsWith("/inventory/scan") && "text-primary-text")}
+      className={cx(topButton, "border border-line-strong", pathname.startsWith("/inventory/scan") && "text-primary-text")}
       aria-label="Scan a label"
       title="Scan a label"
     >
-      <ScanLine size={18} aria-hidden />
+      <ScanLine size={16} aria-hidden />
       <span>Scan</span>
     </Link>
   );
 
-  return (
-    <div className="min-h-dvh pb-[76px] xl:pb-0">
-      <NavigationProgress />
-      {/* Top bar */}
-      <header className="no-print sticky top-0 z-30 border-b border-line/70 bg-bg/90 backdrop-blur">
-        {demo && <DemoBanner canReset={demo.canReset} sandbox={demo.sandbox} />}
-        <div className="mx-auto flex h-[68px] max-w-[1480px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
-          {/* One menu button (B report B12, C report): the drawer. Floor roles have none (their four doors are below). */}
-          {!floor && (
-            <button className="grid size-11 shrink-0 place-items-center rounded-full bg-surface shadow-[var(--shadow-card)] xl:hidden" onClick={() => setDrawer(true)} aria-label="Open menu" data-testid="open-menu">
-              <Menu size={18} />
-            </button>
+  /** One page of the menu (sidebar and drawer): tinted background and a green bar when open. */
+  const entry = (i: NavItem, big = false) => {
+    const on = i.href === activeHref;
+    const n = badges[i.href];
+    return (
+      <li key={i.href}>
+        <Link
+          href={i.href}
+          aria-current={on ? "page" : undefined}
+          aria-label={n ? withCount(i.label, n) : undefined}
+          className={cx(
+            "relative flex items-center justify-between gap-2 rounded-[6px] pl-9 pr-2 text-[13.5px] leading-tight",
+            big ? "min-h-[44px] py-2 text-[15px]" : "min-h-[32px] py-1.5 pointer-coarse:min-h-[44px]",
+            on ? "bg-[var(--nav-active-bg)] font-semibold text-[var(--nav-active-fg)] before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:rounded-[2px] before:bg-primary" : "text-fg-2 hover:bg-surface-3 hover:text-fg",
           )}
-          <Link href={homeHref} className="grid min-h-11 min-w-11 shrink-0 place-items-center" aria-label="Bryel's Care home">
-            {/* ADR-123: from 1280 px the menu shares the bar with Search; the mark (36 px) shows there, the full logo from 1536 px. */}
-            <LogoMark className="size-9 sm:hidden xl:block 2xl:hidden" />
-            <Logo className="hidden h-9 w-auto sm:block xl:hidden 2xl:block" />
-          </Link>
-          {/* Areas from 1280 px, starting next to the logo (B report #1: the Search box comes right after). */}
-          <nav aria-label="Menu" className="hidden min-w-0 xl:block" data-testid="top-menu">
-            <ul className="scroll-x-hidden flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full bg-surface p-1 shadow-[var(--shadow-card)]">
-              {pills.map((p) => (
-                <li key={p.key}>
-                  <Link
-                    href={p.href}
-                    aria-current={p.active ? "page" : undefined}
-                    aria-label={p.badge ? withCount(p.label, p.badge) : undefined}
-                    title={p.title}
-                    className={cx("relative flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors", p.active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2 hover:text-fg")}
-                  >
-                    {p.icon}
-                    <span>{p.label}</span>
-                    <CountBadge n={p.badge} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          {/* Search, labelled, at every width (round 5). ADR-126 "scan": the Scan button stands in its place. */}
-          <div className={cx("flex min-w-0 items-center", !scanFirst && "flex-1 xl:flex-none")}>
-            {search && <MasterSearchLauncher search={search} userId={user.id} keysOnly={scanFirst} tight={tightTopBar} />}
-            {scanFirst && scanButton}
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {sites.length > 1 && <div className="hidden shrink-0 xl:block">{siteSwitcher(false)}</div>}
-            {/* The sync chip shows only when something waits to be sent or there is no signal (round 5). */}
-            <SyncChip userId={user.id} />
-            {/* ADR-075/082: "To approve" for office approvers (owner and manager: it is in "Needs me"). */}
-            {showApprovals && !needsMeArea && !floor && (
-              <Link
-                href="/approvals"
-                className={cx(topButton, "hidden sm:flex", pathname.startsWith("/approvals") && "text-primary-text")}
-                aria-label={`To approve, ${approvalCount} waiting`}
-                title="To approve"
-                data-testid="top-bar-approvals"
-              >
-                <ListChecks size={18} aria-hidden />
-                <span className={cx("hidden whitespace-nowrap", tightTopBar ? "" : "md:inline")}>To approve</span>
-                <CountBadge n={approvalCount} className="absolute -right-0.5 -top-0.5" />
-              </Link>
-            )}
-            {/* Messages: the bell with its word where it fits (owner and manager: in "Needs me"). */}
-            {!needsMeArea && (
-              <Link href="/notifications" className={cx(topButton, pathname.startsWith("/notifications") && "text-primary-text")} aria-label={`Messages, ${unreadCount} unread`} title="Messages" data-testid="top-bar-messages">
-                <Bell size={18} aria-hidden />
-                <span className={cx("hidden", tightTopBar ? "" : "md:inline")}>Messages</span>
-                <CountBadge n={unreadCount} className="absolute -right-0.5 -top-0.5" />
-              </Link>
-            )}
-            {/* One "?" (floor roles have Help in the bottom bar instead). */}
-            {loadHelp && !floor && (
-              <div className="hidden sm:block">
-                <FrameHelp load={loadHelp} withLabel labelClass={cx("hidden", tightTopBar ? "2xl:inline" : "lg:inline")} />
-              </div>
-            )}
-            <details className="relative shrink-0" data-frame-menu ref={accountRef}>
-              <summary className="grid size-11 cursor-pointer list-none place-items-center rounded-full text-[13px] font-semibold ring-2 ring-white [&::-webkit-details-marker]:hidden" style={{ background: "var(--lime-200)", color: "var(--brand-800)" }} aria-label="Your account, help and set-up" data-testid="account-menu">
-                {initials}
-              </summary>
-              <div className="absolute right-0 top-12 z-40 w-64 max-w-[calc(100vw-32px)] rounded-[18px] border border-line bg-surface p-3 shadow-[var(--shadow-pop)]">
-                <p className="px-1 font-semibold text-fg">{user.name}</p>
-                <p className="px-1 text-[12px] text-muted">{user.roles}</p>
-                <p className="mt-1 px-1 text-[12px] text-muted">Site: {site?.name}</p>
-                <ul className="mt-2 border-t border-line pt-1">
-                  <li><Link href="/account" className="flex min-h-[44px] items-center rounded-[10px] px-2 text-[14px] font-medium text-fg hover:bg-surface-2">My account and devices</Link></li>
-                  <li><Link href="/help" className="flex min-h-[44px] items-center rounded-[10px] px-2 text-[14px] font-medium text-fg hover:bg-surface-2">Help</Link></li>
-                  {hasSetup && <li><Link href="/setup" className="flex min-h-[44px] items-center rounded-[10px] px-2 text-[14px] font-medium text-fg hover:bg-surface-2" data-testid="account-setup">Set-up</Link></li>}
-                  <li>
-                    <button type="button" onClick={() => { accountRef.current?.removeAttribute("open"); setDrawer(true); }} className="flex min-h-[44px] w-full items-center rounded-[10px] px-2 text-left text-[14px] font-medium text-fg hover:bg-surface-2" data-testid="account-all-screens">
-                      All screens
-                    </button>
-                  </li>
-                  {demo?.canReset && <li><Link href="/admin/demo" className="flex min-h-[44px] items-center rounded-[10px] px-2 text-[14px] font-medium text-fg hover:bg-surface-2">Reset demo data</Link></li>}
-                </ul>
-                <div className="mt-1 border-t border-line pt-1">
-                  <SignOutButton signOut={signOut} variant="menu" />
-                </div>
-              </div>
-            </details>
-          </div>
-        </div>
-        {/* Desktop: the open area's tabs (at most five) and one flat "More" list. Floor roles have none. */}
-        {!floor && activeGroup && (() => {
-          const { main, sections } = groupSections(activeGroup);
-          const more = sections.find((s) => s.name === MORE)?.items ?? [];
-          if (main.length + more.length <= 1) return null;
-          const moreHere = more.some((i) => i.href === activeHref);
-          return (
-            <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 xl:block">
-              <ul className="flex flex-wrap items-center gap-1.5" data-testid="desktop-tab-row">
-                {main.map((i) => (
-                  <li key={i.href}>
-                    <Link
-                      href={i.href}
-                      aria-current={i.href === activeHref ? "page" : undefined}
-                      aria-label={badges[i.href] ? withCount(i.label, badges[i.href]) : undefined}
-                      className={cx("flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium transition-colors", i.href === activeHref ? "border-transparent text-white" : "border-line bg-surface text-fg-2 hover:border-line-strong hover:text-fg")}
-                      style={i.href === activeHref ? { background: "var(--brand-600)" } : undefined}
-                    >
-                      {i.label}
-                      <CountBadge n={badges[i.href]} />
-                    </Link>
-                  </li>
-                ))}
-                {more.length > 0 && (
-                  <li>
-                    <details className="relative" data-frame-menu data-testid="desktop-more">
-                      <summary className={cx("flex min-h-[44px] cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium [&::-webkit-details-marker]:hidden", moreHere ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:text-fg")}>
-                        More
-                        <ChevronDown size={14} aria-hidden />
-                      </summary>
-                      <div className="absolute left-0 top-12 z-40 max-h-[70vh] w-72 overflow-y-auto rounded-[16px] border border-line bg-surface p-2 shadow-[var(--shadow-pop)]">
-                        <ul>{more.map(dropItem)}</ul>
-                      </div>
-                    </details>
-                  </li>
-                )}
-              </ul>
-            </div>
-          );
-        })()}
-        {/* Phones and tablets: the open area's tabs in one swipeable row with a fade; "More" opens the menu. */}
-        {!floor && activeGroup && (() => {
-          const { main, sections } = groupSections(activeGroup);
-          if (main.length <= 1) return null;
-          const more = sections.find((s) => s.name === MORE)?.items ?? [];
-          const moreHere = more.some((i) => i.href === activeHref);
-          return (
-            <nav aria-label={`${activeGroup.label} pages`} className="xl:hidden">
-              <div className="mx-auto flex max-w-[1480px] items-center gap-1.5 px-4 pb-2.5 sm:px-6">
-                <div className="relative min-w-0 flex-1">
-                  <ul ref={rowRef} className="scroll-x-hidden flex gap-1.5 overflow-x-auto">
-                    {main.map((i) => (
-                      <li key={i.href} className="shrink-0">
-                        <Link
-                          href={i.href}
-                          aria-current={i.href === activeHref ? "page" : undefined}
-                          aria-label={badges[i.href] ? withCount(i.label, badges[i.href]) : undefined}
-                          className={cx("flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium", i.href === activeHref ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2")}
-                        >
-                          {i.label}
-                          <CountBadge n={badges[i.href]} />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                  {fade && <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[var(--bg)] to-transparent" data-testid="tab-row-fade" />}
-                </div>
-                {more.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setDrawer(true)}
-                    aria-label={`More ${activeGroup.label} pages`}
-                    className={cx("flex min-h-[44px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium", moreHere ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2")}
-                  >
-                    More <ChevronDown size={14} aria-hidden />
-                  </button>
-                )}
-              </div>
-            </nav>
-          );
-        })()}
-      </header>
+        >
+          <span className="min-w-0">{i.label}</span>
+          <CountBadge n={n} tone="muted" />
+        </Link>
+      </li>
+    );
+  };
 
-      <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
-        <main id="main" className="min-w-0 flex-1 py-5 sm:py-7" data-frame-help={loadHelp && !floor ? "on" : undefined}>
+  /** The whole two-level menu (ADR-136): every area with its pages under it. */
+  const tree = (big = false) =>
+    nav.map((g) => {
+      const items = groupEntries(g);
+      const icon = ICONS[g.icon];
+      const here = g === activeGroup;
+      // An area with one page (Home) is one link.
+      if (items.length <= 1) {
+        const href = items[0]?.href ?? groupHref(g);
+        const on = href === activeHref || (here && !activeHref);
+        return (
+          <li key={g.label} className="mb-0.5">
+            <Link
+              href={href}
+              aria-current={on ? "page" : undefined}
+              className={cx(
+                "relative flex items-center gap-2.5 rounded-[6px] px-2.5 font-medium",
+                big ? "min-h-[44px] text-[15px]" : "min-h-[34px] text-[14px] pointer-coarse:min-h-[44px]",
+                on ? "bg-[var(--nav-active-bg)] text-[var(--nav-active-fg)] before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:rounded-[2px] before:bg-primary" : "text-fg hover:bg-surface-3",
+              )}
+            >
+              <span className={on ? "text-primary-text" : "text-fg-2"} aria-hidden>{icon}</span>
+              {g.label}
+            </Link>
+          </li>
+        );
+      }
+      const open = !closed.includes(g.label) || here;
+      const n = areaBadge(g);
+      return (
+        <li key={g.label} className="mt-1">
+          <button
+            type="button"
+            onClick={() => toggleArea(g.label)}
+            aria-expanded={open}
+            aria-label={n ? `${g.label}, ${n} waiting` : undefined}
+            className={cx("flex w-full items-center gap-2.5 rounded-[6px] px-2.5 text-left font-semibold text-fg hover:bg-surface-3", big ? "min-h-[44px] text-[15px]" : "min-h-[34px] text-[14px] pointer-coarse:min-h-[44px]")}
+            data-testid={`nav-area-${g.label}`}
+          >
+            <span className={here ? "text-primary-text" : "text-fg-2"} aria-hidden>{icon}</span>
+            <span className="min-w-0 flex-1">{g.label}</span>
+            <CountBadge n={n} />
+            <ChevronDown size={14} aria-hidden className={cx("shrink-0 text-muted transition-transform", !open && "-rotate-90")} />
+          </button>
+          {open && <ul className="mb-1 mt-0.5 flex flex-col gap-px">{items.map((i) => entry(i, big))}</ul>}
+        </li>
+      );
+    });
+
+  /** The sidebar's icon-only column: one icon per area (its first page), the open area tinted. */
+  const rail = nav.map((g) => {
+    const here = g === activeGroup;
+    const n = areaBadge(g);
+    return (
+      <li key={g.label}>
+        <Link
+          href={groupEntries(g)[0]?.href ?? groupHref(g)}
+          title={g.label}
+          aria-label={n ? `${g.label}, ${n} waiting` : g.label}
+          aria-current={here ? "page" : undefined}
+          className={cx("relative mx-auto grid size-10 place-items-center rounded-[6px]", here ? "bg-[var(--nav-active-bg)] text-primary-text" : "text-fg-2 hover:bg-surface-3 hover:text-fg")}
+        >
+          {ICONS[g.icon]}
+          <CountBadge n={n} className="absolute -right-1 -top-1" />
+        </Link>
+      </li>
+    );
+  });
+
+  const foot = (big = false, iconsOnly = false) => {
+    const row = (href: string, label: string, icon: React.ReactNode, testId?: string) => {
+      const on = pathname === href || pathname.startsWith(href + "/");
+      return iconsOnly ? (
+        <li key={href}>
+          <Link href={href} title={label} aria-label={label} aria-current={on ? "page" : undefined} className={cx("mx-auto grid size-10 place-items-center rounded-[6px]", on ? "bg-[var(--nav-active-bg)] text-primary-text" : "text-fg-2 hover:bg-surface-3 hover:text-fg")} data-testid={testId}>
+            {icon}
+          </Link>
+        </li>
+      ) : (
+        <li key={href}>
+          <Link href={href} aria-current={on ? "page" : undefined} data-testid={testId} className={cx("relative flex items-center gap-2.5 rounded-[6px] px-2.5 font-medium", big ? "min-h-[44px] text-[15px]" : "min-h-[34px] text-[14px] pointer-coarse:min-h-[44px]", on ? "bg-[var(--nav-active-bg)] text-[var(--nav-active-fg)] before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:rounded-[2px] before:bg-primary" : "text-fg hover:bg-surface-3")}>
+            <span className={on ? "text-primary-text" : "text-fg-2"} aria-hidden>{icon}</span>
+            {label}
+          </Link>
+        </li>
+      );
+    };
+    return (
+      <ul className="flex flex-col gap-0.5">
+        {hasSetup && row("/setup", "Set-up", <Settings size={16} />, big ? undefined : "sidebar-setup")}
+        {hasSettings && row("/admin/settings", "Settings", <SlidersHorizontal size={16} />)}
+        {row("/help", "Help", <HelpCircle size={16} />)}
+      </ul>
+    );
+  };
+
+  return (
+    <div className="min-h-dvh">
+      <a href="#main" className="sr-only z-[70] rounded-[6px] bg-surface px-3 py-2 text-[14px] font-medium text-fg shadow-[var(--shadow-pop)] focus:not-sr-only focus:fixed focus:left-3 focus:top-3">
+        Skip to the page
+      </a>
+      <NavigationProgress />
+      <RowClicks />
+
+      {/* Sidebar from 1024 px (ADR-136). */}
+      <aside ref={sideRef} aria-label="Menu" data-testid="sidebar" className="no-print fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-w)] flex-col border-r border-line bg-surface lg:flex">
+        <div className={cx("flex h-14 shrink-0 items-center border-b border-line", collapsed ? "justify-center px-2" : "gap-2.5 px-4")}>
+          <Link href={homeHref} className="flex min-w-0 items-center gap-2.5 rounded-[6px]" aria-label="Bryel's Care home">
+            <LogoMark className="size-7 shrink-0" />
+            {!collapsed && <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-fg" aria-hidden>Bryel&apos;s Care</span>}
+          </Link>
+        </div>
+        <nav aria-label="Main menu" className="min-h-0 flex-1 overflow-y-auto px-2 py-2" onKeyDown={arrowKeys} data-testid="side-menu">
+          <ul className={cx("flex flex-col", collapsed && "gap-1")}>{collapsed ? rail : tree()}</ul>
+        </nav>
+        <div className="shrink-0 border-t border-line px-2 py-2" onKeyDown={arrowKeys}>
+          {foot(false, collapsed)}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Show the menu names" : "Show icons only"}
+            title={collapsed ? "Show the menu names" : "Show icons only"}
+            className={cx("mt-1 flex min-h-[32px] w-full items-center gap-2.5 rounded-[6px] px-2.5 text-[13px] text-muted hover:bg-surface-3 hover:text-fg", collapsed && "justify-center px-0")}
+            data-testid="sidebar-toggle"
+          >
+            {collapsed ? <ChevronsRight size={16} aria-hidden /> : <><ChevronsLeft size={16} aria-hidden /> Icons only</>}
+          </button>
+        </div>
+      </aside>
+
+      <div className="pb-[76px] lg:pb-0 lg:pl-[var(--sidebar-w)]">
+        {demo && <DemoBanner canReset={demo.canReset} sandbox={demo.sandbox} />}
+        {/* Top bar, 56 px. */}
+        <header className="no-print sticky top-0 z-30 border-b border-line bg-surface">
+          <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:px-6">
+            {/* One menu button below 1024 px (B report B12, C report). Floor roles have none (their doors are below). */}
+            {!floor && (
+              <button className="grid size-10 shrink-0 place-items-center rounded-[6px] text-fg-2 hover:bg-surface-3 pointer-coarse:size-11 lg:hidden" onClick={() => setDrawer(true)} aria-label="Open menu" data-testid="open-menu">
+                <Menu size={20} />
+              </button>
+            )}
+            <Link href={homeHref} className="grid min-h-11 min-w-11 shrink-0 place-items-center lg:hidden" aria-label="Bryel's Care home">
+              <LogoMark className="size-8" />
+            </Link>
+            {/* Breadcrumb: Section / Page / record (ADR-136). */}
+            <nav aria-label="You are here" className="hidden min-w-0 shrink lg:block" data-testid="breadcrumb">
+              <ol className="flex min-w-0 items-center gap-1 text-[14px]">
+                {trail.map((c, i) => {
+                  const lastOne = i === trail.length - 1;
+                  return (
+                    <li key={i} className={cx("flex min-w-0 items-center gap-1", !lastOne && "shrink-0")}>
+                      {i > 0 && <ChevronRight size={14} className="shrink-0 text-muted" aria-hidden />}
+                      {"href" in c && c.href && !lastOne ? (
+                        <Link href={c.href} className="truncate rounded-[4px] text-fg-2 hover:text-fg hover:underline">
+                          {c.label}
+                        </Link>
+                      ) : (
+                        <span className={cx("truncate", lastOne ? "font-medium text-fg" : "text-fg-2")} aria-current={lastOne ? "page" : undefined}>
+                          {c.label}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
+            {/* Search in the middle (round 5; ADR-136). ADR-126 "scan": the Scan button stands in its place. */}
+            <div className="flex min-w-0 flex-1 items-center justify-center lg:px-4" data-testid="top-search">
+              {search && <MasterSearchLauncher search={search} userId={user.id} keysOnly={scanFirst} />}
+              {scanFirst && scanButton}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {sites.length > 1 && <div className="hidden shrink-0 xl:block">{siteSwitcher(false)}</div>}
+              {/* The sync chip shows only when something waits to be sent or there is no signal (round 5). */}
+              <SyncChip userId={user.id} />
+              {/* ADR-075/082: "To approve" for office approvers (owner and manager: it is in "Needs me"). */}
+              {showApprovals && !needsMeArea && !floor && (
+                <Link
+                  href="/approvals"
+                  className={cx(topButton, "hidden sm:flex", pathname.startsWith("/approvals") && "text-primary-text")}
+                  aria-label={`To approve, ${approvalCount} waiting`}
+                  title="To approve"
+                  data-testid="top-bar-approvals"
+                >
+                  <ListChecks size={18} aria-hidden />
+                  <CountBadge n={approvalCount} className="absolute -right-0.5 -top-0.5" />
+                </Link>
+              )}
+              {/* Messages: the bell (owner and manager: in "Needs me"). */}
+              {!needsMeArea && (
+                <Link href="/notifications" className={cx(topButton, pathname.startsWith("/notifications") && "text-primary-text")} aria-label={`Messages, ${unreadCount} unread`} title="Messages" data-testid="top-bar-messages">
+                  <Bell size={18} aria-hidden />
+                  <CountBadge n={unreadCount} className="absolute -right-0.5 -top-0.5" />
+                </Link>
+              )}
+              {/* One "?" (floor roles have Help in the bottom bar instead). ADR-136: at every width. */}
+              {loadHelp && !floor && (
+                <div className="block">
+                  <FrameHelp load={loadHelp} withLabel labelClass="hidden xl:inline" />
+                </div>
+              )}
+              <details className="relative shrink-0" data-frame-menu ref={accountRef}>
+                <summary className="ml-1 grid size-9 cursor-pointer list-none place-items-center rounded-full bg-surface-3 text-[13px] font-semibold text-fg-2 hover:bg-[var(--border)] pointer-coarse:size-11 [&::-webkit-details-marker]:hidden" aria-label="Your account, help and set-up" data-testid="account-menu">
+                  {initials}
+                </summary>
+                <div className="absolute right-0 top-11 z-40 w-64 max-w-[calc(100vw-32px)] rounded-[8px] border border-line bg-surface p-1.5 shadow-[var(--shadow-pop)]">
+                  <div className="px-2.5 py-2">
+                    <p className="font-semibold text-fg">{user.name}</p>
+                    <p className="text-[12px] text-muted">{user.roles}</p>
+                    <p className="mt-0.5 text-[12px] text-muted">Site: {site?.name}</p>
+                  </div>
+                  <ul className="border-t border-line py-1">
+                    <li><Link href="/account" className="flex min-h-[36px] items-center rounded-[6px] px-2.5 text-[14px] text-fg hover:bg-surface-3 pointer-coarse:min-h-[44px]">My account and devices</Link></li>
+                    <li><Link href="/help" className="flex min-h-[36px] items-center rounded-[6px] px-2.5 text-[14px] text-fg hover:bg-surface-3 pointer-coarse:min-h-[44px]">Help</Link></li>
+                    {hasSetup && <li><Link href="/setup" className="flex min-h-[36px] items-center rounded-[6px] px-2.5 text-[14px] text-fg hover:bg-surface-3 pointer-coarse:min-h-[44px]" data-testid="account-setup">Set-up</Link></li>}
+                    <li className="lg:hidden">
+                      <button type="button" onClick={() => { accountRef.current?.removeAttribute("open"); setDrawer(true); }} className="flex min-h-[44px] w-full items-center rounded-[6px] px-2.5 text-left text-[14px] text-fg hover:bg-surface-3" data-testid="account-all-screens">
+                        All screens
+                      </button>
+                    </li>
+                    {demo?.canReset && <li><Link href="/admin/demo" className="flex min-h-[36px] items-center rounded-[6px] px-2.5 text-[14px] text-fg hover:bg-surface-3 pointer-coarse:min-h-[44px]">Reset demo data</Link></li>}
+                  </ul>
+                  <div className="border-t border-line pt-1">
+                    <SignOutButton signOut={signOut} variant="menu" />
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </header>
+
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1440px] px-4 py-5 outline-none sm:px-6 lg:px-8 lg:py-6" data-frame-help={loadHelp && !floor ? "on" : undefined}>
           <DeletedNotice pathname={pathname} />
           {/* ADR-132 §6: after a save the record opens at the top with its success message. */}
           <SavedLanding />
@@ -443,16 +552,16 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
         </main>
       </div>
 
-      {/* Bottom bar (phones and tablets): the role's doors, never a second menu button. */}
-      <nav aria-label="Primary" className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur xl:hidden">
+      {/* Bottom bar below 1024 px: the role's doors, never a second menu button. */}
+      <nav aria-label="Primary" className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
         <ul className="mx-auto flex max-w-[560px] justify-around">
           {tabs.map((t) => {
             const active = t.href === activeTab;
             const n = tabBadge(t);
             return (
               <li key={t.href} className="min-w-0 flex-1">
-                <Link href={t.href} aria-current={active ? "page" : undefined} aria-label={n ? withCount(t.label, n) : undefined} className={cx("flex min-h-[56px] flex-col items-center gap-0.5 px-1 py-2 text-center text-[11px] font-medium leading-tight", active ? "text-primary-text" : "text-muted")}>
-                  <span className={cx("relative grid h-7 w-12 place-items-center rounded-full", active && "bg-[var(--lime-100)]")}>
+                <Link href={t.href} aria-current={active ? "page" : undefined} aria-label={n ? withCount(t.label, n) : undefined} className={cx("flex min-h-[56px] flex-col items-center gap-0.5 px-1 py-2 text-center text-[11px] font-medium leading-tight", active ? "text-primary-text" : "text-fg-2")}>
+                  <span className={cx("relative grid h-7 w-12 place-items-center rounded-[6px]", active && "bg-[var(--nav-active-bg)]")}>
                     {TAB_ICONS[t.icon]}
                     <CountBadge n={n} className="absolute -right-0.5 -top-1" />
                   </span>
@@ -464,74 +573,25 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, homeHref = "/dash
         </ul>
       </nav>
 
-      {/* Drawer: the ☰ button (phones and tablets) or "All screens" in the avatar menu (every width). */}
+      {/* Drawer below 1024 px (☰) or "All screens" in the avatar menu: the same tree as the sidebar. */}
       {drawer && (
         <div className="fixed inset-0 z-50" data-testid="drawer">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDrawer(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-[320px] max-w-[86vw] flex-col overflow-y-auto bg-surface p-4 shadow-xl" aria-label="Menu" role="dialog" aria-modal="true">
-            <div className="mb-4 flex items-center justify-between">
-              <Logo className="h-8 w-auto" />
-              <button className="grid size-11 place-items-center rounded-full bg-surface-2" onClick={() => setDrawer(false)} aria-label="Close menu" autoFocus><X size={18} /></button>
+          <aside className="absolute inset-y-0 left-0 flex w-[320px] max-w-[86vw] flex-col bg-surface shadow-xl" aria-label="Menu" role="dialog" aria-modal="true">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
+              <Logo className="h-7 w-auto" />
+              <button className="grid size-11 place-items-center rounded-[6px] text-fg-2 hover:bg-surface-3" onClick={() => setDrawer(false)} aria-label="Close menu" autoFocus><X size={18} /></button>
             </div>
-            {sites.length > 1 && <div className="mb-3">{siteSwitcher(true)}</div>}
-            <div className="mb-4">
-              <DrawerSync userId={user.id} />
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" onKeyDown={arrowKeys}>
+              {sites.length > 1 && <div className="mb-3">{siteSwitcher(true)}</div>}
+              <div className="mb-3">
+                <DrawerSync userId={user.id} />
+              </div>
+              <ul className="flex flex-col">{tree(true)}</ul>
+              <div className="mt-3 border-t border-line pt-3">{foot(true)}</div>
             </div>
-            {nav.map((g) => {
-              const { main, sections } = groupSections(g);
-              const more = sections.flatMap((s) => s.items);
-              const row = (i: NavItem) => (
-                <li key={i.href}>
-                  <Link href={i.href} aria-current={i.href === activeHref ? "page" : undefined} aria-label={badges[i.href] ? withCount(i.label, badges[i.href]) : undefined} className={cx("flex min-h-[44px] items-center justify-between gap-2 rounded-[12px] px-3 py-2.5 text-[15px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
-                    {i.label}
-                    <CountBadge n={badges[i.href]} />
-                  </Link>
-                </li>
-              );
-              if (main.length + more.length <= 1)
-                return (
-                  <Link key={g.label} href={groupHref(g)} className="mb-1 flex min-h-[52px] items-center gap-2.5 border-b border-line px-2 pb-1 text-[16px] font-semibold text-fg">
-                    {ICONS[g.icon]}
-                    {g.label}
-                  </Link>
-                );
-              return (
-                <details key={g.label} className="mb-1 border-b border-line pb-1" open={g === activeGroup}>
-                  <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2.5 px-2 text-[16px] font-semibold text-fg [&::-webkit-details-marker]:hidden">
-                    {ICONS[g.icon]}
-                    <span className="flex flex-1 flex-col leading-tight">
-                      {g.label}
-                      {g.description && <span className="text-[12px] font-normal text-muted">{g.description}</span>}
-                    </span>
-                    <CountBadge n={areaBadge(g)} />
-                    <ChevronDown size={18} className="text-muted" aria-hidden />
-                  </summary>
-                  <ul>{main.map(row)}</ul>
-                  {more.length > 0 && (
-                    <>
-                      <p className="px-3 pb-0.5 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted">More</p>
-                      <ul>{more.map(row)}</ul>
-                    </>
-                  )}
-                </details>
-              );
-            })}
-            <ul className="mt-2">
-              {hasSetup && (
-                <li>
-                  <Link href="/setup" className="flex min-h-[48px] items-center gap-2.5 px-2 text-[16px] font-semibold text-fg">
-                    <Settings size={18} aria-hidden /> Set-up
-                  </Link>
-                </li>
-              )}
-              <li>
-                <Link href="/help" className="flex min-h-[48px] items-center gap-2.5 px-2 text-[16px] font-semibold text-fg">
-                  <HelpCircle size={18} aria-hidden /> Help
-                </Link>
-              </li>
-            </ul>
-            <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">
-              <LogoMark className="size-8" />
+            <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-3">
+              <span className="grid size-8 place-items-center rounded-full bg-surface-3 text-[12px] font-semibold text-fg-2" aria-hidden>{initials}</span>
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium">{user.name}</p>
                 <p className="truncate text-[12px] text-muted">{user.roles}</p>

@@ -38,7 +38,7 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
       <PageIntro>This screen is for the IT person or the site manager: phones and tablets allowed to keep working without signal. Someone asks from the phone itself (on “Working without signal”); you say OK here and pick what it may do offline.</PageIntro>
       <nav aria-label="Device status" className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
-          <Link key={t.key} href={t.key ? `/admin/devices?status=${t.key}` : "/admin/devices"} aria-current={status === t.key ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", status === t.key ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
+          <Link key={t.key} href={t.key ? `/admin/devices?status=${t.key}` : "/admin/devices"} aria-current={status === t.key ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[14px]", status === t.key ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
             {t.label}
           </Link>
         ))}

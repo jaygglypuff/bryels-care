@@ -13,7 +13,7 @@ export function EquipmentWhy({ items, title }: { items: BlockedEquipment[]; titl
   const blocked = items.filter((i) => !i.usable);
   if (!blocked.length) return null;
   return (
-    <div className="rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[15px] text-[var(--warn-fg)]" data-testid="equipment-why" role="status">
+    <div className="rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[15px] text-[var(--warn-fg)]" data-testid="equipment-why" role="status">
       <p className="font-semibold">{title}</p>
       <ul className="mt-2 flex flex-col gap-3">
         {blocked.map((e) => (

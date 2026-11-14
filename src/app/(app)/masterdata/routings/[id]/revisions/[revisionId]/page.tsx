@@ -182,7 +182,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
                       <summary className="flex min-h-[44px] cursor-pointer items-center text-primary-text">
                         How-to sheet: {s.workInstruction.name} (version {s.workInstruction.revisionNo})
                       </summary>
-                      <p className="mt-1 whitespace-pre-wrap rounded-[10px] bg-surface-2/60 p-2 text-[12px]">{s.workInstruction.bodyMarkdown}</p>
+                      <p className="mt-1 whitespace-pre-wrap rounded-[6px] bg-surface-2/60 p-2 text-[12px]">{s.workInstruction.bodyMarkdown}</p>
                     </details>
                   )}
                   {s.parameters.length > 0 && (

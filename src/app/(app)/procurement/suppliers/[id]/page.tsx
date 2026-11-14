@@ -90,7 +90,7 @@ export default async function SupplierAslPage({ params, searchParams }: { params
           ) : (
             <ul className="flex flex-col gap-3">
               {rows.map((r) => (
-                <li key={r.id} id={`item-${r.id}`} className="scroll-mt-24 rounded-[14px] border border-line p-3">
+                <li key={r.id} id={`item-${r.id}`} className="scroll-mt-24 rounded-[8px] border border-line p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="min-w-0">
                       <span className="font-semibold">{r.materialName}</span> <span className="font-mono text-[12px] text-muted">{r.materialCode}</span>
@@ -114,7 +114,7 @@ export default async function SupplierAslPage({ params, searchParams }: { params
                     </p>
                   )}
                   {r.pending ? (
-                    <div className="mt-2 rounded-[10px] bg-surface-2 p-3 text-[14px]">
+                    <div className="mt-2 rounded-[6px] bg-surface-2 p-3 text-[14px]">
                       <p>
                         <strong>{r.pending.action === "suspend" ? "Stop buying" : "Start buying"} — suggested</strong> by {r.pending.proposedByName}, {fmtDateTime(r.pending.proposedAt)}: {r.pending.note}
                       </p>

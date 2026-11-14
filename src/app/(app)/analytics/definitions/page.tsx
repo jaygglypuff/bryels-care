@@ -89,7 +89,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
         </div>
         <ul className="flex flex-col gap-2 md:hidden">
           {d.entries.map((e) => (
-            <li key={e.code} className="rounded-[12px] border border-line bg-surface p-3">
+            <li key={e.code} className="rounded-[8px] border border-line bg-surface p-3">
               <div className="flex items-start justify-between gap-2">
                 <span className="font-medium">{e.name}</span>
                 <Chip tone={e.label === "actual" ? "neu" : "warn"}>{LABEL_TEXT[e.label]}</Chip>

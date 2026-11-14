@@ -44,7 +44,7 @@ export default async function UomPage() {
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {units.map((u) => (
-              <li key={u.id} className="rounded-[12px] border border-line p-3">
+              <li key={u.id} className="rounded-[8px] border border-line p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold">{u.name} <span className="font-mono text-[13px] text-muted">({u.code})</span></span>
                   <span className="flex gap-1">
@@ -93,7 +93,7 @@ export default async function UomPage() {
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {current.map((c) => (
-                <li key={c.id} className="rounded-[12px] border border-line p-3">
+                <li key={c.id} className="rounded-[8px] border border-line p-3">
                   <p className="font-mono text-[14px]">
                     1 {c.fromCode} = {fmtFactor(c.factor)} {c.toCode}
                   </p>
@@ -112,7 +112,7 @@ export default async function UomPage() {
           <CardTitle>Waiting for a second approval ({pending.length})</CardTitle>
           <ul className="space-y-3">
             {pending.map((c) => (
-              <li key={c.id} className="rounded-[14px] border border-line p-3">
+              <li key={c.id} className="rounded-[8px] border border-line p-3">
                 <p className="text-[14px]">
                   <span className="font-mono">1 {c.fromCode} = {fmtFactor(c.factor)} {c.toCode}</span> · {c.materialCode ? `${c.materialCode} only` : "all materials"} · v{c.revisionNo}
                 </p>

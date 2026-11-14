@@ -32,7 +32,7 @@ function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; 
   const choose = (lot: AdjustmentLotOption) => set({ lot, options: [], message: null, locationId: lot.shelves[0]?.id ?? "", unit: friendlyUnit(lot.baseUom) });
   const id = (f: string) => `${f}_${i}`;
   return (
-    <fieldset className="grid min-w-0 gap-3 rounded-[16px] border border-line p-3" data-testid={`adjustment-line-${i + 1}`}>
+    <fieldset className="grid min-w-0 gap-3 rounded-[8px] border border-line p-3" data-testid={`adjustment-line-${i + 1}`}>
       <legend className="px-1 text-[13px] font-medium text-muted">Lot {i + 1}</legend>
       <input type="hidden" name={id("note")} value="" />
       <ScanOrPick
@@ -76,7 +76,7 @@ function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; 
                   ["increase", "Add", <Plus key="p" size={16} />],
                 ] as const
               ).map(([v, t, icon]) => (
-                <label key={v} className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[12px] border border-line px-3 text-[14px] has-[:checked]:border-primary has-[:checked]:bg-primary-soft has-[:checked]:font-semibold">
+                <label key={v} className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[8px] border border-line px-3 text-[14px] has-[:checked]:border-primary has-[:checked]:bg-primary-soft has-[:checked]:font-semibold">
                   <input type="radio" name={id("direction")} value={v} checked={row.direction === v} onChange={() => set({ direction: v })} className="size-5 accent-[var(--primary)]" />
                   {icon} {t}
                 </label>

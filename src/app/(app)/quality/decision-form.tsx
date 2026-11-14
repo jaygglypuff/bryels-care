@@ -54,7 +54,7 @@ export function DecisionForm({
           <label
             key={o.value}
             className={cx(
-              "flex cursor-pointer flex-col gap-1 rounded-[12px] border px-3 py-2.5 text-[14px]",
+              "flex cursor-pointer flex-col gap-1 rounded-[8px] border px-3 py-2.5 text-[14px]",
               o.blocker ? "cursor-not-allowed border-line bg-surface-2 opacity-70" : choice === o.value ? "border-ring bg-primary-soft" : "border-line-strong hover:bg-surface-2",
             )}
           >

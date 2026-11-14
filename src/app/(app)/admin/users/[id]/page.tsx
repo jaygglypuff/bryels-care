@@ -212,7 +212,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                       {canAssign && (
                         <details className="mt-2">
                           <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Change</summary>
-                          <div className="mt-3 flex flex-col gap-4 rounded-[14px] bg-surface-2 p-3">
+                          <div className="mt-3 flex flex-col gap-4 rounded-[8px] bg-surface-2 p-3">
                             {!a.orgWide && siteWh.length > 0 && (
                               <CommandForm userId={u.id} op="scope" label="Save warehouse limit" hidden={{ assignmentId: a.id }} reason={{ label: "Reason" }}>
                                 <fieldset className="flex flex-wrap gap-3">

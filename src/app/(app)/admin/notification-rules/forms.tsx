@@ -24,7 +24,7 @@ type Opts = { kinds: { kind: string; label: string }[]; roles: { code: string; n
 
 function RoleBoxes({ name, label, selected, roles, error }: { name: string; label: string; selected: string[]; roles: Opts["roles"]; error?: string }) {
   return (
-    <fieldset className="min-w-0 rounded-[14px] border border-line p-2">
+    <fieldset className="min-w-0 rounded-[8px] border border-line p-2">
       <legend className="px-1 text-[13px] font-medium">{label}</legend>
       <div className="grid gap-1 sm:grid-cols-2">
         {roles.map((r) => (

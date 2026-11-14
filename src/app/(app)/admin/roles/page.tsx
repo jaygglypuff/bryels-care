@@ -67,7 +67,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
           {rows.length === 0 ? (
             <EmptyState title="No permission matches the filter" />
           ) : (
-            <div className="max-h-[640px] overflow-auto rounded-[14px] border border-line">
+            <div className="max-h-[640px] overflow-auto rounded-[8px] border border-line">
               <table className="w-full border-collapse text-[12px]">
                 <thead className="sticky top-0 bg-surface">
                   <tr>

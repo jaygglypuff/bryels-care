@@ -16,6 +16,8 @@ import { masterSearchAction } from "./search-actions";
 
 export const dynamic = "force-dynamic";
 
+const SIDEBAR_SCRIPT = `try{if(localStorage.getItem("bc.sidebar")==="collapsed")document.documentElement.dataset.sidebar="collapsed"}catch(e){}`;
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireContext();
   const can = (p: Parameters<typeof ctx.can>[0]) => ctx.can(p);
@@ -33,14 +35,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const maintenance = await getMaintenanceState(db, ctx.organizationId);
   // ADR-126: the screen settings (top bar: search or Scan; search open to everyone or stock people only).
   const prefs = await screenPreferences(ctx);
+  const setup = setupSections(can, ctx.roleCodes);
   return (
+    <>
+    {/* ADR-136: the collapsed sidebar (icons only) is remembered on the device; set before paint so nothing jumps. */}
+    <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCRIPT }} />
     <Shell
       nav={nav}
       tabs={tabs}
       homeHref={homeHref(ctx.roleCodes)}
       floor={isFloor(persona)}
       needsMeArea={AREAS_BY_PERSONA[persona].some((a) => a.label === "Needs me") && nav.some((g) => g.label === "Needs me")}
-      hasSetup={setupSections(can, ctx.roleCodes).length > 0}
+      hasSetup={setup.length > 0}
+      hasSettings={setup.some((x) => x.items.some((i) => i.href === "/admin/settings"))}
       user={{ id: ctx.userId, name: ctx.displayName, roles: ctx.roleCodes.map((r) => ROLE_BUNDLES[r]?.name ?? r).join(", ") }}
       sites={ctx.allowedSites}
       currentSiteId={ctx.currentSiteId}
@@ -61,5 +68,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* ADR-135: how numbers are typed on Weigh and Step (ui.number_entry); a person's own choice on the device wins. */}
       <NumberEntryProvider value={prefs.numberEntry}>{children}</NumberEntryProvider>
     </Shell>
+    </>
   );
 }

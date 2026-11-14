@@ -26,7 +26,7 @@ export function useActionForm(action: (prev: ActionState, fd: FormData) => Promi
     startTransition(() => dispatch(fd));
   };
   const confirmBox = asking ? (
-    <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-3 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3.5">
+    <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-3 rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3.5">
       <p className="text-[15px] font-medium text-fg">{confirmText}</p>
       <div className="flex flex-wrap gap-2">
         <Button

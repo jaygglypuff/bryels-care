@@ -45,7 +45,7 @@ export default async function PacksPage() {
         {outputs.length === 0 ? (
           <EmptyState title="Nothing to box">A finished batch shows here when QA said OK and it still has units to box. Nothing to do now.</EmptyState>
         ) : (
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" data-testid="to-box">
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" data-testid="to-box">
             {outputs.map((o) => (
               <li key={o.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">

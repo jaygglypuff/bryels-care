@@ -36,13 +36,13 @@ export function ReverseForm({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center rounded-full border border-transparent bg-[#c62828] px-5 text-[14px] font-medium text-white hover:bg-[#8a1c1c]">
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center rounded-[6px] border border-transparent bg-[#c62828] px-5 text-[14px] font-medium text-white hover:bg-[#8a1c1c]">
         Undo this stock change…
       </button>
     );
   }
   return (
-    <form action={action} className="space-y-4 rounded-[18px] border border-[var(--bad-bd)] bg-[var(--bad-bg)]/40 p-4" aria-label="Undo this stock change">
+    <form action={action} className="space-y-4 rounded-[8px] border border-[var(--bad-bd)] bg-[var(--bad-bg)]/40 p-4" aria-label="Undo this stock change">
       <p className="text-[14px] text-fg">
         <strong>This saves an undo</strong> that puts {summary} back. The first stock change stays on record unchanged. The undo is refused if the stock has moved on since.
       </p>
@@ -88,7 +88,7 @@ export function ReverseForm({
         <SubmitButton variant="danger" disabled={typed.trim().toUpperCase() !== "REVERSE"} pendingText="Saving the undo…">
           Undo it (kept on record)
         </SubmitButton>
-        <button type="button" onClick={() => setOpen(false)} className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px]">
+        <button type="button" onClick={() => setOpen(false)} className="min-h-[44px] rounded-[6px] border border-line bg-surface px-5 text-[14px]">
           Cancel
         </button>
       </div>

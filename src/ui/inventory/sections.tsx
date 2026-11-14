@@ -27,7 +27,7 @@ const TONE: Record<LocationSection, string> = {
 function SectionIcon({ section, size = 20 }: { section: LocationSection; size?: number }) {
   const I = ICON[section];
   return (
-    <span className={cx("inline-flex shrink-0 items-center justify-center rounded-[10px] p-2", TONE[section])} aria-hidden>
+    <span className={cx("inline-flex shrink-0 items-center justify-center rounded-[6px] p-2", TONE[section])} aria-hidden>
       <I size={size} />
     </span>
   );
@@ -36,7 +36,7 @@ function SectionIcon({ section, size = 20 }: { section: LocationSection; size?: 
 /** Big tappable tile: "Raw materials — 12 lots". */
 export function SectionTile({ section, label, hint, lots, blockedLots, locations, href }: { section: LocationSection; label: string; hint: string; lots: number; blockedLots: number; locations: number; href: string }) {
   return (
-    <Link href={href} className="flex min-h-[96px] min-w-0 items-start gap-3 rounded-[16px] border border-line bg-surface p-4 transition-shadow hover:shadow-[var(--shadow-pop)] active:bg-surface-2" data-testid={`section-tile-${section}`}>
+    <Link href={href} className="flex min-h-[96px] min-w-0 items-start gap-3 rounded-[8px] border border-line bg-surface p-4 transition-shadow hover:shadow-[var(--shadow-pop)] active:bg-surface-2" data-testid={`section-tile-${section}`}>
       <SectionIcon section={section} size={22} />
       <span className="min-w-0 flex-1">
         <span className="block text-[16px] font-semibold leading-tight">{label}</span>

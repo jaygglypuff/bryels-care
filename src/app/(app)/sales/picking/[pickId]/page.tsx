@@ -113,7 +113,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
             {canScan && short.length > 0 ? "Taken so far" : "To take"} · {v.progress.picked} of {v.progress.toPick} ({v.progress.pct}%)
           </CardTitle>
           <div className="mb-3 h-3 w-full overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
-            <div className="h-3 rounded-full bg-primary" style={{ width: `${v.progress.pct}%` }} />
+            <div className="h-3 rounded-[6px] bg-primary" style={{ width: `${v.progress.pct}%` }} />
           </div>
           {v.rows.length === 0 ? (
             <EmptyState title="Nothing set aside">This order has no stock set aside any more. Ask the office.</EmptyState>
@@ -128,7 +128,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
                   data-lot={r.lotNumber}
                   data-box={r.boxNumber ?? ""}
                   data-qty={String(Number(r.qty) - Number(r.picked))}
-                  className={`rounded-[14px] border p-3 ${r.done ? "border-[var(--ok-bd)] bg-[var(--ok-bg)]" : r.blocked ? "border-[var(--bad-bd)] bg-[var(--bad-bg)]" : "border-line"}`}
+                  className={`rounded-[8px] border p-3 ${r.done ? "border-[var(--ok-bd)] bg-[var(--ok-bg)]" : r.blocked ? "border-[var(--bad-bd)] bg-[var(--bad-bg)]" : "border-line"}`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[16px] font-semibold">

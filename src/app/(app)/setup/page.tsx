@@ -37,7 +37,7 @@ export default async function SetupPage() {
             const rare = sec.items.filter((i) => i.advanced);
             const row = (i: (typeof sec.items)[number]) => (
               <li key={i.href}>
-                <Link href={i.href} className="flex min-h-[48px] items-center justify-between gap-2 rounded-[12px] px-3 text-[15px] font-medium text-fg hover:bg-surface-2">
+                <Link href={i.href} className="flex min-h-[48px] items-center justify-between gap-2 rounded-[8px] px-3 text-[15px] font-medium text-fg hover:bg-surface-2">
                   {i.label}
                   <ChevronRight size={16} className="shrink-0 text-muted" aria-hidden />
                 </Link>
@@ -50,7 +50,7 @@ export default async function SetupPage() {
                 {daily.length > 0 && <ul className="mt-2 divide-y divide-line">{daily.map(row)}</ul>}
                 {rare.length > 0 && (
                   <details className="mt-1">
-                    <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between rounded-[12px] px-3 text-[14px] font-medium text-muted hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between rounded-[8px] px-3 text-[14px] font-medium text-muted hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
                       {daily.length > 0 ? "Less used" : "Open the list"} <ChevronDown size={14} aria-hidden />
                     </summary>
                     <ul className="divide-y divide-line">{rare.map(row)}</ul>

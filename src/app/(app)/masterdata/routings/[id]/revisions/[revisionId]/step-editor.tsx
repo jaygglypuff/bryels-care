@@ -159,13 +159,13 @@ export function RoutingStepEditor({
           <Input id="r-chg" value={chg} onChange={(e) => setChg(e.target.value)} />
         </Field>
       </div>
-      {steps.length === 0 && <p className="rounded-[12px] border border-dashed border-line-strong p-4 text-center text-[13px] text-muted">No steps yet. Add the first step.</p>}
+      {steps.length === 0 && <p className="rounded-[8px] border border-dashed border-line-strong p-4 text-center text-[13px] text-muted">No steps yet. Add the first step.</p>}
       {steps.map((s, i) => {
         const err = (k: string) => fe[`steps.${i}.${k}`];
         const pid = `st-${i}`;
         if (shown !== i)
           return (
-            <div key={i} className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 rounded-[16px] border border-line px-3 py-2" data-testid={`step-summary-${i + 1}`}>
+            <div key={i} className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line px-3 py-2" data-testid={`step-summary-${i + 1}`}>
               <p className="min-w-0 text-[15px]">
                 <span className="font-semibold">
                   {i + 1}. {s.name || "New step"}
@@ -176,13 +176,13 @@ export function RoutingStepEditor({
                   {s.parameters.length ? ` · ${s.parameters.length} ${s.parameters.length === 1 ? "reading" : "readings"}` : ""}
                 </span>
               </p>
-              <button type="button" onClick={() => setOpenStep(i)} className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2" aria-label={`Change step ${i + 1}`}>
+              <button type="button" onClick={() => setOpenStep(i)} className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2" aria-label={`Change step ${i + 1}`}>
                 Change
               </button>
             </div>
           );
         return (
-          <fieldset key={i} className="rounded-[16px] border border-line p-3" data-testid={`edit-step-${i + 1}`}>
+          <fieldset key={i} className="rounded-[8px] border border-line p-3" data-testid={`edit-step-${i + 1}`}>
             <legend className="px-1 text-[12px] font-semibold text-muted">Step {i + 1}</legend>
             <div className="grid gap-3 sm:grid-cols-6">
               <div className="sm:col-span-2">
@@ -280,7 +280,7 @@ export function RoutingStepEditor({
               {s.parameters.map((p, k) => {
                 const perr = (f: string) => fe[`steps.${i}.parameters.${k}.${f}`];
                 return (
-                  <div key={k} className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 rounded-[12px] bg-surface-2/60 p-2.5 sm:grid-cols-6">
+                  <div key={k} className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 rounded-[8px] bg-surface-2/60 p-2.5 sm:grid-cols-6">
                     <label className="col-span-2 flex flex-col gap-0.5 text-[12px] font-medium sm:col-span-3">
                       What to record
                       <Input aria-label="Parameter name" placeholder="e.g. Oil temperature" value={p.name} onChange={(e) => setParam(i, k, { name: e.target.value })} />
@@ -298,7 +298,7 @@ export function RoutingStepEditor({
                       <Input aria-label="Unit" placeholder="°C, min, pcs" value={p.uom} onChange={(e) => setParam(i, k, { uom: e.target.value })} disabled={p.valueKind !== "numeric"} />
                     </label>
                     <div className="flex items-end justify-end">
-                      <button type="button" aria-label="Remove parameter" onClick={() => set(i, { parameters: s.parameters.filter((_, j) => j !== k) })} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
+                      <button type="button" aria-label="Remove parameter" onClick={() => set(i, { parameters: s.parameters.filter((_, j) => j !== k) })} className="inline-flex size-11 items-center justify-center rounded-[6px] text-[var(--bad-fg)] hover:bg-surface-2">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -327,7 +327,7 @@ export function RoutingStepEditor({
               <button
                 type="button"
                 onClick={() => set(i, { parameters: [...s.parameters, { code: "", name: "", valueKind: "numeric", uom: "", minValue: "", targetValue: "", maxValue: "", isRequired: true }] })}
-                className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-line px-3 text-[13px] hover:bg-surface-2"
+                className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-[6px] border border-line px-3 text-[13px] hover:bg-surface-2"
               >
                 <Plus size={14} /> Add a reading (parameter)
               </button>
@@ -341,16 +341,16 @@ export function RoutingStepEditor({
             </div>
 
             <div className="mt-2 flex flex-wrap gap-1">
-              <button type="button" onClick={() => setOpenStep(null)} className="mr-auto inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">
+              <button type="button" onClick={() => setOpenStep(null)} className="mr-auto inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2">
                 Done with this step
               </button>
-              <button type="button" aria-label={`Move step ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
+              <button type="button" aria-label={`Move step ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-[6px] hover:bg-surface-2">
                 <ArrowUp size={16} />
               </button>
-              <button type="button" aria-label={`Move step ${i + 1} down`} onClick={() => move(i, 1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
+              <button type="button" aria-label={`Move step ${i + 1} down`} onClick={() => move(i, 1)} className="inline-flex size-11 items-center justify-center rounded-[6px] hover:bg-surface-2">
                 <ArrowDown size={16} />
               </button>
-              <button type="button" aria-label={`Remove step ${i + 1}`} onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
+              <button type="button" aria-label={`Remove step ${i + 1}`} onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))} className="inline-flex size-11 items-center justify-center rounded-[6px] text-[var(--bad-fg)] hover:bg-surface-2">
                 <Trash2 size={16} />
               </button>
             </div>
@@ -362,7 +362,7 @@ export function RoutingStepEditor({
         onClick={() => {
           setSteps((ss) => [...ss, emptyStep()]);
           setOpenStep(steps.length);
-        }}         className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
+        }}         className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-[6px] border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
       >
         <Plus size={16} /> Add step
       </button>

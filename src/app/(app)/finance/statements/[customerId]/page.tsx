@@ -76,7 +76,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
         <p className="mb-2 mt-4 text-[14px] font-semibold">How late</p>
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           {AGING_BUCKETS.map((b) => (
-            <li key={b} className="rounded-[12px] border border-line px-3 py-2">
+            <li key={b} className="rounded-[8px] border border-line px-3 py-2">
               <p className="text-[12px] font-semibold text-muted">{LATE_WORD[b] ?? b}</p>
               <p className="mt-1 font-semibold tabular-nums">
                 <Money value={st.buckets[b]} />

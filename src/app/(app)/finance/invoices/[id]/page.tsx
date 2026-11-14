@@ -163,7 +163,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
 
         <Card>
           <CardTitle action={<Money value={i.totalAmount} className="text-value" />}>What the customer pays</CardTitle>
-          <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {d.lines.map((l) => (
               <li key={l.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
                 <span className="min-w-0">

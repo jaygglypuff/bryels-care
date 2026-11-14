@@ -77,7 +77,7 @@ export function NeedsAttention({ items }: { items: AttentionItem[] }) {
   const first = items.slice(0, ATTENTION_MAX);
   const rest = items.slice(ATTENTION_MAX);
   return (
-    <section aria-labelledby="attention-h" className="rounded-[20px] border border-line bg-surface p-4 sm:p-5">
+    <section aria-labelledby="attention-h" className="rounded-[8px] border border-line bg-surface p-4 sm:p-5">
       <h2 id="attention-h" className="font-display text-[18px] font-semibold text-fg">Needs your attention</h2>
       {items.length === 0 ? (
         <p className="mt-3 flex items-center gap-2 text-[15px] text-fg-2">
@@ -118,9 +118,9 @@ const TONES = {
 function HomeCard({ title, icon, tone, value, href, children, label }: { title: string; icon: ReactNode; tone: keyof typeof TONES; value: ReactNode; href: string; children?: ReactNode; label: string }) {
   const t = TONES[tone];
   return (
-    <Link href={href} aria-label={label} className={cx("group flex h-full min-w-0 flex-col rounded-[18px] border p-3.5 transition-shadow hover:shadow-[var(--shadow-pop)] sm:p-4", t.card)}>
+    <Link href={href} aria-label={label} className={cx("group flex h-full min-w-0 flex-col rounded-[8px] border p-3.5 transition-shadow hover:shadow-[var(--shadow-pop)] sm:p-4", t.card)}>
       <span className="flex items-center gap-2">
-        <span className={cx("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full", t.icon)} aria-hidden>
+        <span className={cx("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px]", t.icon)} aria-hidden>
           {icon}
         </span>
         <span className="min-w-0 text-[13px] font-semibold leading-tight text-fg">{title}</span>
@@ -169,7 +169,7 @@ export function HomeCards({ home, approvals, stockHref, batchesHref }: { home: O
         >
           {p.done} of {p.total} {p.total === 1 ? "batch" : "batches"} done this week
           <span className="mt-1.5 block h-2 overflow-hidden rounded-full bg-surface" role="img" aria-label={`${p.pct ?? 0}% of this week's batches released by QA`}>
-            <span className="block h-full rounded-full" style={{ width: `${p.pct ?? 0}%`, background: slotColor(2) }} />
+            <span className="block h-full rounded-[6px]" style={{ width: `${p.pct ?? 0}%`, background: slotColor(2) }} />
           </span>
         </HomeCard>
       )}
@@ -274,7 +274,7 @@ export function ProductionByStage({ oc, all }: { oc: OperationsCenter; all: bool
   if (oc.stages.length === 0) return null;
   const max = Math.max(1, ...oc.stages.map((s) => s.count));
   return (
-    <section aria-labelledby="stages-h" className="min-w-0 rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6">
+    <section aria-labelledby="stages-h" className="min-w-0 rounded-[8px] bg-surface p-5 border border-line sm:p-6">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 id="stages-h" className="font-display text-[17px] font-semibold text-fg">Production by stage</h2>
         {/* ADR-110 C0: the card opens "How work flows" (every step from Ask to buy to Invoice, with counts). */}
@@ -310,7 +310,7 @@ export function ProductionByStage({ oc, all }: { oc: OperationsCenter; all: bool
 
 export function RecentActivity({ rows, showSite }: { rows: ActivityRow[]; showSite: boolean }) {
   return (
-    <section aria-labelledby="activity-h" className="min-w-0 rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6">
+    <section aria-labelledby="activity-h" className="min-w-0 rounded-[8px] bg-surface p-5 border border-line sm:p-6">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 id="activity-h" className="font-display text-[17px] font-semibold text-fg">Recent activity</h2>
         <Link href="/admin/audit" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">

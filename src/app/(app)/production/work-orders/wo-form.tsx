@@ -136,7 +136,7 @@ export function WorkOrderForm({ mode, options, initial }: { mode: "create" | "ed
         <Field label="Notes" htmlFor="notes" error={fe.notes}>
           <Textarea id="notes" name="notes" defaultValue={initial?.notes ?? ""} maxLength={1000} />
         </Field>
-        {preview && <p className="rounded-[12px] border border-line bg-surface-2/60 px-3.5 py-2.5 text-[13px]">{preview}</p>}
+        {preview && <p className="rounded-[8px] border border-line bg-surface-2/60 px-3.5 py-2.5 text-[13px]">{preview}</p>}
         <FormMessage state={state} />
         <SubmitButton size="lg" variant="cta" pendingText="Saving…">
           {mode === "create" ? "Create production order" : "Save changes"}

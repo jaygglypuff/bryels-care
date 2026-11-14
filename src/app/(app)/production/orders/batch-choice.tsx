@@ -25,7 +25,7 @@ export function BatchChoice({ pieces, refBatchG, yieldPct, pieceG, largestG, lar
   const opt = (value: "split" | "one" | "custom", title: string, detail: string, disabled = false) => (
     <label
       className={cx(
-        "flex min-h-[56px] cursor-pointer items-start gap-3 rounded-[14px] border px-3.5 py-3 text-[15px]",
+        "flex min-h-[56px] cursor-pointer items-start gap-3 rounded-[8px] border px-3.5 py-3 text-[15px]",
         effective === value ? "border-primary bg-[var(--primary-bg,rgba(0,0,0,0.03))]" : "border-line",
         disabled && "cursor-not-allowed opacity-60",
       )}
@@ -47,7 +47,7 @@ export function BatchChoice({ pieces, refBatchG, yieldPct, pieceG, largestG, lar
       {/* ADR-133 item 8: one choice when splitting gives one batch (never the same choice twice). */}
       {batchChoiceOptions(p, word).map((o) => opt(o.value, o.title, o.detail, o.disabled))}
       {effective === "custom" && (
-        <div className="grid gap-2 rounded-[14px] border border-line p-3">
+        <div className="grid gap-2 rounded-[8px] border border-line p-3">
           {sizes.map((v, i) => (
             <div key={i} className="flex items-center gap-2">
               <label className="w-20 shrink-0 text-[15px]" htmlFor={`bsize-${i}`}>
@@ -56,7 +56,7 @@ export function BatchChoice({ pieces, refBatchG, yieldPct, pieceG, largestG, lar
               <Input id={`bsize-${i}`} name="batchSizes" inputMode="numeric" value={v} placeholder={String(p.split.sizes[i] ?? "")} onChange={(e) => setSizes(sizes.map((x, j) => (j === i ? e.target.value.replace(/[^0-9,]/g, "") : x)))} className="min-h-[48px] min-w-0 flex-1" />
               <span className="text-[14px] text-fg-2">{word}</span>
               {sizes.length > 1 && (
-                <button type="button" aria-label={`Remove batch ${i + 1}`} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line" onClick={() => setSizes(sizes.filter((_, j) => j !== i))}>
+                <button type="button" aria-label={`Remove batch ${i + 1}`} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[6px] border border-line" onClick={() => setSizes(sizes.filter((_, j) => j !== i))}>
                   <Minus size={16} aria-hidden />
                 </button>
               )}

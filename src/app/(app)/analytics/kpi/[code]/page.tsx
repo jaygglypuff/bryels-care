@@ -132,7 +132,7 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
             </div>
             <ul className="flex flex-col gap-2 md:hidden">
               {r.rows.map((row, i) => (
-                <li key={`${row.refId}-${i}`} className="rounded-[12px] border border-line bg-surface p-3">
+                <li key={`${row.refId}-${i}`} className="rounded-[8px] border border-line bg-surface p-3">
                   <div className="flex items-start justify-between gap-2">
                     <RecordRef r={row} />
                     <CategoryChip category={row.category} />
@@ -144,7 +144,7 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
                   </p>
                 </li>
               ))}
-              <li className="rounded-[12px] bg-surface-2 p-3 text-[13px] font-semibold">Total {totalLine(r)}</li>
+              <li className="rounded-[8px] bg-surface-2 p-3 text-[13px] font-semibold">Total {totalLine(r)}</li>
             </ul>
           </>
         )}

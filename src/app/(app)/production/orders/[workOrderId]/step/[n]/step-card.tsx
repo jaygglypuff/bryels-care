@@ -45,19 +45,19 @@ function StepCheck(p: Props) {
   const others = p.checkers.filter((c) => c.id !== step.record?.conductedById);
   if (p.viewer.canCheck && !p.viewer.isDoer)
     return (
-      <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
+      <section className="grid gap-3 rounded-[8px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
         <h2 className="text-title text-fg">This step waits for your check</h2>
         <p className="text-[16px] text-fg-2">
           {plainWords(step.name)}
           {step.record?.conductedBy ? `, done by ${step.record.conductedBy}` : ""}. Look at the work, then check it on your list.
         </p>
-        <Link href="/production/checks" className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-6 text-[17px] font-semibold text-white">
+        <Link href="/production/checks" className="inline-flex min-h-[56px] w-full items-center justify-center rounded-[6px] bg-cta px-6 text-[17px] font-semibold text-white">
           Open my list: Waiting for you to check
         </Link>
       </section>
     );
   return (
-    <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check" data-testid="step-waits-check">
+    <section className="grid gap-3 rounded-[8px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check" data-testid="step-waits-check">
       <h2 className="flex items-center gap-2 text-title text-fg">
         <UserCheck size={24} aria-hidden /> Saved. Waiting for the second check
       </h2>
@@ -69,7 +69,7 @@ function StepCheck(p: Props) {
         </Button>
       )}
       {p.sameDevice && open && (
-        <form action={action} className="grid gap-3 rounded-[14px] bg-surface-2 p-3" data-testid="check-here-form">
+        <form action={action} className="grid gap-3 rounded-[8px] bg-surface-2 p-3" data-testid="check-here-form">
           <input type="hidden" name="batchId" value={p.batchId} />
           <input type="hidden" name="stepNo" value={step.stepNo} />
           <input type="hidden" name="stepKind" value={step.kind} />
@@ -77,7 +77,7 @@ function StepCheck(p: Props) {
           <p className="text-[16px] font-semibold">Who checks?</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {others.map((c) => (
-              <button key={c.id} type="button" aria-pressed={who?.id === c.id} onClick={() => setWho(c)} className={cx("min-h-[52px] rounded-full border px-4 text-left text-[16px]", who?.id === c.id ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+              <button key={c.id} type="button" aria-pressed={who?.id === c.id} onClick={() => setWho(c)} className={cx("min-h-[52px] rounded-[6px] border px-4 text-left text-[16px]", who?.id === c.id ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
                 {c.displayName}
               </button>
             ))}
@@ -157,7 +157,7 @@ export function StepCard(p: Props) {
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start">
       <section
-        className="rounded-[20px] border border-line bg-surface p-4 sm:p-5"
+        className="rounded-[8px] border border-line bg-surface p-4 sm:p-5"
         aria-label="What to do"
       >
         {step.instruction ? (
@@ -202,7 +202,7 @@ export function StepCard(p: Props) {
           p.nextHref && p.nextLabel ? (
             <Link
               href={p.nextHref}
-              className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white"
+              className="inline-flex min-h-[56px] w-full items-center justify-center rounded-[6px] bg-cta px-8 text-[17px] font-semibold text-white"
             >
               {p.nextLabel}
             </Link>
@@ -212,7 +212,7 @@ export function StepCard(p: Props) {
         ) : step.isWeighing ? (
           <Link
             href={p.weighHref}
-            className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white"
+            className="inline-flex min-h-[56px] w-full items-center justify-center rounded-[6px] bg-cta px-8 text-[17px] font-semibold text-white"
           >
             Weigh
           </Link>
@@ -221,7 +221,7 @@ export function StepCard(p: Props) {
         ) : step.isTransfer ? (
           <Link
             href={p.finishHref}
-            className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white"
+            className="inline-flex min-h-[56px] w-full items-center justify-center rounded-[6px] bg-cta px-8 text-[17px] font-semibold text-white"
           >
             Go to Finish
           </Link>
@@ -243,7 +243,7 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
   const [state, action] = useInPlaceAction(equipmentCardAction);
   const open = step.status === "pending" || step.status === "in_progress";
   return (
-    <section className="rounded-[16px] border border-line bg-surface p-4" aria-label="Equipment" data-testid="step-equipment">
+    <section className="rounded-[8px] border border-line bg-surface p-4" aria-label="Equipment" data-testid="step-equipment">
       <h2 className="flex items-center gap-2 text-[17px] font-semibold text-fg">
         <Wrench size={18} aria-hidden /> Equipment for this step
       </h2>
@@ -302,7 +302,7 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
 function CheckerPick({ checkers, sameDevice }: { checkers: Person[]; sameDevice: boolean }) {
   const [who, setWho] = useState("");
   return (
-    <div className="grid gap-2 rounded-[14px] bg-surface-2 p-3" data-testid="checker-pick">
+    <div className="grid gap-2 rounded-[8px] bg-surface-2 p-3" data-testid="checker-pick">
       <p className="text-[15px] text-fg">A second person checks this step on their own phone after you save.</p>
       {sameDevice && checkers.length > 0 && (
         <>
@@ -359,7 +359,7 @@ function CheckList(p: Props) {
           <li
             key={c.id}
             className={cx(
-              "rounded-[14px] border p-3",
+              "rounded-[8px] border p-3",
               answers[c.id] === "no"
                 ? "border-2 border-[var(--bad-bd)] bg-[var(--bad-bg)]"
                 : "border-line bg-surface",
@@ -381,7 +381,7 @@ function CheckList(p: Props) {
                     aria-pressed={answers[c.id] === a}
                     onClick={() => setAnswers({ ...answers, [c.id]: a })}
                     className={cx(
-                      "inline-flex min-h-[56px] min-w-[88px] items-center justify-center gap-1 rounded-full border text-[17px] font-semibold",
+                      "inline-flex min-h-[56px] min-w-[88px] items-center justify-center gap-1 rounded-[6px] border text-[17px] font-semibold",
                       answers[c.id] === a
                         ? a === "yes"
                           ? "border-transparent bg-primary text-white"
@@ -420,7 +420,7 @@ function CheckList(p: Props) {
       )}
       {p.canPerform && (
         // Round 5 problem 10: ONE button. Nothing answered yet: "All OK" (every answer Yes). Once answered: "Save".
-        <div className="rounded-[20px] bg-surface/95 p-2 lg:static">
+        <div className="rounded-[8px] bg-surface/95 p-2 lg:static">
           {!allAnswered && !Object.values(answers).some(Boolean) ? (
             <SubmitButton name="allOk" value="1" variant="cta" size="lg" pendingText="Saving…" className="w-full">
               All OK
@@ -455,7 +455,7 @@ function WaitCard(p: Props) {
   const early = step.waiting && !step.exceptionApproved;
   return (
     <section
-      className="rounded-[20px] border border-line bg-surface p-5 text-center"
+      className="rounded-[8px] border border-line bg-surface p-5 text-center"
       data-testid="wait-card"
     >
       <Hourglass size={56} className="mx-auto text-muted" aria-hidden />
@@ -540,7 +540,7 @@ function ApprovalForm({
   return (
     <form
       action={action}
-      className="mt-3 grid gap-2 rounded-[14px] bg-surface-2 p-3 text-left"
+      className="mt-3 grid gap-2 rounded-[8px] bg-surface-2 p-3 text-left"
     >
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="stepNo" value={stepNo} />
@@ -678,7 +678,7 @@ function FieldsCard(p: Props) {
                         aria-pressed={values[f.id] === a}
                         onClick={() => set(f.id, a)}
                         className={cx(
-                          "inline-flex min-h-[56px] flex-1 items-center justify-center rounded-full border text-[17px] font-semibold",
+                          "inline-flex min-h-[56px] flex-1 items-center justify-center rounded-[6px] border text-[17px] font-semibold",
                           values[f.id] === a
                             ? "border-transparent bg-primary text-white"
                             : "border-line-strong bg-surface text-fg",
@@ -706,7 +706,7 @@ function FieldsCard(p: Props) {
                   <input type="hidden" name={`correctionCode-${f.id}`} value={why[f.id] ?? ""} />
                   <div className="flex flex-wrap gap-2">
                     {CORRECTION_REASONS.map((r) => (
-                      <button key={r.code} type="button" aria-pressed={why[f.id] === r.code} onClick={() => setWhy({ ...why, [f.id]: r.code })} className={cx("min-h-[52px] rounded-full border px-4 text-[16px]", why[f.id] === r.code ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+                      <button key={r.code} type="button" aria-pressed={why[f.id] === r.code} onClick={() => setWhy({ ...why, [f.id]: r.code })} className={cx("min-h-[52px] rounded-[6px] border px-4 text-[16px]", why[f.id] === r.code ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
                         {r.label}
                       </button>
                     ))}
@@ -769,7 +769,7 @@ function FieldsCard(p: Props) {
           </p>
         )}
         {p.canPerform && (
-          <div className="rounded-[20px] bg-surface/95 p-2 lg:static">
+          <div className="rounded-[8px] bg-surface/95 p-2 lg:static">
             <SubmitButton
               id={`done-${step.stepNo}`}
               variant={p.quietDone ? "secondary" : "cta"}

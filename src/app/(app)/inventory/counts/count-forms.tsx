@@ -22,7 +22,7 @@ export function PlanCountForm({ locations, counters, kinds }: { locations: { id:
         {fe.locationIds && <p className="mb-1 text-[12px] text-[var(--bad-fg)]">{fe.locationIds}</p>}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {locations.map((l) => (
-            <label key={l.id} className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-line px-2 text-[14px]">
+            <label key={l.id} className="flex min-h-[44px] items-center gap-2 rounded-[6px] border border-line px-2 text-[14px]">
               <input type="checkbox" name="locationIds" value={l.id} className="size-5 shrink-0 accent-[var(--primary)]" />
               <span className="min-w-0 break-words"><span className="font-medium">{l.name}</span> <span className="font-mono text-[12px] text-muted">{l.code}</span></span>
             </label>
@@ -36,7 +36,7 @@ export function PlanCountForm({ locations, counters, kinds }: { locations: { id:
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {counters.map((c) => (
-              <label key={c.id} className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-line px-2 text-[14px]">
+              <label key={c.id} className="flex min-h-[44px] items-center gap-2 rounded-[6px] border border-line px-2 text-[14px]">
                 <input type="checkbox" name="counterUserIds" value={c.id} className="size-5 accent-[var(--primary)]" /> {c.name}
               </label>
             ))}
@@ -102,7 +102,7 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
       {key && <input type="hidden" name="idempotencyKey" value={key} />}
       <input type="hidden" name="locationId" value={location.id} />
       {lines.some((l) => l.unlabelled) && (
-        <ul className="divide-y divide-line rounded-[12px] border border-line text-[14px]" aria-label={`Found without a label on ${location.code}`}>
+        <ul className="divide-y divide-line rounded-[8px] border border-line text-[14px]" aria-label={`Found without a label on ${location.code}`}>
           {lines.filter((l) => l.unlabelled).map((l, i) => (
             <li key={`${l.lotNumber ?? "x"}-${i}`} className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 px-3 py-2">
               <span className="min-w-0">
@@ -120,10 +120,10 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
         </ul>
       )}
       <div role="radiogroup" aria-label="Does it have a label?" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[12px] border border-line px-3 text-[14px] has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
+        <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[8px] border border-line px-3 text-[14px] has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
           <input type="radio" name={id("mode")} checked={mode === "lot"} onChange={() => setMode("lot")} className="size-5 accent-[var(--primary)]" /> It has a label
         </label>
-        <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[12px] border border-line px-3 text-[14px] has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
+        <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[8px] border border-line px-3 text-[14px] has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
           <input type="radio" name={id("mode")} checked={mode === "unlabelled"} onChange={() => setMode("unlabelled")} className="size-5 accent-[var(--primary)]" /> No label (I found it here)
         </label>
       </div>
@@ -195,7 +195,7 @@ export function ApproveForm({ countId, lines, reasons, step }: { countId: string
       {/* One card per line (phone 390 px: no table to scroll sideways; ADR-088). */}
       <ul className="flex flex-col gap-2" aria-label="Differences to check">
         {lines.map((l) => (
-          <li key={l.id} className="rounded-[16px] border border-line p-3" data-testid="count-review-line">
+          <li key={l.id} className="rounded-[8px] border border-line p-3" data-testid="count-review-line">
             <p className="text-[15px] font-semibold">{l.label}</p>
             <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] tabular sm:grid-cols-4">
               <div><dt className="text-muted">Should be</dt><dd>{amt(l.expected, l.uom)}</dd></div>
@@ -253,7 +253,7 @@ export function RejectLinesForm({ countId, lines }: { countId: string; lines: { 
       </Button>
     );
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-[12px] border border-line p-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-[8px] border border-line p-3">
       <div className="flex flex-col gap-1">
         {lines.map((l) => (
           <label key={l.id} className="flex min-h-[44px] items-center gap-2 text-[14px]">

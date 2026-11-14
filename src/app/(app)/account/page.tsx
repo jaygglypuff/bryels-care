@@ -88,7 +88,7 @@ export default async function AccountPage() {
                     {!s.current && (
                       <form action={revokeMySession}>
                         <input type="hidden" name="sessionId" value={s.id} />
-                        <button className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[13px] font-medium text-fg hover:bg-surface-2">Sign out</button>
+                        <button className="inline-flex min-h-[44px] items-center rounded-[6px] border border-line px-4 text-[13px] font-medium text-fg hover:bg-surface-2">Sign out</button>
                       </form>
                     )}
                   </li>

@@ -103,7 +103,7 @@ export function RecipeSummary({
       {packaging.length > 0 && (
         <section data-testid="recipe-packaging">
           <h3 className="text-[12px] font-semibold uppercase tracking-wide text-muted">Packaging</h3>
-          <ul className="mt-1 flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ul className="mt-1 flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {packaging.map((p, i) => {
               const qty = n !== "0" ? packagingQty(n, p) : null;
               return (
@@ -122,7 +122,7 @@ export function RecipeSummary({
         {draft.lines.length === 0 ? (
           <p className="text-[14px] text-muted">No ingredients yet.</p>
         ) : (
-          <ol className="mt-1 flex flex-col divide-y divide-line rounded-[14px] border border-line">
+          <ol className="mt-1 flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {draft.lines.map((l, i) => {
               const g = lineGrams(batchG, l);
               return (
@@ -130,7 +130,7 @@ export function RecipeSummary({
                   <span className="min-w-0">
                     <span className="mr-2 text-muted tabular">{i + 1}.</span>
                     <span className="font-medium">{materialName(l.materialId)}</span>
-                    {l.needsCheck && <span className="ml-2 rounded-full bg-[var(--appr-bg)] px-2 text-[var(--appr-fg)] py-0.5 text-[11px] font-semibold">second person checks</span>}
+                    {l.needsCheck && <span className="ml-2 rounded-[4px] bg-[var(--appr-bg)] px-2 text-[var(--appr-fg)] py-0.5 text-[11px] font-semibold">second person checks</span>}
                   </span>
                   <span className="tabular">
                     <span className="font-semibold">{num(g, 6)} g</span>
@@ -153,7 +153,7 @@ export function RecipeSummary({
         ) : (
           <ol className="mt-1 flex flex-col gap-2">
             {draft.steps.map((s, i) => (
-              <li key={i} className="flex items-start gap-3 rounded-[14px] border border-line px-3 py-2">
+              <li key={i} className="flex items-start gap-3 rounded-[8px] border border-line px-3 py-2">
                 <BlockIcon block={s.block} className="mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-[14px] font-medium">{stepPreviewLine(s, i, draft.steps.length)}</p>

@@ -47,7 +47,7 @@ export default async function NewSupplierReturnPage({ searchParams }: { searchPa
           <form method="get" role="search" className="mb-3 flex flex-wrap items-center gap-2">
             <label htmlFor="sr-q" className="sr-only">Find a supplier</label>
             <input id="sr-q" name="q" defaultValue={q ?? ""} placeholder="Type part of the supplier's name" autoComplete="off" className="min-h-[48px] min-w-0 flex-1 rounded-[8px] border border-line bg-surface px-3 text-[16px]" />
-            <button type="submit" className="inline-flex min-h-[48px] items-center rounded-full border border-line px-5 text-[15px] font-medium hover:bg-surface-2">Find</button>
+            <button type="submit" className="inline-flex min-h-[48px] items-center rounded-[6px] border border-line px-5 text-[15px] font-medium hover:bg-surface-2">Find</button>
           </form>
           {found.length === 0 ? (
             <EmptyState title="No supplier with that name" action={<LinkButton href="/procurement/returns/new" variant="secondary">Show all suppliers</LinkButton>}>Try fewer letters.</EmptyState>
@@ -72,7 +72,7 @@ export default async function NewSupplierReturnPage({ searchParams }: { searchPa
           ) : (
             <>
               <p className="mb-2 text-[14px] font-medium">Their lots here</p>
-              <ul className="mb-4 flex flex-col divide-y divide-line rounded-[14px] border border-line">
+              <ul className="mb-4 flex flex-col divide-y divide-line rounded-[8px] border border-line">
                 {lots.map((l) => (
                   <li key={`${l.lotId}-${l.locationId}`} className="flex flex-wrap items-center gap-2 px-3 py-2 text-[14px]">
                     <span className="font-medium">{l.materialName ?? l.materialCode}</span>

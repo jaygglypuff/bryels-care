@@ -90,7 +90,7 @@ export function PrintLabelsButton({
 
   if (blocked) {
     return (
-      <p className="rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-4 py-3 text-[15px] text-[var(--warn-fg)]" role="status" data-testid="print-labels-blocked">
+      <p className="rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-4 py-3 text-[15px] text-[var(--warn-fg)]" role="status" data-testid="print-labels-blocked">
         {blocked}
       </p>
     );

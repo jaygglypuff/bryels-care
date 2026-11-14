@@ -48,7 +48,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
   const q: RecallQuery = complaintId ? { complaintId } : sp.supplierLot?.trim() ? { supplierLot: sp.supplierLot.trim() } : { code: sp.code?.trim() || undefined };
   const searched = !!(q.complaintId || q.supplierLot || q.code);
   const [r, lots] = await Promise.all([recallScope(ctx, { ...q, mode }), lotChoices(ctx)]);
-  const linkCls = "inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
+  const linkCls = "inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
   const outstanding = r.customers.flatMap((c) => c.outstanding);
   const outByUom = new Map<string, Decimal>();
   for (const o of outstanding) outByUom.set(o.uom, (outByUom.get(o.uom) ?? new Decimal(0)).plus(o.qty));
@@ -129,7 +129,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
                 </div>
                 <nav className="flex flex-wrap gap-2" aria-label="Direction">
                   {(["forward", "reverse"] as const).map((m) => (
-                    <Link key={m} href={`/quality/recall?${queryString(q, m)}`} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[13px]", r.mode === m ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
+                    <Link key={m} href={`/quality/recall?${queryString(q, m)}`} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[13px]", r.mode === m ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
                       {m === "forward" ? "Only where it went" : "Also batches that used the same materials"}
                     </Link>
                   ))}

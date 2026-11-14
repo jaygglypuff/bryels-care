@@ -81,7 +81,7 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
 /** ADR-117: the owner's one green Approve for the waiting recipe and steps, with the GMP warning in plain words. */
 function OwnerAloneBox({ r }: { r: RecipeView }) {
   return (
-    <section aria-label="What to do next" data-testid="owner-alone-box" className="mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 py-3">
+    <section aria-label="What to do next" data-testid="owner-alone-box" className="mb-4 flex flex-col gap-3 rounded-[8px] border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 py-3">
       <div>
         <p className="text-label font-semibold text-primary-text">What to do next</p>
         <p className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{r.ownerAlone.note}</p>
@@ -123,7 +123,7 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
         <NextStep text="In use. Nothing to do here." />
       )}
       {saved && !(saved === "sent" && r.mode !== "waiting") && (
-        <div role="status" className="rounded-[12px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
+        <div role="status" className="rounded-[8px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
           {saved === "sent"
             ? r.ownerAlone.canApproveAlone
               ? "Sent for approval. As the owner you can approve it alone above, or leave it for QA and a manager under “To approve”."
@@ -135,7 +135,7 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
       )}
       {r.mode === "waiting" && !r.ownerAlone.canApproveAlone && <p className="text-[14px] text-fg-2">{approvalSentence(r.approvalPolicy, "recipe")}</p>}
       {r.mode !== "waiting" && r.ownerAlone.approvedText && (
-        <p className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="owner-alone-approved">
+        <p className="rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="owner-alone-approved">
           {r.ownerAlone.approvedText}
         </p>
       )}

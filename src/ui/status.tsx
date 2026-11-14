@@ -66,10 +66,15 @@ const STATES: Record<string, { tone: Tone; label: string; icon: ReactNode }> = {
   invoiced: { tone: "ok", label: "Invoiced", icon: <CheckCircle2 size={13} /> },
 };
 
+/** ADR-136 badge: small, square-ish (4 px corners), muted tint + text + icon; never colour alone. */
+export const BADGE = "inline-flex items-center gap-1 whitespace-nowrap rounded-[4px] border px-1.5 py-px text-[12px] font-medium leading-[18px] [&_svg]:size-3 [&_svg]:shrink-0";
+export type BadgeTone = Tone;
+export const toneClass = (t: Tone) => TONE[t];
+
 export function StatusChip({ status, label, className }: { status: string; label?: string; className?: string }) {
   const s = STATES[status] ?? { tone: "neu" as Tone, label: status, icon: null };
   return (
-    <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] font-medium", TONE[s.tone], className)}>
+    <span className={cx(BADGE, TONE[s.tone], className)}>
       {s.icon}
       {label ?? s.label}
     </span>
@@ -77,12 +82,13 @@ export function StatusChip({ status, label, className }: { status: string; label
 }
 
 export function Chip({ tone = "neu", children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] font-medium", TONE[tone])}>{children}</span>;
+  return <span className={cx(BADGE, TONE[tone])}>{children}</span>;
 }
 
+/** An alert line: tint, hairline border, 8 px corners; the title says what happened, the action sits on the right. */
 export function Banner({ tone = "info", title, children, action }: { tone?: Tone; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className={cx("flex flex-wrap items-start gap-3 rounded-[12px] border border-l-4 px-4 py-3", TONE[tone])}>
+    <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[8px] border px-3.5 py-2.5 text-[14px]", TONE[tone])}>
       <div className="min-w-0 flex-1">
         <p className="font-semibold">{title}</p>
         {children && <div className="mt-0.5 text-[13px]">{children}</div>}

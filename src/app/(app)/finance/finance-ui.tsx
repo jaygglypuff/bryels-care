@@ -79,7 +79,7 @@ export function PostingsCard({ postings }: { postings: PostingView[] }) {
       ) : (
         <ul className="flex flex-col gap-2 text-[14px]">
           {postings.map((p) => (
-            <li key={p.id} className="rounded-[10px] border border-line px-3 py-2">
+            <li key={p.id} className="rounded-[6px] border border-line px-3 py-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium">{POSTING_LABEL[p.postingType] ?? p.postingType}</span>
                 <Money value={p.amount} className="font-semibold" />

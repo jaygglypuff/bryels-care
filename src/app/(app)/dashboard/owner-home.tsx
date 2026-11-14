@@ -73,9 +73,9 @@ async function sortOut(ctx: AuthContext, items: AttentionItem[]): Promise<OtherL
 /** One white card with a big number; amber only when it asks for action (never red for a zero). */
 function MoneyCard({ title, icon, value, href, children, tone = "neutral", testId }: { title: string; icon: ReactNode; value: ReactNode; href: string; children?: ReactNode; tone?: "neutral" | "attention"; testId?: string }) {
   return (
-    <Link href={href} data-testid={testId} className={cx("group flex h-full min-w-0 flex-col rounded-[18px] border p-3.5 transition-shadow hover:shadow-[var(--shadow-pop)] sm:p-4", tone === "attention" ? "border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "border-line bg-surface")}>
+    <Link href={href} data-testid={testId} className={cx("group flex h-full min-w-0 flex-col rounded-[8px] border p-3.5 transition-shadow hover:shadow-[var(--shadow-pop)] sm:p-4", tone === "attention" ? "border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "border-line bg-surface")}>
       <span className="flex items-center gap-2">
-        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-fg-2" aria-hidden>{icon}</span>
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-surface-2 text-fg-2" aria-hidden>{icon}</span>
         <span className="min-w-0 text-[13px] font-semibold leading-tight text-fg">{title}</span>
       </span>
       <span className="mt-3 block break-words font-display text-stat leading-none text-fg tabular">{value}</span>
@@ -87,7 +87,7 @@ function MoneyCard({ title, icon, value, href, children, tone = "neutral", testI
 function ChecksForMe({ checks }: { checks: CheckItem[] }) {
   if (!checks.length) return null;
   return (
-    <section aria-labelledby="checks-h" className="rounded-[20px] border border-[var(--warn-bd)] bg-surface p-4 sm:p-5" data-testid="home-checks">
+    <section aria-labelledby="checks-h" className="rounded-[8px] border border-[var(--warn-bd)] bg-surface p-4 sm:p-5" data-testid="home-checks">
       <h2 id="checks-h" className="font-display text-section font-semibold text-fg">Waiting for you to check</h2>
       <ul className="mt-1 divide-y divide-line">
         {checks.map((c) => (
@@ -107,7 +107,7 @@ function ChecksForMe({ checks }: { checks: CheckItem[] }) {
 function LineList({ title, lines, testId, icon }: { title: string; lines: OtherLine[]; testId: string; icon: ReactNode }) {
   if (!lines.length) return null;
   return (
-    <section aria-labelledby={`${testId}-h`} className="rounded-[20px] border border-line bg-surface p-4 sm:p-5" data-testid={testId}>
+    <section aria-labelledby={`${testId}-h`} className="rounded-[8px] border border-line bg-surface p-4 sm:p-5" data-testid={testId}>
       <h2 id={`${testId}-h`} className="font-display text-section font-semibold text-fg">{title}</h2>
       <ul className="mt-1 divide-y divide-line">
         {lines.map(({ item, who }) => (
@@ -177,7 +177,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
   const greeting = greetingOf();
   const today = new Date(home.today + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   const pill = (href: string, active: boolean, label: string) => (
-    <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
+    <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-[6px] px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
       {label}
     </Link>
   );
@@ -187,7 +187,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
       subtitle={`${today} · ${all ? "All your sites" : ctx.currentSite.name}`}
       actions={
         ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view") ? (
-          <div className="flex rounded-full border border-line bg-surface p-1" role="group" aria-label="Sites">
+          <div className="flex rounded-[6px] border border-line bg-surface p-1" role="group" aria-label="Sites">
             {pill("/dashboard", !all, "This site")}
             {pill("/dashboard?scope=all", all, "All my sites")}
           </div>
@@ -338,7 +338,7 @@ async function QaHome({ ctx }: { ctx: AuthContext }) {
       </section>
       <ChecksForMe checks={checks} />
       {rows.length > 1 && (
-        <section aria-labelledby="qa-rest-h" className="rounded-[20px] border border-line bg-surface p-4 sm:p-5">
+        <section aria-labelledby="qa-rest-h" className="rounded-[8px] border border-line bg-surface p-4 sm:p-5">
           <h2 id="qa-rest-h" className="font-display text-section font-semibold text-fg">After that</h2>
           <ul className="mt-1 divide-y divide-line">
             {rows.slice(1, 8).map((r) => (

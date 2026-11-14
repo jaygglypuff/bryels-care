@@ -37,7 +37,7 @@ export function WorkList({ title, lines, counts, testId }: { title: string; line
           How work flows
         </Link>
       </div>
-      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
         {shown.map(({ l, c }) => {
           const age = c.count > 0 ? ageWords(c.oldestAt) : null;
           return (
@@ -55,7 +55,7 @@ export function WorkList({ title, lines, counts, testId }: { title: string; line
                 </span>
               </span>
               {c.count > 0 && (
-                <Link href={l.href} className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full border border-line-strong bg-surface px-4 text-[14px] font-semibold text-fg hover:bg-surface-2 min-[420px]:w-auto">
+                <Link href={l.href} className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[6px] border border-line-strong bg-surface px-4 text-[14px] font-semibold text-fg hover:bg-surface-2 min-[420px]:w-auto">
                   {l.button} <ArrowRight size={14} aria-hidden />
                 </Link>
               )}

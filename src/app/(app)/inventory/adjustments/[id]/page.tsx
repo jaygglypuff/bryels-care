@@ -112,7 +112,7 @@ export default async function AdjustmentPage({ params, searchParams }: { params:
 
       <section className="space-y-2">
         <h2 className="text-[16px] font-semibold">What changes</h2>
-        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Lots in this fix">
+        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label="Lots in this fix">
           {a.lines.map((l) => {
             const amount = l.baseUom ? fmtFriendly(l.qtyBase, l.baseUom) : new Decimal(l.qtyBase).toString();
             const inner = (

@@ -22,8 +22,8 @@ function Progress({ done, total }: { done: number; total: number }) {
   if (total === 0) return <span className="text-muted">—</span>;
   return (
     <span className="flex items-center gap-2">
-      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--lime-100)]" role="img" aria-label={`${done} of ${total} steps done`}>
-        <i className="block h-full rounded-full bg-[var(--brand-600)]" style={{ width: `${((done / total) * 100).toFixed(0)}%` }} />
+      <span className="h-1.5 w-16 overflow-hidden rounded-[6px] bg-[var(--lime-100)]" role="img" aria-label={`${done} of ${total} steps done`}>
+        <i className="block h-full rounded-[6px] bg-[var(--brand-600)]" style={{ width: `${((done / total) * 100).toFixed(0)}%` }} />
       </span>
       <span className="tabular text-[12px] text-fg-2">{done}/{total}</span>
     </span>
@@ -50,11 +50,11 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
         subtitle={oc.scope.label}
         actions={
           multi ? (
-            <div className="flex rounded-full border border-line bg-surface p-1 text-[13px]" role="group" aria-label="Sites shown">
-              <Link href="/operations" aria-current={!oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3.5", !oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
+            <div className="flex rounded-[6px] border border-line bg-surface p-1 text-[13px]" role="group" aria-label="Sites shown">
+              <Link href="/operations" aria-current={!oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-3.5", !oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
                 This site
               </Link>
-              <Link href="/operations?scope=all" aria-current={oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3.5", oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
+              <Link href="/operations?scope=all" aria-current={oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] px-3.5", oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
                 All my sites
               </Link>
             </div>
@@ -86,7 +86,7 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
               <ul className="space-y-2 md:hidden">
                 {oc.batches.map((b) => (
                   <li key={b.id}>
-                    <Link href={b.href} className="block rounded-[14px] border border-line bg-surface p-3.5">
+                    <Link href={b.href} className="block rounded-[8px] border border-line bg-surface p-3.5">
                       <div className="flex items-center justify-between gap-2">
                         <p className="min-w-0 font-medium text-fg">{b.productName}</p>
                         <StatusChip status={b.status} />
@@ -135,8 +135,8 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
           <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {quick.map((q) => (
               <li key={q.href}>
-                <Link href={q.href} className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-[14px] border border-line bg-surface p-3 text-center text-[13px] font-medium text-fg-2 hover:border-line-strong hover:text-fg">
-                  <span className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary-text">{ICONS[q.icon]}</span>
+                <Link href={q.href} className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-[8px] border border-line bg-surface p-3 text-center text-[13px] font-medium text-fg-2 hover:border-line-strong hover:text-fg">
+                  <span className="grid size-10 place-items-center rounded-[6px] bg-primary-soft text-primary-text">{ICONS[q.icon]}</span>
                   {q.label}
                 </Link>
               </li>

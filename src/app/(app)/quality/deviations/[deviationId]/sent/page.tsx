@@ -40,7 +40,7 @@ export default async function DeviationSentPage({ params, searchParams }: { para
   return (
     <div className="mx-auto grid max-w-xl gap-4 py-6 text-[16px]" data-density="operator">
       <PageIntro>This screen is for the person who reported a problem: QA has it now.</PageIntro>
-      <div role="status" className="rounded-[20px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-5" data-testid="problem-sent">
+      <div role="status" className="rounded-[8px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] p-5" data-testid="problem-sent">
         <h1 className="flex items-center gap-2 font-display text-title text-[var(--ok-fg)]">
           <CheckCircle2 size={28} aria-hidden /> Sent to QA
         </h1>

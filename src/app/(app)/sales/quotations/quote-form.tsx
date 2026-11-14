@@ -110,7 +110,7 @@ export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, 
             const lp = listPrice(book, l.productId, l.qtyUnits);
             const disc = lp && l.unitPrice.trim() ? new Decimal(lp).minus(safeD(l.unitPrice)).div(lp).times(100) : null;
             return (
-              <li key={l.key} className="grid grid-cols-2 gap-3 rounded-[12px] border border-line p-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start">
+              <li key={l.key} className="grid grid-cols-2 gap-3 rounded-[8px] border border-line p-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start">
                 <div className="col-span-2 md:col-span-1">
                   <Field label={`Product ${i + 1}`} htmlFor={`qp-${l.key}`} error={fe[`lines.${i}.productId`]}>
                     <NamePicker

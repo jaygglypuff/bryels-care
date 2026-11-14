@@ -52,7 +52,7 @@ export async function PortalAccessPanel({ ctx, customerId }: { ctx: AuthContext;
           {"canAdminUsers" in v && v.canAdminUsers && <TenantStatusForm tenantId={v.tenant.id} status={v.tenant.status} />}
 
           {v.catalog && (
-            <section aria-label="Portal catalogue" className="rounded-[14px] border border-line p-3">
+            <section aria-label="Portal catalogue" className="rounded-[8px] border border-line p-3">
               <p className="mb-2 text-[13px] font-semibold">Catalogue in the portal · {v.catalog.items.length} product{v.catalog.items.length === 1 ? "" : "s"}</p>
               {v.catalog.items.length === 0 ? (
                 <p className="text-[12.5px] text-muted">Nothing can be ordered yet: no product matches the rule (approved price list needed).</p>

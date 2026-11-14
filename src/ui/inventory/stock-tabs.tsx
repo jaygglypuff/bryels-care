@@ -22,7 +22,7 @@ export function StockTabs({ active }: { active: StockTab }) {
               href={t.href}
               aria-current={t.key === active ? "page" : undefined}
               className={cx(
-                "flex min-h-[44px] items-center justify-center rounded-[10px] border px-3 text-center text-[14px] font-medium sm:-mb-px sm:justify-start sm:whitespace-nowrap sm:rounded-none sm:border-0 sm:border-b-2 sm:px-3.5",
+                "flex min-h-[44px] items-center justify-center rounded-[6px] border px-3 text-center text-[14px] font-medium sm:-mb-px sm:justify-start sm:whitespace-nowrap sm:rounded-none sm:border-0 sm:border-b-2 sm:px-3.5",
                 t.key === active ? "border-[var(--brand-600)] bg-primary-soft text-primary-text sm:bg-transparent" : "border-line bg-surface text-fg-2 hover:text-fg sm:border-transparent sm:bg-transparent",
               )}
             >

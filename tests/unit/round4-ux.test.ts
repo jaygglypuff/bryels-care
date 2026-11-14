@@ -49,8 +49,8 @@ describe("frame Help (UX re-audit C #9)", () => {
     expect(guideKeyFor("/admin/users", ["finance"])).toBe("role.site_manager");
     expect(guideKeyFor("/admin/users", [])).toBe("start.everyday_basics");
   });
-  it("the shell shows one 44 px Help button on every screen", () => {
-    expect(src("src/ui/help/frame-help.tsx")).toMatch(/h-11 min-w-11/);
+  it("the shell shows one Help button on every screen (44 px on touch screens, ADR-136)", () => {
+    expect(src("src/ui/help/frame-help.tsx")).toMatch(/pointer-coarse:h-11 pointer-coarse:min-w-11/);
     expect(src("src/app/(app)/shell.tsx")).toMatch(/<FrameHelp load=\{loadHelp\}/);
     expect(src("src/app/(app)/layout.tsx")).toMatch(/loadHelp=\{helpForScreen\}/);
   });
@@ -58,7 +58,8 @@ describe("frame Help (UX re-audit C #9)", () => {
 
 describe("44 px targets inside pages (UX re-audit C #2)", () => {
   it("Chart/Table toggle, Sign out, stage warnings, Edit and Change or confirm are 44 px", () => {
-    expect(src("src/ui/charts/chart-frame.tsx")).toMatch(/min-h-\[44px\] min-w-\[44px\] rounded-full/);
+    // ADR-136: square-ish 6 px corners instead of pills; still 44 px.
+    expect(src("src/ui/charts/chart-frame.tsx")).toMatch(/min-h-\[44px\] min-w-\[44px\] rounded-\[6px\]/);
     expect(src("src/app/(app)/account/page.tsx")).toMatch(/min-h-\[44px\][^"]*">Sign out</);
     expect(src("src/ui/pipeline.tsx")).toMatch(/min-h-\[44px\][^"]*" data-testid="stage-warning"/);
     expect(src("src/app/(app)/masterdata/uom/page.tsx")).toMatch(/min-h-\[44px\][^"]*">Edit</);
@@ -66,7 +67,7 @@ describe("44 px targets inside pages (UX re-audit C #2)", () => {
   });
   it("Problems & alerts: 44 px kind chips, folded on phones; one Add a note button instead of a note box per row", () => {
     const page = src("src/app/(app)/action-centre/page.tsx");
-    expect(page).toMatch(/inline-flex min-h-\[44px\] items-center rounded-full border px-4 text-\[13px\]/);
+    expect(page).toMatch(/inline-flex min-h-\[44px\] items-center rounded-\[6px\] border px-4 text-\[13px\]/);
     expect(page).toMatch(/<details className="mb-3 sm:hidden"/);
     const form = src("src/app/(app)/action-centre/forms.tsx");
     expect(form).toMatch(/Add a note/);

@@ -89,7 +89,7 @@ export function PriceListForm({ customers, products, today, initial, initialCust
         {fe.lines && <p className="mb-2 text-[12px] text-[var(--bad-fg)]">{fe.lines}</p>}
         <ol className="flex flex-col gap-3">
           {lines.map((l, i) => (
-            <li key={l.key} className="grid grid-cols-2 gap-3 rounded-[12px] border border-line p-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <li key={l.key} className="grid grid-cols-2 gap-3 rounded-[8px] border border-line p-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
               <div className="col-span-2 md:col-span-1">
                 <Field label={`Product ${i + 1}`} htmlFor={`pl-p-${l.key}`} error={fe[`lines.${i}.productId`]}>
                   <NamePicker id={`pl-p-${l.key}`} value={l.productId} required placeholder="Choose a product…" searchLabel="Type part of the product name" options={productOptions} onChange={(id) => update(l.key, { productId: id })} />

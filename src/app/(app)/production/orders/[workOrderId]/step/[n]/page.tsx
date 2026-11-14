@@ -112,7 +112,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
           boxes ? (
             <div className="grid gap-3">
               {/* Round 5 problem 3: the work in order, one green button, one print trip. */}
-              <ol className="grid gap-1 rounded-[16px] border border-line bg-surface p-4 text-[16px]" data-testid="pack-order">
+              <ol className="grid gap-1 rounded-[8px] border border-line bg-surface p-4 text-[16px]" data-testid="pack-order">
                 {boxes.labelling === "per_piece" ? <li>1. Stick a label on each {boxes.pieceWord.replace(/s$/, "")}.</li> : null}
                 <li>{boxes.labelling === "per_piece" ? "2" : "1"}. Pack {boxes.unitsPerBox} in a box.</li>
                 <li>{boxes.labelling === "per_piece" ? "3" : "2"}. Stick one label on each box.</li>

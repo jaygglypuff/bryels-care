@@ -193,7 +193,7 @@ export default async function ImportPage({ params, searchParams }: { params: Pro
           {rows.rows.length === 0 ? (
             <EmptyState title="No rows with this result" />
           ) : (
-            <ul aria-label="Rows" className="flex flex-col divide-y divide-line rounded-[16px] border border-line">
+            <ul aria-label="Rows" className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
               {rows.rows.map((r) => {
                 const raw = r.raw as Record<string, string>;
                 const warnings = (r.warnings as string[] | null) ?? [];

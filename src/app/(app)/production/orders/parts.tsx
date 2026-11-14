@@ -35,7 +35,7 @@ export function ProgressStrip({ steps, note }: { steps: { key: string; label: st
       <ol className="grid grid-cols-5 gap-1.5" aria-label="Progress">
         {steps.map((s, i) => (
           <li key={s.key} aria-current={s.state === "current" ? "step" : undefined} className="min-w-0">
-            <div className={cx("h-2 rounded-full", s.state === "done" ? "bg-[var(--ok-fg)]" : s.state === "current" ? "bg-primary" : "bg-surface-2")} />
+            <div className={cx("h-2 rounded-[6px]", s.state === "done" ? "bg-[var(--ok-fg)]" : s.state === "current" ? "bg-primary" : "bg-surface-2")} />
             <p className={cx("mt-1.5 flex items-center gap-1 text-[11px] leading-tight sm:text-[13px]", s.state === "current" ? "font-semibold text-fg" : "text-muted")}>
               {s.state === "done" && <CheckCircle2 size={13} aria-hidden className="shrink-0" />}
               <span className="min-w-0 hyphens-none [overflow-wrap:normal] [word-break:keep-all]">
@@ -95,15 +95,15 @@ export function DefectTables({ summary, showProduct = true }: { summary: DefectS
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-[14px] border border-line p-3">
+        <div className="rounded-[8px] border border-line p-3">
           <p className="text-[12px] text-muted">Good pieces</p>
           <p className="text-value tabular">{n(summary.totals.good)}</p>
         </div>
-        <div className="rounded-[14px] border border-line p-3">
+        <div className="rounded-[8px] border border-line p-3">
           <p className="text-[12px] text-muted">Rejects</p>
           <p className="text-value tabular">{n(summary.totals.defects)}</p>
         </div>
-        <div className="rounded-[14px] border border-line p-3">
+        <div className="rounded-[8px] border border-line p-3">
           <p className="text-[12px] text-muted">Reject rate</p>
           <p className="text-value tabular">{summary.totals.defectPct ? `${summary.totals.defectPct}%` : "—"}</p>
         </div>
@@ -113,7 +113,7 @@ export function DefectTables({ summary, showProduct = true }: { summary: DefectS
           <h3 className="mb-2 text-[14px] font-semibold">Rejects by type</h3>
           <ul className="space-y-1.5">
             {summary.totals.byType.map((t) => (
-              <li key={t.type} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line px-3 py-2 text-[14px]">
+              <li key={t.type} className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line px-3 py-2 text-[14px]">
                 <span>{t.type}</span>
                 <span className="tabular text-fg-2">
                   {n(t.qty)} · {t.pctOfDefects}% of rejects · {t.pctOfMade}% of all made

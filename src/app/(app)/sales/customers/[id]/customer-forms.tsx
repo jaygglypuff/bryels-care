@@ -21,7 +21,7 @@ import {
 function Toggle({ label, children }: { label: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return open ? (
-    <div className="mt-3 rounded-[12px] border border-line p-3">
+    <div className="mt-3 rounded-[8px] border border-line p-3">
       {children}
       <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setOpen(false)}>
         Close

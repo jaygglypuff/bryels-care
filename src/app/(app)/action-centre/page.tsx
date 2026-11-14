@@ -29,7 +29,7 @@ function age(minutes: number) {
 
 /** Filter chips by kind: real links, 44 px tall (UX re-audit C #2). */
 function KindChips({ kinds, kind, qs }: { kinds: { kind: string; label: string }[]; kind?: string; qs: (x: Record<string, string | undefined>) => string }) {
-  const chip = (on: boolean) => cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[13px]", on ? "border-primary bg-primary-soft font-semibold" : "border-line hover:bg-surface-2");
+  const chip = (on: boolean) => cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[13px]", on ? "border-primary bg-primary-soft font-semibold" : "border-line hover:bg-surface-2");
   return (
     <nav aria-label="Show one kind" className="mt-2 flex flex-wrap gap-2 sm:mt-0" data-testid="kind-chips">
       <Link href={qs({ kind: undefined })} aria-current={!kind ? "page" : undefined} className={chip(!kind)}>All kinds</Link>
@@ -140,7 +140,7 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
             key={t.tab}
             href={`/action-centre?tab=${t.tab}`}
             aria-current={tab === t.tab ? "page" : undefined}
-            className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", tab === t.tab ? "border-primary bg-primary-soft font-semibold" : "border-line")}
+            className={cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[14px]", tab === t.tab ? "border-primary bg-primary-soft font-semibold" : "border-line")}
           >
             {t.label}
             {t.tab === "exceptions" ? ` · ${problems}` : ""}
@@ -154,7 +154,7 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
         <Card>
           {/* Round 4 (UX re-audit C #2): 44 px chips, folded on phones so they do not fill the first screen. */}
           <details className="mb-3 sm:hidden" open={!!kind}>
-            <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-full border border-line px-4 text-[14px] font-medium [&::-webkit-details-marker]:hidden">
+            <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-[6px] border border-line px-4 text-[14px] font-medium [&::-webkit-details-marker]:hidden">
               Show one kind only{kind ? `: ${ACTION_KINDS.find((k) => k.kind === kind)?.label ?? ""}` : ""}
             </summary>
             <KindChips kinds={kindsHere} kind={kind} qs={qs} />
@@ -164,9 +164,9 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
           </div>
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px]">
             {ctx.allowedSites.length > 1 && (
-              <Link href={qs({ group: bySite ? undefined : "site" })} className="inline-flex min-h-[44px] items-center rounded-full px-3 text-primary-text hover:bg-primary-soft">{bySite ? "Do not group" : "Group by site"}</Link>
+              <Link href={qs({ group: bySite ? undefined : "site" })} className="inline-flex min-h-[44px] items-center rounded-[6px] px-3 text-primary-text hover:bg-primary-soft">{bySite ? "Do not group" : "Group by site"}</Link>
             )}
-            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="inline-flex min-h-[44px] items-center rounded-full px-3 text-primary-text hover:bg-primary-soft">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
+            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="inline-flex min-h-[44px] items-center rounded-[6px] px-3 text-primary-text hover:bg-primary-soft">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
           </div>
           {items.length === 0 ? (
             <EmptyState title="No problems right now">

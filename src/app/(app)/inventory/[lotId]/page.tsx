@@ -161,7 +161,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
           {lot.balances.length === 0 ? (
             <EmptyState title="No stock left">All of this lot was used, sent out or moved away.</EmptyState>
           ) : (
-            <ul className="divide-y divide-line rounded-[12px] border border-line" aria-label="Where it is">
+            <ul className="divide-y divide-line rounded-[8px] border border-line" aria-label="Where it is">
               {lot.balances.map((b) => (
                 <li key={b.locationId} className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 px-3 py-2.5">
                   <div className="min-w-0">

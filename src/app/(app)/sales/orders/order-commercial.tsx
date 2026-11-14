@@ -32,7 +32,7 @@ function ReasonForm({ orderId, action, button, label, placeholder, confirm, vari
       </Button>
     );
   return (
-    <div className="rounded-[12px] border border-line p-3">
+    <div className="rounded-[8px] border border-line p-3">
       <ActionForm action={action} hidden={{ orderId }} submit={button} pending="Saving…" variant={variant} confirm={confirm}>
         {(fe) => (
           <Field label={label} htmlFor={`${button}-reason`} error={fe.reason}>

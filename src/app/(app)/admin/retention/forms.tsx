@@ -21,7 +21,7 @@ type PolicyFormProps = {
 export function PolicyEditForm(p: PolicyFormProps) {
   const id = (k: string) => `${p.dataClass}-${p.target}-${k}`.replace(/[^a-zA-Z0-9-]/g, "_");
   return (
-    <ActionForm action={savePolicyAction} hidden={{ dataClass: p.dataClass, target: p.target }} submit="Save policy" pending="Saving…" size="sm" className="mt-2 flex flex-col gap-3 rounded-[14px] border border-line p-3">
+    <ActionForm action={savePolicyAction} hidden={{ dataClass: p.dataClass, target: p.target }} submit="Save policy" pending="Saving…" size="sm" className="mt-2 flex flex-col gap-3 rounded-[8px] border border-line p-3">
       {(fe) => (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -75,7 +75,7 @@ export function PolicyEditForm(p: PolicyFormProps) {
 export function PolicyConfirmForm({ dataClass, target }: { dataClass: string; target: string }) {
   const id = (k: string) => `c-${dataClass}-${target}-${k}`.replace(/[^a-zA-Z0-9-]/g, "_");
   return (
-    <ActionForm action={confirmPolicyAction} hidden={{ dataClass, target }} submit="Record confirmation" pending="Recording…" size="sm" className="mt-2 flex flex-col gap-3 rounded-[14px] border border-line p-3">
+    <ActionForm action={confirmPolicyAction} hidden={{ dataClass, target }} submit="Record confirmation" pending="Recording…" size="sm" className="mt-2 flex flex-col gap-3 rounded-[8px] border border-line p-3">
       {(fe) => (
         <>
           <Field label="Reviewer and evidence" htmlFor={id("note")} error={fe.note} hint="e.g. “Legal adviser memo 2026-11-03, 7 years confirmed”">

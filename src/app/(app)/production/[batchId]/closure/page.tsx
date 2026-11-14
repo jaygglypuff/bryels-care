@@ -193,7 +193,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
         ) : (
           <ul className="mt-3 space-y-3">
             {papers.map((p) => (
-              <li key={p.id} className="rounded-[12px] border border-line p-3 text-[13px]">
+              <li key={p.id} className="rounded-[8px] border border-line p-3 text-[13px]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono font-semibold">{p.paperReference}</span>
                   <Chip tone={p.status === "reviewed" ? "ok" : p.status === "void" ? "neu" : p.status === "returned" ? "bad" : "warn"}>{p.status}</Chip>

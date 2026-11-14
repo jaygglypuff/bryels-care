@@ -197,7 +197,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
             ]}
           />
           {q.notesCustomer && <p className="mt-3 text-[13px]">Note to the customer: {q.notesCustomer}</p>}
-          {q.notesInternal && <p className="mt-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-fg-2">For our team: {q.notesInternal}</p>}
+          {q.notesInternal && <p className="mt-2 rounded-[6px] bg-surface-2 px-3 py-2 text-[13px] text-fg-2">For our team: {q.notesInternal}</p>}
           <div className="mt-3">
             <MoreDetails>
               <Dl

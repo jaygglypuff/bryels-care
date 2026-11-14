@@ -12,7 +12,7 @@ export function ForgotForm({ emailReady }: { emailReady: boolean }) {
       <h1 className="font-display text-title">Forgot your password?</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">Enter your work email. If the account exists we send a link that works once, for 30 minutes.</p>
       {!emailReady && (
-        <p className="mb-4 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
+        <p className="mb-4 rounded-[6px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
           Email is not set up on this system yet, so no link can be sent. Ask your system administrator to reset your password for you.
         </p>
       )}

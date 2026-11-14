@@ -64,7 +64,7 @@ function WhatIsThis({ children }: { children: ReactNode }) {
   return (
     <details className="text-[13px]">
       <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-primary-text underline-offset-2 hover:underline">What is this?</summary>
-      <div className="mt-1 rounded-[12px] bg-surface-2 p-3 text-fg-2">{children}</div>
+      <div className="mt-1 rounded-[8px] bg-surface-2 p-3 text-fg-2">{children}</div>
     </details>
   );
 }
@@ -98,7 +98,7 @@ function IconButton({ label, onClick, disabled, children, danger }: { label: str
       onClick={onClick}
       disabled={disabled}
       className={cx(
-        "inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-line bg-surface text-fg hover:bg-surface-2 disabled:opacity-30",
+        "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border border-line bg-surface text-fg hover:bg-surface-2 disabled:opacity-30",
         danger && "text-[var(--bad-fg)]",
       )}
     >
@@ -303,7 +303,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
                   type="button"
                   onClick={() => go(n)}
                   aria-current={here ? "step" : undefined}
-                  className={cx("flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[12px] border px-2 text-center text-[13px] font-semibold leading-tight", here ? "border-primary bg-primary text-white" : n < screen ? "border-line bg-primary-soft text-primary-text" : "border-line bg-surface text-muted")}
+                  className={cx("flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[8px] border px-2 text-center text-[13px] font-semibold leading-tight", here ? "border-primary bg-primary text-white" : n < screen ? "border-line bg-primary-soft text-primary-text" : "border-line bg-surface text-muted")}
                 >
                   {n < screen ? <Check size={16} className="shrink-0" aria-hidden /> : null}
                   {/* Number and title wrap as one centred line (desktop audit 2026-11: "2" sat apart from "How big is one batch?"). */}
@@ -324,7 +324,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
       </nav>
 
       {restored !== null && (
-        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-[var(--info-bd,var(--line))] bg-[var(--info-bg)] px-3 py-2 text-[14px] text-[var(--info-fg)]" data-testid="wizard-restored">
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-[var(--info-bd,var(--line))] bg-[var(--info-bg)] px-3 py-2 text-[14px] text-[var(--info-fg)]" data-testid="wizard-restored">
           <span>We kept what you typed on this device{restored ? ` (last change ${restored})` : ""}. It is not saved yet: press Save as draft or Send for approval.</span>
           <Button type="button" variant="ghost" size="sm" onClick={startOver}>
             Start over
@@ -332,7 +332,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
         </div>
       )}
       {banner && (
-        <div role={banner.ok ? "status" : "alert"} className={cx("rounded-[12px] border px-3 py-2 text-[14px]", banner.ok ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]")}>
+        <div role={banner.ok ? "status" : "alert"} className={cx("rounded-[8px] border px-3 py-2 text-[14px]", banner.ok ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]")}>
           {banner.text}
         </div>
       )}
@@ -450,7 +450,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
                 When I send it, also make the product <b>{product.name}</b> active (needed before it can be made or sold).
               </label>
             )}
-            <p className="rounded-[12px] bg-[var(--info-bg)] px-3 py-2 text-[14px] text-[var(--info-fg)]">
+            <p className="rounded-[8px] bg-[var(--info-bg)] px-3 py-2 text-[14px] text-[var(--info-fg)]">
               A recipe can be used for production only after someone approves it. After approval it can&apos;t be changed; to change it later you make a new version.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -470,7 +470,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
       )}
 
       {/* Back / Next, always in reach: sticks above the app's bottom tab bar on phones and iPads (xl has none). */}
-      <div className="sticky bottom-[calc(68px+env(safe-area-inset-bottom))] z-20 rounded-[18px] border border-line bg-surface/95 px-3 py-3 shadow-[var(--shadow-card)] backdrop-blur xl:bottom-3">
+      <div className="sticky bottom-[calc(68px+env(safe-area-inset-bottom))] z-20 rounded-[8px] border border-line bg-surface/95 px-3 py-3 shadow-[var(--shadow-card)] backdrop-blur xl:bottom-3">
         {screen === 3 && !start.locks.ingredients && d.lines.length > 0 && (
           <p className={cx("mb-2 text-center text-[14px] font-semibold", totals.exact ? "text-[var(--ok-fg)]" : "text-[var(--warn-fg)]")}>{d.view === "pct" ? percentTotalText(totals) : gramsTotalText(totals)}</p>
         )}
@@ -522,7 +522,7 @@ function SoFarPanel({ productName, batchText, lines, totalText, totalOk, steps, 
   const none = <span className="text-muted">Not yet</span>;
   return (
     <aside aria-label="The recipe so far" className="hidden xl:sticky xl:top-[150px] xl:block" data-testid="recipe-so-far">
-      <div className="rounded-[18px] border border-line bg-surface p-4">
+      <div className="rounded-[8px] border border-line bg-surface p-4">
         <h2 className="mb-2 text-[15px] font-semibold">The recipe so far</h2>
         <p className="mb-3 text-[12px] text-muted">{versionLabel} · not saved yet</p>
         <dl>
@@ -613,12 +613,12 @@ function ProductScreen({
             // A product has one recipe (ADR-089): not offered again; open it to make a new version (UX audit C #9).
             return (
               <li key={p.id}>
-                <div className="flex min-h-[56px] w-full flex-wrap items-center justify-between gap-3 rounded-[14px] border border-dashed border-line bg-surface-2/50 px-4 py-2" data-testid="product-has-recipe">
+                <div className="flex min-h-[56px] w-full flex-wrap items-center justify-between gap-3 rounded-[8px] border border-dashed border-line bg-surface-2/50 px-4 py-2" data-testid="product-has-recipe">
                   <span className="min-w-0">
                     <span className="block text-[15px] font-semibold text-fg-2">{p.name}</span>
                     <span className="block text-[13px] text-muted">Already has a recipe</span>
                   </span>
-                  <a href={`/masterdata/recipes/${p.formulaId}`} className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-primary-text hover:bg-surface-2">
+                  <a href={`/masterdata/recipes/${p.formulaId}`} className="inline-flex min-h-[44px] shrink-0 items-center rounded-[6px] border border-line bg-surface px-4 text-[14px] font-medium text-primary-text hover:bg-surface-2">
                     Open it
                   </a>
                 </div>
@@ -631,7 +631,7 @@ function ProductScreen({
                 role="radio"
                 aria-checked={chosen}
                 onClick={() => onPick(p.id)}
-                className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[14px] border px-4 py-2 text-left", chosen ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2")}
+                className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[8px] border px-4 py-2 text-left", chosen ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2")}
               >
                 <span className="min-w-0">
                   <span className="block text-[15px] font-semibold">{p.name}</span>
@@ -644,7 +644,7 @@ function ProductScreen({
             </li>
           );
         })}
-        {shown.length === 0 && <li className="rounded-[14px] border border-dashed border-line-strong p-4 text-center text-[14px] text-muted">No product with that name.</li>}
+        {shown.length === 0 && <li className="rounded-[8px] border border-dashed border-line-strong p-4 text-center text-[14px] text-muted">No product with that name.</li>}
       </ul>
       {canCreate &&
         (making ? (
@@ -672,7 +672,7 @@ function NewProductForm({ families, onCancel, onCreated }: { families: { code: s
   const [pending, start] = useTransition();
   const word = f.family.toLowerCase().includes("soap") ? "bars" : "pieces";
   return (
-    <fieldset className="flex flex-col gap-3 rounded-[16px] border border-line bg-surface-2/60 p-4">
+    <fieldset className="flex flex-col gap-3 rounded-[8px] border border-line bg-surface-2/60 p-4">
       <legend className="px-1 text-[15px] font-semibold">New product</legend>
       <p className="text-[13px] text-muted">Makes the product and the item you sell, and makes both ready to use (if you are allowed to).</p>
       <div className="flex flex-col gap-1.5">
@@ -756,14 +756,14 @@ type CopyQuestions = { src: RecipeCopySource; plan: RecipeCopyPlan; answers: Rec
 function SizeQuestions({ q, onAnswer, onDone }: { q: CopyQuestions; onAnswer: (key: string, a: SizeAnswer) => void; onDone: () => void }) {
   const text = sizeQuestion(q.plan, q.src.from);
   const to = q.plan.size?.to;
-  const chip = (on: boolean) => cx("min-h-[48px] rounded-full border px-4 text-[15px]", on ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface");
+  const chip = (on: boolean) => cx("min-h-[48px] rounded-[6px] border px-4 text-[15px]", on ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface");
   const open = q.plan.held.filter((h) => !q.answers[h.key]).length;
   return (
     <Card className="mt-4 flex flex-col gap-3 border-2 border-[var(--warn-bd)]" data-testid="copy-size-questions">
       <h2 className="text-[17px] font-semibold">Another piece size</h2>
       <p className="text-[15px]">{text}</p>
       {q.plan.held.map((h) => (
-        <div key={h.key} className="grid gap-2 rounded-[12px] bg-surface-2 p-3" data-testid={`size-item-${h.key}`}>
+        <div key={h.key} className="grid gap-2 rounded-[8px] bg-surface-2 p-3" data-testid={`size-item-${h.key}`}>
           <p className="text-[15px]">
             <b>{h.kind === "packaging" ? `Packaging: ${h.what}` : `Step: ${h.what}`}</b>
             {h.words !== h.what && <span className="block text-[14px] text-fg-2">“{h.words}”</span>}
@@ -842,7 +842,7 @@ function BatchScreen({
                 role="radio"
                 aria-checked={d.batchBy === k}
                 onClick={() => set({ batchBy: k })}
-                className={cx("flex min-h-[56px] flex-col justify-center rounded-[14px] border px-4 py-2 text-left", d.batchBy === k ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2")}
+                className={cx("flex min-h-[56px] flex-col justify-center rounded-[8px] border px-4 py-2 text-left", d.batchBy === k ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2")}
               >
                 <span className="text-[16px] font-semibold">{label}</span>
                 <span className="text-[12px] text-muted">{ex}</span>
@@ -892,7 +892,7 @@ function BatchScreen({
               <ErrorText text={errors.pieceG} />
             </div>
           ) : (
-            <p role="alert" className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]">
+            <p role="alert" className="rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]">
               {product?.name ?? "This product"} has no weight per piece yet, so pieces can&apos;t be turned into kilograms. Choose “By weight (kg)”, or ask someone who can edit products to add its size (grams) under Products.
             </p>
           ))}
@@ -908,7 +908,7 @@ function BatchScreen({
           <ErrorText text={errors.expectedPct} />
           {pieces && <p className="text-[14px] font-medium text-fg">One batch makes {pieces}.</p>}
           {sentence && (
-            <div className="rounded-[12px] bg-surface-2 px-3 py-2" data-testid="batch-pieces">
+            <div className="rounded-[8px] bg-surface-2 px-3 py-2" data-testid="batch-pieces">
               <p className="text-[16px] font-semibold text-fg">{sentence.main}</p>
               <p className="text-[13px] text-muted">{sentence.how}</p>
             </div>
@@ -958,7 +958,7 @@ function BatchScreen({
             </Button>
           </div>
           {confirming && (
-            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]">
+            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]">
               This replaces the ingredients and steps you already typed. Press the button again to copy, or
               <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
                 keep mine
@@ -1025,7 +1025,7 @@ function IngredientsScreen({
   if (locked) {
     return (
       <Card className="flex flex-col gap-2">
-        <p className="rounded-[12px] bg-[var(--appr-bg)] px-3 py-2 text-[14px] text-[var(--appr-fg)]">The ingredients are waiting for approval, so they can&apos;t be changed now. You can still change the steps.</p>
+        <p className="rounded-[8px] bg-[var(--appr-bg)] px-3 py-2 text-[14px] text-[var(--appr-fg)]">The ingredients are waiting for approval, so they can&apos;t be changed now. You can still change the steps.</p>
         <ol className="flex flex-col divide-y divide-line">
           {d.lines.map((l, i) => (
             <li key={i} className="py-2 text-[14px]">
@@ -1055,7 +1055,7 @@ function IngredientsScreen({
         <p className="text-[15px]">List everything that goes into one batch of {fmt(d.batchKg, 3)} kg, and how much.</p>
         <div className="flex flex-col gap-1">
           <span className="text-[14px] font-semibold">Type amounts in</span>
-          <div role="radiogroup" aria-label="Type amounts in" className="inline-flex w-full max-w-sm rounded-full border border-line bg-surface-2 p-1">
+          <div role="radiogroup" aria-label="Type amounts in" className="inline-flex w-full max-w-sm rounded-[6px] border border-line bg-surface-2 p-1">
             {(["g", "pct"] as const).map((u) => (
               <button
                 key={u}
@@ -1063,7 +1063,7 @@ function IngredientsScreen({
                 role="radio"
                 aria-checked={unit === u}
                 onClick={() => set({ view: u })}
-                className={cx("min-h-[44px] flex-1 rounded-full text-[15px] font-semibold", unit === u ? "bg-surface text-fg shadow" : "text-muted")}
+                className={cx("min-h-[44px] flex-1 rounded-[6px] text-[15px] font-semibold", unit === u ? "bg-surface text-fg shadow" : "text-muted")}
               >
                 {u === "g" ? "grams" : "percent"}
               </button>
@@ -1073,7 +1073,7 @@ function IngredientsScreen({
         </div>
       </Card>
 
-      {d.lines.length === 0 && <p className="rounded-[16px] border border-dashed border-line-strong p-5 text-center text-[14px] text-muted">No ingredients yet. Press “Add an ingredient”.</p>}
+      {d.lines.length === 0 && <p className="rounded-[8px] border border-dashed border-line-strong p-5 text-center text-[14px] text-muted">No ingredients yet. Press “Add an ingredient”.</p>}
 
       {d.lines.map((l, i) => {
         const err = (k: string) => errors[`lines.${i}.${k}`];
@@ -1082,7 +1082,7 @@ function IngredientsScreen({
         return (
           <Card key={i} className="flex flex-col gap-3 !p-4" data-testid={`ingredient-${i + 1}`}>
             <div className="flex items-start justify-between gap-2">
-              <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-surface-2 px-2 text-[15px] font-semibold tabular">{i + 1}</span>
+              <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-[6px] bg-surface-2 px-2 text-[15px] font-semibold tabular">{i + 1}</span>
               <div className="flex gap-1.5">
                 <IconButton label={`Move ingredient ${i + 1} up`} disabled={i === 0} onClick={() => set({ lines: move(d.lines, i, -1) })}>
                   <ArrowUp size={20} />
@@ -1111,7 +1111,7 @@ function IngredientsScreen({
                 onCancel={l.materialId ? () => setPicking(null) : undefined}
               />
             ) : (
-              <button type="button" onClick={() => setPicking(i)} className="flex min-h-[48px] items-center justify-between rounded-[14px] border border-line px-3 text-left">
+              <button type="button" onClick={() => setPicking(i)} className="flex min-h-[48px] items-center justify-between rounded-[8px] border border-line px-3 text-left">
                 <span className="text-[16px] font-semibold">{matName(l.materialId)}</span>
                 <span className="text-[13px] text-primary-text">Change</span>
               </button>
@@ -1177,7 +1177,7 @@ function IngredientsScreen({
       <div
         role="status"
         className={cx(
-          "rounded-[14px] border px-4 py-3 text-[16px] font-semibold",
+          "rounded-[8px] border px-4 py-3 text-[16px] font-semibold",
           totals.exact ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]",
         )}
         data-testid="ingredient-total"
@@ -1245,7 +1245,7 @@ function PackagingSection({
         return (
           <Card key={i} className="flex flex-col gap-3 !p-4" data-testid={`packaging-${i + 1}`}>
             <div className="flex items-start justify-between gap-2">
-              <span className="inline-flex h-9 items-center rounded-full bg-surface-2 px-3 text-[13px] font-semibold">Packaging {i + 1}</span>
+              <span className="inline-flex h-9 items-center rounded-[6px] bg-surface-2 px-3 text-[13px] font-semibold">Packaging {i + 1}</span>
               <IconButton label={`Remove packaging ${i + 1}`} danger onClick={() => set({ packaging: d.packaging.filter((_, j) => j !== i) })}>
                 <Trash2 size={20} />
               </IconButton>
@@ -1267,7 +1267,7 @@ function PackagingSection({
                 onCancel={p.materialId ? () => setPicking(null) : undefined}
               />
             ) : (
-              <button type="button" onClick={() => setPicking(i)} className="flex min-h-[48px] items-center justify-between rounded-[14px] border border-line px-3 text-left">
+              <button type="button" onClick={() => setPicking(i)} className="flex min-h-[48px] items-center justify-between rounded-[8px] border border-line px-3 text-left">
                 <span className="text-[16px] font-semibold">{matName(p.materialId)}</span>
                 <span className="text-[13px] text-primary-text">Change</span>
               </button>
@@ -1328,7 +1328,7 @@ function IngredientPicker({
     ? { search: "Search packaging", ph: "Type the name, like wrapper", none: "No packaging item with that name.", newLabel: "New packaging item name", newPh: "Soap wrapper 135 g", note: "It is counted in pieces. Add the supplier and details later under Materials.", add: "Add this packaging item", adding: "Adding…", start: "Add a new packaging item" }
     : { search: "Search ingredients", ph: "Type the ingredient name", none: "No ingredient with that name.", newLabel: "New ingredient name", newPh: "Calamansi Extract", note: "It is weighed in grams. Add the details (INCI name, supplier) later under Materials.", add: "Add this ingredient", adding: "Adding…", start: "Add a new ingredient" };
   return (
-    <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-surface-2/60 p-3">
+    <div className="flex flex-col gap-2 rounded-[8px] border border-line bg-surface-2/60 p-3">
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
         <Input aria-label={W.search} autoFocus placeholder={W.ph} value={q} onChange={(e) => setQ(e.target.value)} className="pl-10" />
@@ -1336,7 +1336,7 @@ function IngredientPicker({
       <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
         {shown.map((m) => (
           <li key={m.id}>
-            <button type="button" onClick={() => onPick(m.id)} className="flex min-h-[44px] w-full items-center justify-between rounded-[10px] px-3 text-left hover:bg-surface">
+            <button type="button" onClick={() => onPick(m.id)} className="flex min-h-[44px] w-full items-center justify-between rounded-[6px] px-3 text-left hover:bg-surface">
               <span className="text-[15px] font-medium">{m.name}</span>
               <span className="text-[12px] text-muted">
                 {m.code}
@@ -1407,7 +1407,7 @@ function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: 
   if (locked) {
     return (
       <Card className="flex flex-col gap-2">
-        <p className="rounded-[12px] bg-[var(--appr-bg)] px-3 py-2 text-[14px] text-[var(--appr-fg)]">The steps are waiting for approval, so they can&apos;t be changed now. You can still change the ingredients.</p>
+        <p className="rounded-[8px] bg-[var(--appr-bg)] px-3 py-2 text-[14px] text-[var(--appr-fg)]">The steps are waiting for approval, so they can&apos;t be changed now. You can still change the ingredients.</p>
         <ol className="flex flex-col gap-1">
           {d.steps.map((s, i) => (
             <li key={i} className="text-[14px]">
@@ -1424,7 +1424,7 @@ function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: 
   };
   return (
     <div className="flex flex-col gap-3">
-      {d.steps.length === 0 && <p className="rounded-[16px] border border-dashed border-line-strong p-5 text-center text-[14px] text-muted">No steps yet. Tap a block below to add the first step.</p>}
+      {d.steps.length === 0 && <p className="rounded-[8px] border border-dashed border-line-strong p-5 text-center text-[14px] text-muted">No steps yet. Tap a block below to add the first step.</p>}
       <ol className="flex flex-col gap-3">
         {d.steps.map((s, i) => {
           const isOpen = open === i || Object.keys(errors).some((k) => k.startsWith(`steps.${i}.`));
@@ -1467,7 +1467,7 @@ function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: 
         <h2 className="text-[17px] font-semibold">Add a step</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {RECIPE_BLOCKS.map((b) => (
-            <button key={b.key} type="button" onClick={() => add(b.key)} className="flex min-h-[64px] items-center gap-3 rounded-[14px] border border-line bg-surface px-3 text-left hover:bg-surface-2" title={b.help}>
+            <button key={b.key} type="button" onClick={() => add(b.key)} className="flex min-h-[64px] items-center gap-3 rounded-[8px] border border-line bg-surface px-3 text-left hover:bg-surface-2" title={b.help}>
               <BlockIcon block={b.key} />
               <span className="text-[14px] font-semibold leading-tight">{b.label}</span>
             </button>
@@ -1566,7 +1566,7 @@ function StepFields({ s, i, setStep, errors }: { s: RecipeStepDraft; i: number; 
           <span className="text-[14px] font-semibold">Things to write down (optional)</span>
           <p className="text-[12px] text-muted">For example the temperature. If you give a lowest and highest number, the screen warns the worker when the number is outside.</p>
           {s.readings.map((r, k) => (
-            <div key={k} className="flex flex-col gap-2 rounded-[14px] border border-line p-3">
+            <div key={k} className="flex flex-col gap-2 rounded-[8px] border border-line p-3">
               <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
                 <Input aria-label={`What to write down ${k + 1}`} placeholder="Temperature" value={r.name} onChange={(e) => setReading(k, { name: e.target.value })} />
                 <Select aria-label="Kind of answer" value={r.kind} onChange={(e) => setReading(k, { kind: e.target.value as RecipeReadingDraft["kind"] })}>

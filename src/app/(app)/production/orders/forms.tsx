@@ -17,7 +17,7 @@ export type MakeForPrefill = { salesOrderId: string; salesOrderNumber: string; l
 
 function MoreDetails({ children }: { children: ReactNode }) {
   return (
-    <details className="rounded-[14px] border border-line bg-surface-2/40 px-3.5 py-2.5">
+    <details className="rounded-[8px] border border-line bg-surface-2/40 px-3.5 py-2.5">
       <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">More details</summary>
       <div className="mt-2 grid gap-4 sm:grid-cols-2">{children}</div>
     </details>
@@ -55,7 +55,7 @@ export function ProductionOrderForm({ formulas, lines, today, prefill, initialPr
       {(fe) => (
         <>
           {prefill && (
-            <p className="rounded-[14px] border border-line bg-surface-2/60 px-3.5 py-3 text-[14px]">
+            <p className="rounded-[8px] border border-line bg-surface-2/60 px-3.5 py-3 text-[14px]">
               For customer order <span className="font-semibold">{prefill.salesOrderNumber}</span>, line {prefill.lineNo}: {prefill.missing} pieces are missing.
             </p>
           )}
@@ -204,7 +204,7 @@ export function DailyLogForm({ workOrderId, defectTypes, batches, today, initial
           <Field label="Good pieces made" htmlFor={`${p}goodQty`} error={fe.goodQty}>
             <Input id={`${p}goodQty`} name="goodQty" inputMode="decimal" defaultValue={initial ? D(initial.goodQty).toString() : ""} placeholder="0" />
           </Field>
-          <details className="rounded-[14px] border border-line px-3.5" open={!!fe.defects || types.some((t) => !!qtyOf(t) && qtyOf(t) !== "0")}>
+          <details className="rounded-[8px] border border-line px-3.5" open={!!fe.defects || types.some((t) => !!qtyOf(t) && qtyOf(t) !== "0")}>
             <summary className="min-h-[48px] cursor-pointer py-3 text-[14px] font-medium">Any rejects? Tap to write how many of each type</summary>
           <fieldset className="pb-3">
             <legend className="sr-only">Rejects (how many pieces of each type)</legend>

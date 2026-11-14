@@ -45,7 +45,7 @@ export default async function DefectsPage({ searchParams }: { searchParams: Prom
             </Select>
           </label>
         )}
-        <button className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Show</button>
+        <button className="min-h-[44px] rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Show</button>
       </form>
       {summary.rows.length === 0 ? (
         // Re-audit: the empty state says who writes rejects and where (not only "Nothing recorded yet").

@@ -15,7 +15,7 @@ export function AuthFrame({ children, below }: { children: ReactNode; below?: Re
         <svg aria-hidden="true" className="absolute -bottom-32 -left-20 size-[420px] opacity-[0.12]" viewBox="0 0 200 200">
           <circle cx="100" cy="100" r="96" fill="none" stroke="var(--lime-300)" strokeWidth="14" />
         </svg>
-        <div className="relative inline-flex w-fit rounded-[22px] bg-white px-5 py-3 shadow-[var(--shadow-pop)]">
+        <div className="relative inline-flex w-fit rounded-[8px] bg-white px-5 py-3 shadow-[var(--shadow-pop)]">
           <Logo tagline className="h-16 w-auto" />
         </div>
         <div className="relative mt-auto max-w-[460px]">

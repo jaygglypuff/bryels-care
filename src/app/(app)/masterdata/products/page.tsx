@@ -57,7 +57,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             Search
             <Input name="q" defaultValue={sp.q} placeholder="Name or number" />
           </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Search</button>
+          <button type="submit" className="min-h-[44px] rounded-[6px] bg-primary px-5 text-[14px] font-medium text-white">Search</button>
           <div className="w-full">
             <MoreDetails title="More filters">
               <div className="flex flex-wrap gap-3">

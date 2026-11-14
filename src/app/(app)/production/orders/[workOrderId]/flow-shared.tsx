@@ -35,7 +35,7 @@ export function orderHrefOf(workOrderId: string) {
 export function FlowHeader({ title, batchNumber, orderHref, progress, actions }: { title: string; batchNumber: string; orderHref: string; progress?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="mb-4 flex flex-wrap items-center gap-3">
-      <Link href={orderHref} aria-label="Back to the order" className="inline-flex min-h-[52px] min-w-[52px] items-center justify-center rounded-full border border-line bg-surface text-fg hover:bg-surface-2">
+      <Link href={orderHref} aria-label="Back to the order" className="inline-flex min-h-[52px] min-w-[52px] items-center justify-center rounded-[6px] border border-line bg-surface text-fg hover:bg-surface-2">
         <ArrowLeft size={22} aria-hidden />
       </Link>
       <div className="min-w-0 flex-1">
@@ -60,9 +60,9 @@ export function FlowHeader({ title, batchNumber, orderHref, progress, actions }:
 /** The "Nothing here" state when the order has no batch for this screen. */
 export function NoBatch({ orderHref, children }: { orderHref: string; children: ReactNode }) {
   return (
-    <div className="mx-auto max-w-xl rounded-[20px] border border-dashed border-line-strong bg-surface-2/60 px-6 py-10 text-center" data-density="operator">
+    <div className="mx-auto max-w-xl rounded-[8px] border border-dashed border-line-strong bg-surface-2/60 px-6 py-10 text-center" data-density="operator">
       <p className="text-[17px] font-medium text-fg">{children}</p>
-      <Link href={orderHref} className="mt-4 inline-flex min-h-[52px] items-center rounded-full border border-line bg-surface px-6 text-[16px] font-medium text-fg">
+      <Link href={orderHref} className="mt-4 inline-flex min-h-[52px] items-center rounded-[6px] border border-line bg-surface px-6 text-[16px] font-medium text-fg">
         Back to the order
       </Link>
     </div>

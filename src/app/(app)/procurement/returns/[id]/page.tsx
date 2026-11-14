@@ -100,7 +100,7 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
           {v.lines.length === 0 ? (
             <p className="text-[14px] text-fg-2">No lots yet.{can.edit ? " Add them below." : ""}</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
+            <ul className="flex flex-col divide-y divide-line rounded-[8px] border border-line">
               {v.lines.map((l) => (
                 <li key={l.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-3">
                   <div className="min-w-0">

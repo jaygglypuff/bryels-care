@@ -59,7 +59,7 @@ export function SyncPanel({ userId, sites, currentSiteId }: { userId: string; si
   return (
     <div className="space-y-5">
       {msg && (
-        <p role={msg.ok ? "status" : "alert"} className={cx("rounded-[10px] border px-3 py-2 text-[13px]", msg.ok ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]")}>
+        <p role={msg.ok ? "status" : "alert"} className={cx("rounded-[6px] border px-3 py-2 text-[13px]", msg.ok ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]")}>
           {msg.text}
         </p>
       )}

@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, Hourglass } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { AuthContext } from "@/lib/auth/context";
 import { whoCanDo } from "@/modules/identity";
 import { NextStep } from "@/ui/guide";
-import { buttonClass, cx } from "@/ui/core";
+import { buttonClass } from "@/ui/core";
+import { Callout } from "@/ui/kit";
 import { TEAM_OF_PERMISSION, whoWords } from "./who-words";
 
 /**
@@ -14,25 +15,16 @@ import { TEAM_OF_PERMISSION, whoWords } from "./who-words";
  */
 export function DoNext({ text, waitingFor, action, children }: { text: ReactNode; waitingFor?: ReactNode; action?: { label: string; href: string }; children?: ReactNode }) {
   if (!children && !action) return <NextStep text={text} waitingFor={waitingFor} />;
-  // A link goes below the sentence on phones (NextStep puts it beside, which squeezes the words at 390 px).
+  // ADR-136: one compact line; a form that is the next step sits on the right (or under the line on a phone).
   const button = children ?? (
-    <Link href={action!.href} className={cx(buttonClass("cta"), "w-full font-semibold sm:w-auto")}>
-      {action!.label} <ArrowRight size={16} aria-hidden />
+    <Link href={action!.href} className={buttonClass("cta", "sm")}>
+      {action!.label} <ArrowRight size={14} aria-hidden />
     </Link>
   );
   return (
-    <section aria-label="What to do next" className="mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-      <div className="min-w-0 flex-1">
-        <p className="text-label font-semibold text-primary-text">What to do next</p>
-        <p className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{text}</p>
-        {waitingFor && (
-          <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-2">
-            <Hourglass size={14} aria-hidden /> {waitingFor}
-          </p>
-        )}
-      </div>
-      <div className="min-w-0 sm:w-auto [&_button]:min-h-[44px] [&_button]:w-full sm:[&_button]:w-auto">{button}</div>
-    </section>
+    <Callout waitingFor={waitingFor} action={<div className="flex flex-col gap-2 [&_button]:min-h-[36px] pointer-coarse:[&_button]:min-h-[44px]">{button}</div>}>
+      {text}
+    </Callout>
   );
 }
 

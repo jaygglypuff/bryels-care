@@ -19,7 +19,7 @@ export function ReserveForm({ lotId, locationId, available, uom, ttlDefault, ide
     );
   const fe = state?.fieldErrors ?? {};
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-[12px] border border-line p-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-[8px] border border-line p-3">
       <input type="hidden" name="lotId" value={lotId} />
       <input type="hidden" name="locationId" value={locationId} />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />

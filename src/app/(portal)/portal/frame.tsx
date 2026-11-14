@@ -12,7 +12,7 @@ export function PortalFrame({ children, below }: { children: ReactNode; below?: 
         <svg aria-hidden="true" className="absolute -left-24 -top-24 size-[480px] opacity-[0.14]" viewBox="0 0 200 200">
           <path d="M100 10 C130 60, 170 80, 190 100 C170 120, 130 140, 100 190 C70 140, 30 120, 10 100 C30 80, 70 60, 100 10Z" fill="var(--lime-300)" />
         </svg>
-        <div className="relative inline-flex w-fit rounded-[22px] bg-white px-5 py-3 shadow-[var(--shadow-pop)]">
+        <div className="relative inline-flex w-fit rounded-[8px] bg-white px-5 py-3 shadow-[var(--shadow-pop)]">
           <Logo tagline className="h-16 w-auto" />
         </div>
         <div className="relative mt-auto max-w-[460px]">
@@ -30,7 +30,7 @@ export function PortalFrame({ children, below }: { children: ReactNode; below?: 
         <div className="w-full max-w-[420px]">
           <div className="mb-6 flex items-center justify-between gap-3 lg:hidden">
             <Logo tagline className="h-12 w-auto" />
-            <span className="rounded-full bg-[var(--lime-100)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--brand-800)]">Customer portal</span>
+            <span className="rounded-[6px] bg-[var(--lime-100)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--brand-800)]">Customer portal</span>
           </div>
           {children}
           {below}

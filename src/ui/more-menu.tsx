@@ -18,15 +18,15 @@ export function MoreMenu({ children, label = "More", className, compact = false 
         aria-label={compact ? label : undefined}
         title={compact ? label : undefined}
         className={cx(
-          "inline-flex min-h-[44px] cursor-pointer list-none items-center justify-center gap-1.5 rounded-full border border-line bg-surface text-[14px] font-medium text-fg hover:bg-surface-2 [&::-webkit-details-marker]:hidden",
-          compact ? "min-w-[44px] px-0 sm:px-4" : "px-4",
+          "inline-flex min-h-[36px] cursor-pointer list-none items-center justify-center gap-1.5 rounded-[6px] border border-line-strong bg-surface text-[14px] font-medium text-fg shadow-[var(--shadow-card)] hover:bg-surface-2 pointer-coarse:min-h-[44px] [&::-webkit-details-marker]:hidden",
+          compact ? "min-w-[36px] px-0 pointer-coarse:min-w-[44px] sm:px-3" : "px-3",
         )}
       >
-        <MoreHorizontal size={18} aria-hidden /> <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
+        <MoreHorizontal size={16} aria-hidden /> <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
       </summary>
       <div
         className={cx(
-          "rounded-[16px] border border-line bg-surface p-4 shadow-[var(--shadow-pop)]",
+          "rounded-[8px] border border-line bg-surface p-3 shadow-[var(--shadow-pop)]",
           compact ? "absolute right-0 z-30 mt-2 w-[min(340px,calc(100vw-32px))]" : "mt-2 w-full min-w-0 sm:absolute sm:right-0 sm:z-30 sm:w-[340px]",
         )}
       >

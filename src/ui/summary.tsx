@@ -63,7 +63,7 @@ export function QuietLine({ children, detail, tone = "ok", testId }: { children:
   const icon = tone === "ok" ? <CheckCircle2 size={16} aria-hidden className="shrink-0 text-[var(--ok-fg)]" /> : null;
   if (!detail)
     return (
-      <p className="flex min-h-[44px] items-center gap-2 px-1 text-[14px] text-fg-2" data-testid={testId}>
+      <p className="flex min-h-[40px] items-center gap-2 px-1 text-[14px] text-fg-2" data-testid={testId}>
         {icon}
         {children}
       </p>

@@ -47,7 +47,7 @@ function CoSign({ prefix, people, title, hint, required = false }: { prefix: "ch
   const [who, setWho] = useState("");
   const needsPassword = useContext(SignOffPassword);
   return (
-    <fieldset className="grid gap-3 rounded-[12px] border border-line bg-surface-2/50 p-3 sm:grid-cols-2" data-testid={`cosign-${prefix}`}>
+    <fieldset className="grid gap-3 rounded-[8px] border border-line bg-surface-2/50 p-3 sm:grid-cols-2" data-testid={`cosign-${prefix}`}>
       <legend className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted">{title}</legend>
       <Field label="Name" htmlFor={`${prefix}-${title}`} hint={hint}>
         <Select id={`${prefix}-${title}`} name={`${prefix}Id`} value={who} onChange={(e) => setWho(e.target.value)} required={required}>
@@ -124,7 +124,7 @@ export function WeighForm({
   const tol: "empty" | "within" | "below" | "above" = !total ? "empty" : total.lt(ing.minG) ? "below" : total.gt(ing.maxG) ? "above" : "within";
   const outside = !partial && (tol === "below" || tol === "above");
   return (
-    <form action={action} className="mt-1 flex flex-col gap-4 rounded-[12px] border border-line-strong p-3.5" data-testid="weigh-form">
+    <form action={action} className="mt-1 flex flex-col gap-4 rounded-[8px] border border-line-strong p-3.5" data-testid="weigh-form">
       <Hidden v={{ batchId, batchMaterialId: ing.id, idempotencyKey: idem, uom }} />
       {replaces && <input type="hidden" name="supersedesId" value={replaces.id} />}
       {/* ADR-098 ScanOrPick: the usable lots (oldest expiry first) to tap or scan; then the shelf when several. */}
@@ -230,7 +230,7 @@ export function WeighForm({
         </Field>
       )}
       {outside && (
-        <div className="flex flex-col gap-3 rounded-[12px] border border-[var(--bad-bd)] bg-[var(--bad-bg)]/40 p-3">
+        <div className="flex flex-col gap-3 rounded-[8px] border border-[var(--bad-bd)] bg-[var(--bad-bg)]/40 p-3">
           <p className="text-[13px] text-[var(--bad-fg)]">Re-weigh, or request an exception: QA (or the site manager) approves on this device with their password. A deviation is opened.</p>
           <CoSign prefix="approver" people={approvers} title="Exception approved by" required />
           <Field label="Approver's reason" htmlFor={`exr-${ing.id}`} error={fe.exceptionReason}>
@@ -273,7 +273,7 @@ export function ReasonForm({ kind, hidden, label, reasonLabel, extra }: { kind: 
       </Button>
     );
   return (
-    <form action={action} className="flex w-full flex-col gap-2 rounded-[12px] border border-line p-3">
+    <form action={action} className="flex w-full flex-col gap-2 rounded-[8px] border border-line p-3">
       <Hidden v={hidden} />
       {extra}
       <Field label={reasonLabel} htmlFor={`reason-${kind}-${Object.values(hidden).join("-")}`} error={state?.fieldErrors?.reason}>

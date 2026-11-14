@@ -146,7 +146,7 @@ function PackagingTable({ step }: { step: ExecStep }) {
   return (
     <ul className="flex flex-col gap-2">
       {step.packaging.map((p) => (
-        <li key={p.id} className="rounded-[10px] border border-line p-2.5">
+        <li key={p.id} className="rounded-[6px] border border-line p-2.5">
           <p className="font-medium">
             {p.materialName} · lot <span className="font-mono">{p.lotNumber}</span> · {p.locationCode}
           </p>
@@ -327,7 +327,7 @@ export default async function BatchRecordPage({ params }: Params) {
             {ex.steps.map((s) => {
               const st = stepChip(s, ex.currentStepNo ?? null, beingMade);
               return (
-                <details key={s.stepNo} className="rounded-[16px] border border-line bg-surface px-4 py-1" open={s.isCurrent && beingMade ? true : undefined} data-testid={`record-step-${s.stepNo}`}>
+                <details key={s.stepNo} className="rounded-[8px] border border-line bg-surface px-4 py-1" open={s.isCurrent && beingMade ? true : undefined} data-testid={`record-step-${s.stepNo}`}>
                   <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2 py-2 text-[15px] [&::-webkit-details-marker]:hidden">
                     <span className="tabular text-muted">{s.stepNo}</span>
                     <span className="min-w-0 flex-1 break-words font-medium text-fg">{plainWords(s.name)}</span>
@@ -340,7 +340,7 @@ export default async function BatchRecordPage({ params }: Params) {
                         <summary className="cursor-pointer text-primary-text">
                           How-to sheet {s.workInstruction.code}, version {s.workInstruction.revisionNo} (as when the batch started)
                         </summary>
-                        <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-surface-2 p-3 font-sans">{s.workInstruction.bodyMarkdown}</pre>
+                        <pre className="mt-2 whitespace-pre-wrap rounded-[6px] bg-surface-2 p-3 font-sans">{s.workInstruction.bodyMarkdown}</pre>
                       </details>
                     )}
                     <SignLine step={s} />
@@ -360,7 +360,7 @@ export default async function BatchRecordPage({ params }: Params) {
             <Card data-testid="record-output">
               <CardTitle>Pieces made, rejects and the hold area</CardTitle>
               {ex.yieldRecord && (
-                <div className={cx("mb-3 rounded-[12px] border p-3 text-[13px]", ex.yieldRecord.isWithinLimits ? "border-line" : "border-[var(--warn-bd)] bg-[var(--warn-bg)]")}>
+                <div className={cx("mb-3 rounded-[8px] border p-3 text-[13px]", ex.yieldRecord.isWithinLimits ? "border-line" : "border-[var(--warn-bd)] bg-[var(--warn-bg)]")}>
                   <p className="tabular">
                     <b>{fmtQty(ex.yieldRecord.actualUnits, "pcs", 0)}</b> · {fmtMass(ex.yieldRecord.actualBase)} of {fmtMass(ex.yieldRecord.theoreticalBase)} expected · <b>{fmtQty(ex.yieldRecord.yieldPct, "%", 2)}</b> of the expected amount (OK {D(ex.yieldRecord.minPct).toString()}–{D(ex.yieldRecord.maxPct).toString()} %)
                   </p>
@@ -374,7 +374,7 @@ export default async function BatchRecordPage({ params }: Params) {
               ) : (
                 <ul className="mt-1 flex flex-col gap-2 text-[13px]">
                   {ex.scrap.map((s) => (
-                    <li key={s.id} className="rounded-[10px] border border-line p-2.5">
+                    <li key={s.id} className="rounded-[6px] border border-line p-2.5">
                       {s.recordKind === "scrap" ? "Thrown away" : "Redo"} {fmtQty(s.qty, s.uom, 0)} · {s.reasonLabel}
                       {s.note ? ` · ${s.note}` : ""} · {s.recordedByName} · <b>{s.status}</b>
                     </li>
@@ -417,7 +417,7 @@ export default async function BatchRecordPage({ params }: Params) {
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
-          <details className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]" data-testid="batch-details">
+          <details className="rounded-[8px] bg-surface p-5 border border-line" data-testid="batch-details">
             <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">Details</summary>
             <Dl
               items={[
@@ -528,7 +528,7 @@ function WeighingList({ ex }: { ex: BatchExecution }) {
   return (
     <ol className="flex flex-col gap-2">
       {ex.ingredients.map((ing) => (
-        <li key={ing.id} className="rounded-[12px] border border-line bg-surface-2/40 p-3 text-[13px]" data-testid={`ingredient-${ing.lineNo}`}>
+        <li key={ing.id} className="rounded-[8px] border border-line bg-surface-2/40 p-3 text-[13px]" data-testid={`ingredient-${ing.lineNo}`}>
           <p className="font-medium text-fg">
             <span className={ing.status === "substituted" ? "text-muted line-through" : undefined}>{ing.materialName}</span>{" "}
             <span className="text-muted">

@@ -74,7 +74,7 @@ export function OfflineWorkspace() {
         <div className="mx-auto flex h-[64px] max-w-[960px] items-center gap-3 px-4">
           <Logo className="h-8 w-auto shrink-0" />
           <span className="hidden font-display text-[15px] font-semibold sm:inline">Offline workspace</span>
-          <span className={cx("ml-auto flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-[12.5px] font-medium shadow-[var(--shadow-card)]", label.tone === "bad" ? "text-[var(--bad-fg)]" : label.tone === "warn" ? "text-[var(--warn-fg)]" : "text-fg-2")} data-testid="offline-status">
+          <span className={cx("ml-auto flex h-9 items-center gap-1.5 rounded-[6px] bg-surface px-3 text-[12.5px] font-medium shadow-[var(--shadow-card)]", label.tone === "bad" ? "text-[var(--bad-fg)]" : label.tone === "warn" ? "text-[var(--warn-fg)]" : "text-fg-2")} data-testid="offline-status">
             {label.icon}
             {label.text}
           </span>
@@ -130,7 +130,7 @@ export function OfflineWorkspace() {
                   ["paper", "Paper records"],
                 ] as const
               ).map(([k, l]) => (
-                <button key={k} type="button" onClick={() => setTab(k)} aria-current={tab === k ? "page" : undefined} className={cx("min-h-[44px] rounded-full border px-4 text-[14px]", tab === k ? "border-transparent bg-cta font-medium text-white" : "border-line bg-surface")}>
+                <button key={k} type="button" onClick={() => setTab(k)} aria-current={tab === k ? "page" : undefined} className={cx("min-h-[44px] rounded-[6px] border px-4 text-[14px]", tab === k ? "border-transparent bg-cta font-medium text-white" : "border-line bg-surface")}>
                   {l}
                 </button>
               ))}

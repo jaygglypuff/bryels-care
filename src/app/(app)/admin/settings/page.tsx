@@ -108,7 +108,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             key={g}
             href={`/admin/settings?group=${slug(g)}`}
             aria-current={g === group ? "page" : undefined}
-            className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", g === group ? "border-ring bg-primary-soft font-semibold" : "border-line hover:bg-surface-2")}
+            className={cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[14px]", g === group ? "border-ring bg-primary-soft font-semibold" : "border-line hover:bg-surface-2")}
           >
             {groupText(g)}
           </Link>

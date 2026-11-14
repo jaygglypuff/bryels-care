@@ -11,7 +11,7 @@ import { portalDemoSignIn } from "../../actions";
 export function PortalDemoList({ accounts, password, highlight }: { accounts: PortalDemoAccount[]; password: string; highlight?: string | null }) {
   const [state, action] = useActionState(portalDemoSignIn, null);
   return (
-    <section aria-labelledby="portal-demo-title" className="mt-5 rounded-[20px] bg-surface p-5 shadow-[var(--shadow-card)]">
+    <section aria-labelledby="portal-demo-title" className="mt-5 rounded-[8px] bg-surface p-5 border border-line">
       <h2 id="portal-demo-title" className="text-[15px] font-semibold text-fg">
         Try the demo
       </h2>

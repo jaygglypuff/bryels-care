@@ -101,7 +101,7 @@ export function CustomerPanel({
               {d.orders.length === 0 ? (
                 <p className="mt-2 text-[14px] text-muted">No orders yet. Tap &quot;New order for this customer&quot; when they order.</p>
               ) : (
-                <ul className="mt-2 divide-y divide-line rounded-[14px] border border-line">
+                <ul className="mt-2 divide-y divide-line rounded-[8px] border border-line">
                   {[...d.orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, RECENT).map((o) => (
                     <li key={o.id}>
                       <Link href={`/sales/${o.id}`} className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 hover:bg-surface-2">
@@ -187,7 +187,7 @@ export function CustomerPanel({
 
 function Total({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="min-w-0 rounded-[14px] border border-line bg-surface p-3">
+    <div className="min-w-0 rounded-[8px] border border-line bg-surface p-3">
       <dt className="text-[12px] text-muted">{label}</dt>
       <dd className="mt-1 break-words text-[16px] font-semibold tabular text-fg sm:text-[18px]">{value}</dd>
     </div>

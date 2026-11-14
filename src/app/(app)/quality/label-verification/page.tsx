@@ -48,7 +48,7 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
           ) : (
             <nav className="flex flex-wrap gap-2" aria-label="Choose an area">
               {zones.map((z) => (
-                <Link key={z.id} href={`/quality/label-verification?locationId=${z.id}`} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", z.id === locationId ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
+                <Link key={z.id} href={`/quality/label-verification?locationId=${z.id}`} className={cx("inline-flex min-h-[44px] items-center rounded-[6px] border px-4 text-[14px]", z.id === locationId ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
                   {z.name} <span className="ml-1 font-mono text-[12px] text-muted">{z.code}</span>
                   {z.boxes > 0 && <span className="ml-1 text-muted">({z.verifiedBoxes} of {z.boxes} boxes done)</span>}
                 </Link>

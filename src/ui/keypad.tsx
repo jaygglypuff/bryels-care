@@ -149,7 +149,7 @@ export function Keypad({
       key={k}
       type="button"
       onClick={() => press(k)}
-      className={cx("min-h-[56px] rounded-[14px] border border-line-strong bg-surface text-[22px] font-semibold tabular text-fg active:bg-surface-2", extra)}
+      className={cx("min-h-[56px] rounded-[8px] border border-line-strong bg-surface text-[22px] font-semibold tabular text-fg active:bg-surface-2", extra)}
       aria-label={k === "back" ? "Delete last" : k === "clear" ? "Clear" : `Key ${k}`}
     >
       {label}
@@ -180,7 +180,7 @@ export function Keypad({
               type="button"
               onClick={onSubmit}
               disabled={submitDisabled || pending}
-              className="row-span-2 flex min-h-[120px] flex-col items-center justify-center gap-1 rounded-[14px] border border-transparent bg-cta text-[16px] font-semibold text-white disabled:opacity-50"
+              className="row-span-2 flex min-h-[120px] flex-col items-center justify-center gap-1 rounded-[8px] border border-transparent bg-cta text-[16px] font-semibold text-white disabled:opacity-50"
             >
               <Check size={26} aria-hidden />
               {pending ? "Saving…" : submitLabel}
@@ -265,7 +265,7 @@ export function KeypadField({
       </label>
       <div
         className={cx(
-          "flex min-h-[56px] w-full items-center justify-between gap-2 rounded-[14px] border bg-surface px-4 tabular focus-within:border-ring focus-within:ring-2 focus-within:ring-[var(--ring)]",
+          "flex min-h-[56px] w-full items-center justify-between gap-2 rounded-[8px] border bg-surface px-4 tabular focus-within:border-ring focus-within:ring-2 focus-within:ring-[var(--ring)]",
           large ? "text-[28px] font-semibold" : "text-[22px]",
           active ? "border-ring ring-2 ring-[var(--lime-200)]" : "border-line-strong",
           error ? "border-[var(--bad-bd)]" : "",

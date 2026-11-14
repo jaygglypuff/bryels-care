@@ -23,7 +23,7 @@ function BatchCard({ b }: { b: BatchListRow }) {
   return (
     <Link
       href={`/production/${b.id}`}
-      className="block rounded-[14px] border border-line bg-surface p-3.5 transition-shadow hover:shadow-sm focus-visible:shadow-sm"
+      className="block rounded-[8px] border border-line bg-surface p-3.5 transition-shadow hover:shadow-sm focus-visible:shadow-sm"
       data-testid="batch-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -40,7 +40,7 @@ function BatchCard({ b }: { b: BatchListRow }) {
           <span className="tabular text-muted">{b.stepsDone}/{total}</span>
         </div>
         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-          <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+          <div className="h-full rounded-[6px] bg-primary" style={{ width: `${pct}%` }} />
         </div>
       </div>
       <p className="mt-2 text-[12px] text-muted">
@@ -83,7 +83,7 @@ export default async function BatchesPage() {
             {COLUMNS.map((col) => {
               const items = rows.filter((r) => col.statuses.includes(r.status));
               return (
-                <section key={col.key} className="flex min-w-0 flex-col rounded-[16px] border border-line bg-surface-2/60 p-3" aria-label={col.title}>
+                <section key={col.key} className="flex min-w-0 flex-col rounded-[8px] border border-line bg-surface-2/60 p-3" aria-label={col.title}>
                   <header className="mb-2.5 flex items-baseline justify-between px-1">
                     <h2 className="text-[13px] font-semibold text-fg">{col.title}</h2>
                     <span className="text-[12px] text-muted tabular">{items.length}</span>
@@ -96,7 +96,7 @@ export default async function BatchesPage() {
             })}
           </div>
 
-          <details className="mt-4 rounded-[16px] border border-line bg-surface p-4">
+          <details className="mt-4 rounded-[8px] border border-line bg-surface p-4">
             <summary className="cursor-pointer text-[14px] font-medium text-fg">Rejected and closed ({closedOrRejected.length})</summary>
             {closedOrRejected.length === 0 ? (
               <p className="mt-2 text-[13px] text-muted">No rejected or closed batches.</p>

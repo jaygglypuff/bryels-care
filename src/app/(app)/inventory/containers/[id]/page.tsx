@@ -124,7 +124,7 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
         {box.contents.length === 0 ? (
           <EmptyState title="Empty">What was inside went into other boxes (see below).</EmptyState>
         ) : (
-          <ul className="divide-y divide-line rounded-[12px] border border-line">
+          <ul className="divide-y divide-line rounded-[8px] border border-line">
             {box.contents.map((c) => (
               <li key={c.lotId}>
                 <Link href={`/inventory/${c.lotId}`} className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 px-3 py-2.5 hover:bg-surface-2">
@@ -154,7 +154,7 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
         {box.lineage.length === 0 ? (
           <p className="text-[14px] text-fg-2">Packed straight from loose stock. It was never split, put together or repacked.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
             {[...ancestors, ...descendants].map((l) => {
               const other = l.direction === "ancestor" ? { id: l.parent_id, number: l.parent_number } : { id: l.child_id, number: l.child_number };
               return (
@@ -178,7 +178,7 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
         {box.movements.length === 0 ? (
           <p className="text-[14px] text-fg-2">Not moved yet.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
             {box.movements.map((m) => {
               const meta = (m.meta ?? {}) as { fromCode?: string; toCode?: string };
               return (

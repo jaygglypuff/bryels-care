@@ -121,7 +121,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
       return canAllocate ? (
         <DoNext text={hasAllocations ? "Next: set aside the rest of the stock." : "Next: set aside the stock for this order (the oldest expiry first)."}>
           {earlier.length > 0 && (
-            <p className="mb-2 rounded-[10px] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="earlier-order">
+            <p className="mb-2 rounded-[6px] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="earlier-order">
               {earlier.map((e) => `Order ${e.orderNumber} (${e.customerName}, due ${fmtDayMonth(e.requestedDeliveryOn)}) is due earlier and also needs this stock.`).join(" ")} Stock goes first to the order due first: set that one aside first unless you agreed otherwise.
             </p>
           )}
@@ -345,7 +345,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               {toMake.length > 0 && (
                 <ul className="flex flex-col gap-2">
                   {toMake.map((l) => (
-                    <li key={l.salesOrderLineId} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line p-3">
+                    <li key={l.salesOrderLineId} className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-line p-3">
                       <div className="min-w-0 text-[14px]">
                         <p className="font-medium">{l.productName}</p>
                         <p className="text-fg-2">
@@ -448,7 +448,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 ["Approval", approvalText(status, order.approvedAt, order.approvalNote)],
               ]}
             />
-            {order.notes && <p className="mt-3 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{order.notes}</p>}
+            {order.notes && <p className="mt-3 rounded-[6px] bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{order.notes}</p>}
             <div className="mt-3">
               <MoreDetails>
                 <Dl

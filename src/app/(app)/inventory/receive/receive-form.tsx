@@ -280,7 +280,7 @@ export function ReceiveForm({
           {po ? (
             <div className="flex min-w-0 flex-col gap-1.5">
               <span className="text-[13px] font-medium">Supplier</span>
-              <p className="min-h-[44px] rounded-[14px] bg-surface-2 px-3.5 py-2.5 text-[14px]">
+              <p className="min-h-[44px] rounded-[8px] bg-surface-2 px-3.5 py-2.5 text-[14px]">
                 {po.supplierName} <span className="text-muted">· order {po.poNumber}</span>
               </p>
             </div>
@@ -402,7 +402,7 @@ export function ReceiveForm({
                       </Select>
                     </div>
                     {question && (
-                      <div role="alertdialog" aria-label="Is this amount right?" className="mt-2 flex flex-col gap-2 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3" data-testid={`amount-question-${pos + 1}`}>
+                      <div role="alertdialog" aria-label="Is this amount right?" className="mt-2 flex flex-col gap-2 rounded-[8px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3" data-testid={`amount-question-${pos + 1}`}>
                         <p className="text-[15px] font-semibold text-fg">{question.text}</p>
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" variant="secondary" size="lg" onClick={() => answer(l.key, {})}>
@@ -444,7 +444,7 @@ export function ReceiveForm({
                 </div>
 
                 {mat?.storageConditions && (
-                  <label className="mt-4 flex min-h-[44px] items-start gap-3 rounded-[12px] border border-line p-3 text-[14px]">
+                  <label className="mt-4 flex min-h-[44px] items-start gap-3 rounded-[8px] border border-line p-3 text-[14px]">
                     <input type="checkbox" className="mt-0.5 size-5 shrink-0" checked={l.storageConditionsConfirmed} onChange={(e) => update(l.key, { storageConditionsConfirmed: e.target.checked })} />
                     <span className="min-w-0">
                       I checked the storage: {mat.storageConditions}
@@ -545,11 +545,11 @@ export function ReceiveForm({
       {fe.lines && <p className="text-[13px] text-[var(--bad-fg)]">{fe.lines}</p>}
       <FormMessage state={state} />
       {allAnswered && (
-        <p role="status" className="rounded-[10px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
+        <p role="status" className="rounded-[6px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
           Thank you. Now tap the save button again.
         </p>
       )}
-      <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 -mx-4 flex flex-wrap lg:bottom-0 items-center justify-between gap-3 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-[16px] sm:border">
+      <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 -mx-4 flex flex-wrap lg:bottom-0 items-center justify-between gap-3 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-[8px] sm:border">
         <p className="text-[13px] text-muted">
           {sent.length} {sent.length === 1 ? "item" : "items"} · saving makes {sent.length} {sent.length === 1 ? "lot" : "lots"}
         </p>

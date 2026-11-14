@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Ban, CheckCircle2, ChevronLeft, Circle, CircleDot, Hourglass } from "lucide-react";
+import { ArrowRight, Ban, CheckCircle2, ChevronLeft, Circle, CircleDot } from "lucide-react";
 import type { ReactNode } from "react";
 import { cx } from "./core";
+import { Callout } from "./kit";
 import { type RecordStep, shortStepLabel } from "./record-steps";
 import { StatusChip } from "./status";
 
@@ -18,7 +19,7 @@ import { StatusChip } from "./status";
  *   5. `meta`: one small line of facts ("Order WO-26-00002 · made 6 Nov").
  *   6. `secondary`: rare extra links as small buttons (never a row of big buttons).
  *   7. `steps`: the progress strip from the record's state machine.
- *   8. `next` / `primary`: "What to do next" in the same box as NextStep, with the one green button.
+ *   8. `next` / `primary`: "What to do next" as one compact line (ADR-136 Callout), with the one green button.
  * Setup records (materials, products, suppliers…) have no number people use: leave `reference` out and the name is
  * the hero (ADR-103/108 names before codes); the code goes in `meta`.
  *
@@ -80,11 +81,11 @@ export function RecordHeader({
   return (
     <header className="mb-4 sm:mb-6" data-testid="record-header">
       {back && (
-        <Link href={back.href} className="-ml-2 mb-1 inline-flex min-h-[44px] items-center gap-0.5 rounded-full px-2 text-meta font-medium text-primary-text hover:bg-primary-soft">
+        <Link href={back.href} className="-ml-1.5 mb-1 inline-flex min-h-[32px] items-center gap-0.5 rounded-[6px] px-1.5 text-meta font-medium text-fg-2 hover:bg-surface-3 hover:text-fg pointer-coarse:min-h-[44px]">
           <ChevronLeft size={16} aria-hidden /> {back.label}
         </Link>
       )}
-      <p className="text-label font-semibold uppercase tracking-[0.04em] text-muted">
+      <p className="text-[13px] font-medium text-fg-2">
         {typeLabel}
         {siteCode && (
           <>
@@ -97,19 +98,19 @@ export function RecordHeader({
       <div className="mt-0.5 flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           {hero ? (
-            <h1 className="min-w-0 break-all font-sans text-id tracking-[-0.015em] text-fg sm:text-id-lg" data-testid="record-reference">
+            <h1 className="min-w-0 break-all font-sans text-id tracking-[-0.011em] text-fg lg:text-id-lg" data-testid="record-reference">
               <span data-testid="record-number">{hero}</span>
             </h1>
           ) : (
-            <h1 className="min-w-0 break-words font-display text-title tracking-tight text-fg sm:text-title-lg" data-testid="record-reference">
+            <h1 className="min-w-0 break-words text-title text-fg lg:text-title-lg" data-testid="record-reference">
               {title}
             </h1>
           )}
           {chip ?? (status ? <StatusChip status={status} label={statusLabel} /> : null)}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2 [&_a]:min-h-[44px] [&_button]:min-h-[44px]">{actions}</div>}
+        {actions && <div className="flex shrink-0 items-center gap-2 [&_a]:min-h-[36px] [&_button]:min-h-[36px] pointer-coarse:[&_a]:min-h-[44px] pointer-coarse:[&_button]:min-h-[44px]">{actions}</div>}
       </div>
-      {hero && title && <p className="mt-0.5 break-words text-subtitle text-fg-2 sm:text-[17px]">{title}</p>}
+      {hero && title && <p className="mt-0.5 break-words text-subtitle text-fg-2">{title}</p>}
       {facts.length > 0 && (
         <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta text-muted">
           {facts.map((m, i) => (
@@ -136,22 +137,15 @@ export function RecordHeader({
       {steps.length > 0 && <RecordProgress steps={steps} />}
 
       {(primary || next) && (
-        <section aria-label="What to do next" className="mt-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-          {next && (
-            <div className="min-w-0 sm:flex-[1_1_16rem]">
-              <p className="text-label font-semibold text-primary-text">What to do next</p>
-              {/* div, not p: callers may pass block content (a warning line, WhoCanHelp) — ADR-123. */}
-              <div className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{next}</div>
-              {waitingFor && (
-                <div className="mt-1 flex items-start gap-1.5 text-meta text-fg-2">
-                  <Hourglass size={14} aria-hidden className="mt-0.5 shrink-0" />
-                  <div className="min-w-0">{waitingFor}</div>
-                </div>
-              )}
-            </div>
-          )}
-          {primary && <div className="min-w-0 sm:ml-auto [&_a]:w-full [&_button]:w-full sm:[&_a]:w-auto sm:[&_button]:w-auto">{primary}</div>}
-        </section>
+        // ADR-136: one compact line (Callout) instead of the big green box; div content: callers may pass block
+        // content (a warning line, WhoCanHelp) — ADR-123.
+        next ? (
+          <Callout className="mb-0 mt-4" waitingFor={waitingFor} action={primary}>
+            {next}
+          </Callout>
+        ) : (
+          <div className="mt-4">{primary}</div>
+        )
       )}
     </header>
   );
@@ -160,7 +154,7 @@ export function RecordHeader({
 /** A tiny link-arrow used by callers that want "Open …" as a tertiary text action in `secondary`. */
 export function TextLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="inline-flex min-h-[44px] items-center gap-1 rounded-full px-2 text-[14px] font-medium text-primary-text hover:bg-primary-soft">
+    <Link href={href} className="inline-flex min-h-[36px] items-center gap-1 rounded-[6px] px-2 text-[14px] font-medium text-primary-text hover:bg-surface-3 pointer-coarse:min-h-[44px]">
       {children} <ArrowRight size={14} aria-hidden />
     </Link>
   );
@@ -201,7 +195,7 @@ function CompactProgress({ steps }: { steps: RecordStep[] }) {
       </p>
       <div aria-hidden className="mt-1.5 flex gap-1">
         {steps.map((s, i) => (
-          <span key={i} className={cx("h-1.5 flex-1 rounded-full", s.state === "done" ? "bg-[var(--ok-fg)]" : s.state === "current" ? "bg-primary" : s.state === "blocked" ? "bg-[var(--rej-fg)]" : "bg-line-strong")} />
+          <span key={i} className={cx("h-1 flex-1 rounded-[2px]", s.state === "done" ? "bg-[var(--ok-fg)]" : s.state === "current" ? "bg-primary" : s.state === "blocked" ? "bg-[var(--rej-fg)]" : "bg-line-strong")} />
         ))}
       </div>
     </div>
@@ -218,11 +212,11 @@ function FullProgress({ steps }: { steps: RecordStep[] }) {
           {i > 0 && <span aria-hidden className={cx("h-px w-3 shrink-0 sm:w-5 lg:w-3 2xl:w-5", s.state === "upcoming" ? "bg-line-strong" : "bg-[var(--ok-fg)]")} />}
           <span
             className={cx(
-              "inline-flex min-h-[32px] min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] leading-tight lg:px-2 2xl:px-2.5",
-              s.state === "done" && "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]",
-              s.state === "current" && "border-primary bg-primary-soft font-semibold text-fg",
+              "inline-flex min-h-[28px] min-w-0 items-center gap-1.5 rounded-[6px] border px-2 py-0.5 text-[13px] leading-tight",
+              s.state === "done" && "border-transparent text-[var(--ok-fg)]",
+              s.state === "current" && "border-primary bg-[var(--nav-active-bg)] font-semibold text-fg",
               s.state === "blocked" && "border-[var(--rej-bd)] bg-[var(--rej-bg)] font-semibold text-[var(--rej-fg)]",
-              s.state === "upcoming" && "border-line bg-surface text-muted",
+              s.state === "upcoming" && "border-transparent text-muted",
             )}
           >
             {s.state === "done" ? (

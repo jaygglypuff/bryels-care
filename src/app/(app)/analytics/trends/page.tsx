@@ -30,7 +30,7 @@ function Picker({ catalogue, codes, grain, span, comparison, scopeKey, sites, ca
     <Card>
       <form method="get" action="/analytics/trends" className="flex flex-col gap-4">
         {/* Round 4 (UX re-audit C #7): the long list of numbers is folded; the picked ones are named in the summary. */}
-        <details className="rounded-[14px] border border-line bg-surface-2/40 px-3.5" data-testid="trend-numbers">
+        <details className="rounded-[8px] border border-line bg-surface-2/40 px-3.5" data-testid="trend-numbers">
           <summary className="flex min-h-[48px] cursor-pointer items-center text-[14px] font-medium text-fg">
             Numbers shown: {codes.length ? catalogue.filter((k) => codes.includes(k.code)).map((k) => plainKpi(k.code, k.name)).join(", ") : "none yet"} · change (up to {TREND_MAX_SERIES})
           </summary>
@@ -112,16 +112,16 @@ function TrendCharts({ t }: { t: Trends }) {
       {t.series.map((s, si) => (
         <figure key={s.code} className="min-w-0">
           <figcaption className="mb-1 flex flex-wrap items-center gap-2 text-[13px]">
-            <span className="size-3 rounded-full" style={{ background: slotColor(s.slot) }} aria-hidden />
+            <span className="size-3 rounded-[6px]" style={{ background: slotColor(s.slot) }} aria-hidden />
             <span className="font-medium text-fg" title={`${s.definition} Calculation: ${s.formula}. Time basis: ${s.timeBasis}.`}>
               {s.name}
             </span>
             <ValueLabelChip label={s.label} />
           </figcaption>
           {s.note ? (
-            <p className="rounded-[12px] border border-dashed border-line-strong px-3 py-6 text-center text-[13px] text-muted">{s.note}</p>
+            <p className="rounded-[8px] border border-dashed border-line-strong px-3 py-6 text-center text-[13px] text-muted">{s.note}</p>
           ) : s.points.every((p) => p === null) ? (
-            <p className="rounded-[12px] border border-dashed border-line-strong px-3 py-6 text-center text-[13px] text-muted">No nightly snapshot in this range yet.</p>
+            <p className="rounded-[8px] border border-dashed border-line-strong px-3 py-6 text-center text-[13px] text-muted">No nightly snapshot in this range yet.</p>
           ) : (
             <LineChart
               labels={labels}

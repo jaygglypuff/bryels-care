@@ -123,11 +123,11 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                       href={keep({ c: c.id, tab: undefined })}
                       aria-current={active ? "true" : undefined}
                       className={cx(
-                        "flex gap-3 rounded-[16px] border p-3 transition-colors",
+                        "flex gap-3 rounded-[8px] border p-3 transition-colors",
                         active ? "border-[var(--info-bd)] bg-[var(--info-bg)]" : "border-line bg-surface hover:bg-surface-2",
                       )}
                     >
-                      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary-text" aria-hidden>
+                      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-primary-soft text-primary-text" aria-hidden>
                         <UserRound size={18} />
                       </span>
                       <span className="min-w-0 flex-1">

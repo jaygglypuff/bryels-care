@@ -29,7 +29,7 @@ const MORE_FILTERS: [string, string][] = [
 
 function OrderCard({ r }: { r: ProductionOrderRow }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-[18px] border border-line bg-surface p-4">
+    <div className="flex min-w-0 flex-col gap-2 rounded-[8px] border border-line bg-surface p-4">
       <Link href={`/production/orders/${r.id}`} className="block min-w-0 hover:underline">
         <p className="text-[18px] font-semibold leading-snug">{r.productName}</p>
       </Link>
@@ -47,7 +47,7 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
         <NeededBy date={r.neededBy} late={r.late} />
         {r.salesOrderNumber && <span className="text-[13px] text-muted">For {r.salesOrderNumber}</span>}
         {/* ADR-082: who makes it */}
-        <span className={cx("rounded-full px-2.5 py-0.5 text-[12.5px] font-medium", r.assignedToMe ? "bg-primary-soft text-primary-text" : "bg-surface-2 text-fg-2")}>
+        <span className={cx("rounded-[4px] px-2.5 py-0.5 text-[12.5px] font-medium", r.assignedToMe ? "bg-primary-soft text-primary-text" : "bg-surface-2 text-fg-2")}>
           {r.assignedToMe ? "Assigned to you" : r.assigneeName ? `Assigned to ${r.assigneeName}` : "Anyone can take it"}
         </span>
       </div>
@@ -67,7 +67,7 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
 function FilterWrap({ operator, open, children }: { operator: boolean; open: boolean; children: React.ReactNode }) {
   if (!operator) return <>{children}</>;
   return (
-    <details className="mb-4 rounded-[14px] border border-line bg-surface px-3.5 py-1" open={open}>
+    <details className="mb-4 rounded-[8px] border border-line bg-surface px-3.5 py-1" open={open}>
       <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium text-primary-text">Show more filters</summary>
       <div className="pt-1">{children}</div>
     </details>
@@ -114,7 +114,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
       {board ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {columns.map((c) => (
-            <section key={c.key} className="min-w-0 rounded-[18px] bg-surface-2/60 p-2.5" aria-label={c.label}>
+            <section key={c.key} className="min-w-0 rounded-[8px] bg-surface-2/60 p-2.5" aria-label={c.label}>
               <h2 className="mb-2 px-1.5 text-[14px] font-semibold">
                 {c.label} <span className="font-normal text-muted">({c.rows.length})</span>
               </h2>
@@ -146,7 +146,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
             {[["1", operator ? "Mine and open" : "Mine and unassigned"], ["0", "Everyone's"]].map(([v, label]) => {
               const active = (v === "1") === mine;
               return (
-                <Link key={v} href={`?status=${status}&mine=${v}`} aria-current={active ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-full border px-4 py-2.5 text-[14px] font-medium", active ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:bg-surface-2")}>
+                <Link key={v} href={`?status=${status}&mine=${v}`} aria-current={active ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-[6px] border px-4 py-2.5 text-[14px] font-medium", active ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:bg-surface-2")}>
                   {label}
                 </Link>
               );
@@ -154,17 +154,17 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
             </nav>
             <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Filter by status">
             {mainFilters.map(([k, label]) => (
-              <Link key={k} href={`?status=${k}${mine !== operator ? `&mine=${mine ? 1 : 0}` : ""}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[48px] whitespace-nowrap rounded-full border px-4 py-3 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
+              <Link key={k} href={`?status=${k}${mine !== operator ? `&mine=${mine ? 1 : 0}` : ""}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[48px] whitespace-nowrap rounded-[6px] border px-4 py-3 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
                 {label}
               </Link>
             ))}
             </nav>
-            <details className="mb-4 rounded-[14px] border border-line bg-surface-2/40 px-3.5 py-1" open={moreActive || !!sp.q}>
+            <details className="mb-4 rounded-[8px] border border-line bg-surface-2/40 px-3.5 py-1" open={moreActive || !!sp.q}>
             <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">More details</summary>
             <div className="flex flex-col gap-3 pb-3">
               <nav className="flex flex-wrap gap-1.5" aria-label="More filters">
                 {MORE_FILTERS.map(([k, label]) => (
-                  <Link key={k} href={`?status=${k}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-full border px-4 py-2.5 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
+                  <Link key={k} href={`?status=${k}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-[6px] border px-4 py-2.5 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
                     {label}
                   </Link>
                 ))}
@@ -175,7 +175,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
                   Search
                   <input name="q" defaultValue={sp.q ?? ""} placeholder="Order number or product" className="min-h-[44px] rounded-[8px] border border-line-strong bg-surface px-3.5 text-[14px]" />
                 </label>
-                <button className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Search</button>
+                <button className="min-h-[44px] rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Search</button>
               </form>
             </div>
             </details>
