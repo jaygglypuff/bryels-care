@@ -191,8 +191,8 @@ const section = (name, fn) => SECTIONS.push({ name, fn });
 // ---------------------------------------------------------------- a. Owner Home
 section('a. owner Home says what to do next', async () => {
   const { page, close } = await asUser(who('owner'));
-  // ADR-136: what to do next is the first panel, "Needs you" (its first line is the oldest decision).
-  await page.getByTestId('home-needs').getByText(/wait(s)? for your decision|Nothing needs you now/).first().waitFor();
+  // ADR-136: what to do next is the first panel, "Needs you": a line to open (decision, check, message) or "Nothing needs you now".
+  await page.getByTestId('home-needs').locator('a[href], [data-testid=home-nothing]').first().waitFor();
   await expectText(page, 'finished batch waits for the QA check');
   await shot(page, 'owner-home');
   await go(page, '/production/orders');
@@ -628,7 +628,8 @@ async function pickEverything(page) {
 /** The customer order page of a customer (from the Customer orders list). */
 async function openOrder(page, customer) {
   await go(page, '/sales');
-  await page.locator('main a[href^="/sales/"]').filter({ hasText: customer }).first().click();
+  // ADR-136: the list is a table on a computer and cards on a phone; click the one that is shown.
+  await page.locator('main a[href^="/sales/"]').filter({ hasText: customer, visible: true }).first().click();
   await waitUrl(page, /\/sales\/[0-9a-f-]{36}$/);
 }
 
@@ -650,7 +651,8 @@ section('k. the Isla Spa order is set aside (use first); the warehouse gets it f
     await expectText(page, 'Next: set aside the stock for this order');
     await setAside.click();
     await confirmIfAsked(page); // round 5 (ADR-131): set aside asks first
-    await expectText(page, 'set aside 48 of 48');
+    // ADR-136: the order lines are a table; the "Set aside" column reads "48 of 48".
+    await page.getByTestId('order-lines').getByText('48 of 48', { exact: true }).first().waitFor();
     await shot(page, 'isla-set-aside');
   }
   const start = page.getByRole('button', { name: 'Get from shelf' });
