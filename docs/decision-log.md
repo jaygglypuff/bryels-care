@@ -2931,3 +2931,20 @@ Owner: (a) "Can you change the weighing or other that requires touching the phon
 5. No migration, no new dependency. Assumptions A-UI-KEYS-01 and A-TV-01 in `docs/PRD.md`.
 
 Open: the owner confirms the TV pacing, per-page counts and dark option on the real TV, and whether a tablet with a keyboard should default to typing. The Step Enter flow has no browser test yet; the iPad accessory bar in keypad mode is unverified on hardware.
+
+## ADR-136 A standard business frame: left sidebar, neutral surfaces, tables instead of pills (owner 2026-11-14)
+Status: Accepted (owner delegated the design decisions; phase 1 of the desktop redesign). Supersedes the top-bar menu row, area tab rows and "More" dropdowns of ADR-129 §1 on screens 1024 px and wider (the menus per job, the catalogue, permissions and floor bottom bars are unchanged). Amends ADR-119 (type scale), ADR-083/ADR-123 (one green button: now `primary` = `cta` = brand green) and ADR-088 (PageIntro and NextStep keep their words, change their place and look).
+
+Owner: "I am still not convinced with the UI, also in desktop mode. There are still a lot of navigation problems, also the UI is ugly, feels AI-ish and not standard."
+
+1. **Frame** (`src/app/(app)/shell.tsx`, `nav.ts` `groupEntries`, `crumbsFor`). From 1024 px a 240 px left sidebar lists the job's whole two-level menu, with no "More" dropdowns and no tab row; areas fold; "Icons only" (64 px) is remembered per device; Set-up, Settings and Help sit at the foot; the open page has a tinted background and a green bar; arrow keys move through the menu; a skip link comes first. A 56 px top bar holds the breadcrumb (Section › Page › record), Search (Ctrl/⌘K), the site switcher, Help "?" and the avatar. Below 1024 px ☰ opens the same tree for office roles and every role keeps its bottom bar; floor phone flows are unchanged.
+2. **Tokens** (`globals.css`). Neutral greys (#F7F8FA, #FFFFFF, #E4E7EC, #101828, #475467); brand green only for the primary button, links, the active entry and focus; Inter only; page titles 20/22 px; 6 px buttons and inputs (36 px with a mouse, ≥44 px on touch), 8 px cards, 4 px badges; no pills except avatars, dots, bars and switches. A dark token set exists under `data-theme="dark"`, not yet switched on from the OS.
+3. **Page header and guidance.** Title, one meta line, actions on the right (one primary, outlined secondary, ⋯ More); no greeting. "This screen is for…" moves into the "?" panel ("About this screen") for office roles; floor roles still read it. "What to do next" is one compact `Callout` line on record pages.
+4. **Lists** (`src/ui/kit.tsx`). One toolbar: underline status tabs with counts (no duplicate stat cards or pill rows), search, filter dropdowns. `DataTable`: sticky header, sortable columns (decimals compared with decimal.js), right-aligned tabular numbers, 48 px rows, whole-row click with a real link in the name cell, count footer, cards on phones. No letter avatars, no underlined names.
+5. **Home:** compact KPI tiles, then panels with one header pattern (Needs you, Waiting on others, Watch out, Sales this week, Recent activity).
+6. **Reference pages converted:** Home, Customer orders and the order page, Production orders, Stock (title = menu word "Stock"), To approve, Settings. Every other page takes the frame, tokens and shared parts; the rest move to the list pattern in phase 2.
+7. No migration, no permission change, no new dependency. Assumption A-UI-136-01 in `docs/PRD.md`; `docs/ux-system.md` §0.
+
+Tests: unit `desktop-shell-adr136`; updated `round4-ux`, `harmony-leftovers`, `one-help-door`, `nav-titles`, grade5 (intro now in the Help panel). E2E: `demo-rehearsal.cjs` (selectors for Needs you, order-line table, visible order row); `top-bar-fit.cjs` rewritten for the new frame (386 checks at 390, 1024 and 1440 px, 7 roles).
+
+Open: phase 2 list pages, stat-card pages and record pages; switching the dark theme on; the owner confirms the sidebar length and the landscape-tablet sidebar on the live demo.
