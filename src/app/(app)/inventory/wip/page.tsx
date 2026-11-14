@@ -25,7 +25,7 @@ export default async function WipPage() {
   const rows = (oc?.batches ?? []).filter((b) => b.status !== "planned");
   return (
     <div className="space-y-4">
-      <PageHeader title="Being made" subtitle={ctx.currentSite.name} actions={<LinkButton href="/inventory/scan" variant="secondary">Scan a label</LinkButton>} />
+      <PageHeader title="Stock" subtitle={`${ctx.currentSite.name} · Being made`} actions={<LinkButton href="/inventory/scan" variant="secondary">Scan a label</LinkButton>} />
       <PageIntro>This screen is for batches that are being made now or are waiting for the QA check. Their materials have left stock; the finished goods go into stock when the batch is finished.</PageIntro>
       <StockTabs active="wip" />
       {!seesBatches ? (

@@ -46,7 +46,7 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
       method="get"
       action="/inventory"
       role="search"
-      className="flex items-stretch gap-2"
+      className="flex min-w-0 flex-1 basis-[260px] items-center gap-2 sm:max-w-[420px]"
       onSubmit={(e) => {
         e.preventDefault();
         go(q);
@@ -55,7 +55,7 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
       {Object.entries(keep).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
       <label htmlFor="stock-q" className="sr-only">Search stock</label>
       <div className="relative min-w-0 flex-1">
-        <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
         <input
           id="stock-q"
           name="q"
@@ -71,7 +71,7 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
             timer.current = setTimeout(() => go(v), 400);
           }}
           className={cx(
-            "h-[48px] w-full rounded-[6px] border border-line bg-surface pl-10 pr-10 text-[15px] text-fg outline-none placeholder:text-muted focus:border-[var(--ring)] focus:ring-2 focus:ring-[var(--ring)]/30 [&::-webkit-search-cancel-button]:hidden",
+            "h-9 w-full rounded-[6px] border border-line-strong bg-surface pl-9 pr-10 text-[15px] text-fg shadow-[var(--shadow-card)] outline-none placeholder:text-muted focus:border-ring focus:ring-[3px] focus:ring-[var(--primary-soft)] pointer-coarse:h-11 pointer-fine:text-[14px] [&::-webkit-search-cancel-button]:hidden",
             pending && "opacity-70",
           )}
           aria-busy={pending}
@@ -80,7 +80,7 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
           <button
             type="button"
             aria-label="Clear search"
-            className="absolute right-1 top-1/2 inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-[6px] text-muted hover:text-fg"
+            className="absolute right-0.5 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-[6px] text-muted hover:text-fg pointer-coarse:size-10"
             onClick={() => {
               setQ("");
               go("");
@@ -91,8 +91,8 @@ export function StockSearch({ defaultQ, keep }: { defaultQ: string; keep: Record
           </button>
         )}
       </div>
-      <Link href="/inventory/scan" className={cx(buttonClass("cta"), "h-[48px] shrink-0 px-4")}>
-        <ScanLine size={18} aria-hidden />
+      <Link href="/inventory/scan" className={cx(buttonClass("secondary"), "shrink-0")}>
+        <ScanLine size={16} aria-hidden />
         Scan
       </Link>
     </form>

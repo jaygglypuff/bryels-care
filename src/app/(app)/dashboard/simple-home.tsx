@@ -310,17 +310,19 @@ export function ProductionByStage({ oc, all }: { oc: OperationsCenter; all: bool
 
 export function RecentActivity({ rows, showSite }: { rows: ActivityRow[]; showSite: boolean }) {
   return (
-    <section aria-labelledby="activity-h" className="min-w-0 rounded-[8px] bg-surface p-5 border border-line sm:p-6">
-      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3">
-        <h2 id="activity-h" className="font-display text-[17px] font-semibold text-fg">Recent activity</h2>
-        <Link href="/admin/audit" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
+    <section aria-labelledby="activity-h" className="min-w-0 rounded-[8px] border border-line bg-surface" data-testid="home-activity">
+      <div className="flex min-h-[48px] flex-wrap items-center justify-between gap-x-3 border-b border-line px-4 py-2">
+        <h2 id="activity-h" className="text-[14px] font-semibold text-fg">Recent activity</h2>
+        <Link href="/admin/audit" className="inline-flex min-h-[32px] items-center text-[13px] font-medium text-primary-text hover:underline pointer-coarse:min-h-[44px]">
           Full history of changes
         </Link>
       </div>
       {rows.length === 0 ? (
-        <EmptyState title="Nothing has happened yet">Receipts, batches, quality decisions and orders appear here.</EmptyState>
+        <div className="p-4">
+          <EmptyState title="Nothing has happened yet">Receipts, batches, quality decisions and orders appear here.</EmptyState>
+        </div>
       ) : (
-        <ul className="divide-y divide-line">
+        <ul className="divide-y divide-line px-4">
           {rows.map((r) => {
             const s = activitySentence(r);
             const href = entityHref(r.entityType, r.entityId);

@@ -18,9 +18,9 @@ const ROOT = join(__dirname, "../..");
 
 /** Screens whose H1 is not a fixed word, and what it shows instead. Keep this list short. */
 const DYNAMIC_TITLES: Record<string, string> = {
-  "/dashboard": "a greeting with the person's name (\"Good evening, Ana\"); the menu word is Home",
+  // ADR-136: the owner's and office Homes are titled "Home"; the floor Home ("My jobs") still greets by name.
+  "/dashboard": "\"Home\" (owner, manager, office) or a greeting with the person's name on the floor Home; the menu word is Home",
   "/floor": "the company and site name on the production TV; the menu word says what the screen is",
-  "/inventory": "the open stock tab (Raw materials, Work in progress, Finished goods, All stock); the menu word is Stock",
 };
 
 function routeFiles(href: string): string[] {

@@ -13,7 +13,7 @@ export function SettingForm({ settingKey, kind, current, sites, requiresApproval
   const fe = state?.fieldErrors ?? {};
   const id = (k: string) => `${settingKey}-${k}`;
   return (
-    <form action={action} className="mt-3 space-y-3 rounded-[8px] border border-line p-3">
+    <form action={action} className="mt-3 space-y-3 rounded-[8px] border border-line bg-surface-2 p-3">
       <input type="hidden" name="key" value={settingKey} />
       <input type="hidden" name="kind" value={kind} />
       <div className="grid gap-3 sm:grid-cols-2">

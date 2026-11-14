@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Decimal from "decimal.js";
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, PhilippinePeso, Plus, Truck, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bell, CheckCircle2, ClipboardCheck, ListChecks, PhilippinePeso, Plus, Truck, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -12,7 +12,9 @@ import { notInvoicedShipments, payablesSummary, receivablesSummary } from "@/mod
 import { nextActors } from "@/modules/governance";
 import { getQaQueue } from "@/modules/quality";
 import { orderCounts } from "@/modules/sales";
-import { EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { KpiTile, Panel, PanelLink, PanelRow } from "@/ui/kit";
+import { FilterSelect } from "@/ui/kit-client";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
 import { navPersona } from "../nav";
@@ -70,67 +72,47 @@ async function sortOut(ctx: AuthContext, items: AttentionItem[]): Promise<OtherL
   return out;
 }
 
-/** One white card with a big number; amber only when it asks for action (never red for a zero). */
+/** One KPI tile with a number (ADR-136 KpiTile); amber only when it asks for action (never red for a zero). */
 function MoneyCard({ title, icon, value, href, children, tone = "neutral", testId }: { title: string; icon: ReactNode; value: ReactNode; href: string; children?: ReactNode; tone?: "neutral" | "attention"; testId?: string }) {
-  return (
-    <Link href={href} data-testid={testId} className={cx("group flex h-full min-w-0 flex-col rounded-[8px] border p-3.5 transition-shadow hover:shadow-[var(--shadow-pop)] sm:p-4", tone === "attention" ? "border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "border-line bg-surface")}>
-      <span className="flex items-center gap-2">
-        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-surface-2 text-fg-2" aria-hidden>{icon}</span>
-        <span className="min-w-0 text-[13px] font-semibold leading-tight text-fg">{title}</span>
-      </span>
-      <span className="mt-3 block break-words font-display text-stat leading-none text-fg tabular">{value}</span>
-      {children && <span className="mt-2 block text-[12.5px] leading-snug text-fg-2">{children}</span>}
-    </Link>
-  );
+  return <KpiTile label={title} icon={icon} value={value} href={href} sub={children} attention={tone === "attention"} testId={testId} />;
 }
 
 function ChecksForMe({ checks }: { checks: CheckItem[] }) {
   if (!checks.length) return null;
   return (
-    <section aria-labelledby="checks-h" className="rounded-[8px] border border-[var(--warn-bd)] bg-surface p-4 sm:p-5" data-testid="home-checks">
-      <h2 id="checks-h" className="font-display text-section font-semibold text-fg">Waiting for you to check</h2>
-      <ul className="mt-1 divide-y divide-line">
+    <Panel title="Waiting for you to check" count={checks.length} flush testId="home-checks" id="checks">
+      <ul className="divide-y divide-line">
         {checks.map((c) => (
-          <li key={c.key} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+          <li key={c.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <span className="min-w-0">
-              <span className="block text-[15px] font-medium text-fg">{c.text}</span>
+              <span className="block text-[14px] font-medium text-fg">{c.text}</span>
               <span className="block text-[13px] text-fg-2">{c.detail}</span>
             </span>
-            <LinkButton href={c.href} variant="secondary">{c.button}</LinkButton>
+            <LinkButton href={c.href} variant="secondary" size="sm">{c.button}</LinkButton>
           </li>
         ))}
       </ul>
-    </section>
+    </Panel>
   );
 }
 
-function LineList({ title, lines, testId, icon }: { title: string; lines: OtherLine[]; testId: string; icon: ReactNode }) {
-  if (!lines.length) return null;
+function LineList({ title, lines, testId, icon, empty }: { title: string; lines: OtherLine[]; testId: string; icon: ReactNode; empty?: string }) {
+  if (!lines.length && !empty) return null;
   return (
-    <section aria-labelledby={`${testId}-h`} className="rounded-[8px] border border-line bg-surface p-4 sm:p-5" data-testid={testId}>
-      <h2 id={`${testId}-h`} className="font-display text-section font-semibold text-fg">{title}</h2>
-      <ul className="mt-1 divide-y divide-line">
-        {lines.map(({ item, who }) => (
-          <li key={item.key}>
-            <Link href={item.href} className="group flex min-h-[48px] items-center gap-3 py-2 text-[15px] text-fg">
-              <span className="shrink-0 text-fg-2" aria-hidden>{icon}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block">{item.text}</span>
-                {who && <span className="block text-[13px] text-fg-2">{who}</span>}
-              </span>
-              <ArrowRight size={16} className="shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <Panel title={title} count={lines.length || null} flush testId={testId} id={testId}>
+      {lines.length ? (
+        <ul className="divide-y divide-line">
+          {lines.map(({ item, who }) => (
+            <PanelRow key={item.key} href={item.href} icon={icon} title={item.text} meta={who} />
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-3 text-[14px] text-fg-2">{empty}</p>
+      )}
+    </Panel>
   );
 }
 
-const greetingOf = () => {
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date()));
-  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-};
 
 /**
  * Home for the owner, the site manager and the office roles that read the numbers (round 5, ADR-129; B report #4, #5,
@@ -174,23 +156,23 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
   const notBilled = unbilled ? { count: unbilled.count, toMake: unbilled.toMake, waitingApproval: unbilled.waitingApproval, toSave: unbilled.toSave, oldestDays: unbilled.oldestDispatchedAt ? Math.floor((Date.now() - unbilled.oldestDispatchedAt.getTime()) / 86_400_000) : null } : null;
   const qs = all ? "?scope=all" : "";
   const stockHref = `/dashboard/details/stock${qs}`;
-  const greeting = greetingOf();
   const today = new Date(home.today + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-  const pill = (href: string, active: boolean, label: string) => (
-    <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-[6px] px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
-      {label}
-    </Link>
-  );
+  // ADR-136: a plain "Home" title with the date and the site; no greeting sentence.
   const header = (
     <PageHeader
-      title={`${greeting}, ${ctx.displayName.split(" ")[0]}`}
+      title="Home"
       subtitle={`${today} · ${all ? "All your sites" : ctx.currentSite.name}`}
       actions={
         ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view") ? (
-          <div className="flex rounded-[6px] border border-line bg-surface p-1" role="group" aria-label="Sites">
-            {pill("/dashboard", !all, "This site")}
-            {pill("/dashboard?scope=all", all, "All my sites")}
-          </div>
+          <FilterSelect
+            id="home-scope"
+            label="Sites"
+            value={all ? "all" : "site"}
+            options={[
+              { value: "site", label: "This site", href: "/dashboard" },
+              { value: "all", label: "All my sites", href: "/dashboard?scope=all" },
+            ]}
+          />
         ) : undefined
       }
     />
@@ -205,7 +187,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
     const s = home.salesToday;
     const m = home.salesMonth;
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         {header}
         <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
         {next ? <NextStep text={`Next: ${next.text}.`} action={{ label: next.key === "so_confirm" ? "Open the orders" : "See the orders", href: next.href }} /> : <NextStep text="Nothing waits for you right now." />}
@@ -213,7 +195,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
           {ctx.can("sales.sales_order.create") && <LinkButton href="/sales/new" variant="cta"><Plus size={16} aria-hidden /> New customer order</LinkButton>}
           {ctx.can("sales.quote.create") && <LinkButton href="/sales/quotations/new" variant="secondary"><Plus size={16} aria-hidden /> New price offer</LinkButton>}
         </div>
-        <section aria-label="Sales at a glance" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section aria-label="Sales at a glance" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {s && <MoneyCard title="Sales today" icon={<PhilippinePeso size={16} />} href={s.href} value={s.masked ? plural(s.orders, "order", "orders") : peso(s.value)}>{plural(s.orders, "order", "orders")} confirmed today</MoneyCard>}
           {m && <MoneyCard title="Sales this month" icon={<PhilippinePeso size={16} />} href={m.href} value={m.masked ? plural(m.orders, "order", "orders") : peso(m.value)} testId="card-sales-month">{plural(m.orders, "order", "orders")} confirmed this month</MoneyCard>}
         </section>
@@ -233,23 +215,19 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
   // ADR-132 §1: the same number as the "Needs me" badge (approvals + checks + messages that ask you to act).
   const needsYou = needs.total;
   const waitingSummary = others.filter((l) => l.who).slice(0, 2).map((l) => l.who!);
-  const next =
-    approvals > 0
-      ? <NextStep text={`Next: ${plural(approvals, "thing waits", "things wait")} for your decision.`} action={{ label: "Open To approve", href: "/approvals" }} />
-      : checks.length > 0
-        ? <NextStep text={`Next: ${checks[0].text.charAt(0).toLowerCase()}${checks[0].text.slice(1)}.`} action={{ label: checks[0].button, href: checks[0].href }} />
-        : needs.messages > 0
-          ? <NextStep text={`Next: ${plural(needs.messages, "message asks", "messages ask")} you to do something.`} action={{ label: "Open messages", href: "/notifications" }} />
-          : mine.length > 0
-            ? <NextStep text={`Next: ${mine[0].item.text}.`} action={{ label: "Open it", href: mine[0].item.href }} />
-            : <NextStep text="Nothing needs you now." waitingFor={waitingSummary.length ? `Waiting on others: ${waitingSummary.join(" · ")}.` : undefined} />;
   const sm = home.salesMonth;
+  // ADR-136: "What to do next" became the first panel, "Needs you": the person's own decisions, checks, messages and work.
+  const needRows: { key: string; href: string; title: string; meta?: string | null; icon: ReactNode }[] = [
+    ...(approvals > 0 ? [{ key: "approve", href: "/approvals", title: `${plural(approvals, "thing waits", "things wait")} for your decision`, meta: "Open To approve, oldest first", icon: <ListChecks size={16} /> }] : []),
+    ...checks.map((c) => ({ key: `check-${c.key}`, href: c.href, title: c.text, meta: c.detail, icon: <ClipboardCheck size={16} /> })),
+    ...(needs.messages > 0 ? [{ key: "messages", href: "/notifications", title: `${plural(needs.messages, "message asks", "messages ask")} you to do something`, meta: null, icon: <Bell size={16} /> }] : []),
+    ...mine.map((l) => ({ key: `mine-${l.item.key}`, href: l.item.href, title: l.item.text, meta: l.who, icon: <ArrowRight size={16} /> })),
+  ];
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {header}
       <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
-      {next}
-      <section aria-label="Money and what needs you" className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="home-cards">
+      <section aria-label="Money and what needs you" className="grid grid-cols-2 gap-3 xl:grid-cols-4" data-testid="home-cards">
         {sm && (
           <MoneyCard title="Sales this month" icon={<PhilippinePeso size={16} />} href={sm.href} value={sm.masked ? plural(sm.orders, "order", "orders") : peso(sm.value)} testId="card-sales-month">
             {plural(sm.orders, "order", "orders")} confirmed{!sm.masked && home.salesToday?.value && Number(home.salesToday.value) > 0 ? ` · today ${peso(home.salesToday.value)}` : ""}
@@ -273,28 +251,38 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
           )}
         </MoneyCard>
       </section>
-      <ChecksForMe checks={checks} />
-      <LineList title="Also yours" testId="home-mine" icon={<ArrowRight size={18} />} lines={mine} />
-      {(others.length > 0 || watch.length > 0 || home.salesWeek) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
-          <div className="flex min-w-0 flex-col gap-4">
-            <LineList title="Waiting on others" testId="home-others" icon={<ArrowRight size={18} />} lines={others} />
-            <LineList title="Watch out" testId="home-watch" icon={<AlertTriangle size={18} />} lines={watch} />
-          </div>
-          {home.salesWeek && <SalesWeek week={home.salesWeek} scopeLabel={home.scope.label} generatedAt={home.generatedAt} />}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Panel title="Needs you" count={needRows.length || null} flush testId="home-needs" id="home-needs">
+            {needRows.length ? (
+              <ul className="divide-y divide-line">
+                {needRows.map((r) => (
+                  <PanelRow key={r.key} href={r.href} icon={r.icon} title={r.title} meta={r.meta} />
+                ))}
+              </ul>
+            ) : (
+              <div className="flex items-start gap-2 px-4 py-3 text-[14px]" data-testid="home-nothing">
+                <CheckCircle2 size={16} aria-hidden className="mt-0.5 shrink-0 text-[var(--ok-fg)]" />
+                <div>
+                  <p className="font-medium text-fg">Nothing needs you now.</p>
+                  {waitingSummary.length > 0 && <p className="text-[13px] text-fg-2">Waiting on others: {waitingSummary.join(" · ")}.</p>}
+                </div>
+              </div>
+            )}
+          </Panel>
+          <LineList title="Waiting on others" testId="home-others" icon={<ArrowRight size={16} />} lines={others} empty="Nobody else has late work." />
+          <LineList title="Watch out" testId="home-watch" icon={<AlertTriangle size={16} />} lines={watch} empty="No stock warnings." />
         </div>
-      )}
-      {activity && <RecentActivity rows={activity} showSite={all} />}
-      <p className="text-[14px] text-fg-2">
-        More numbers and charts:{" "}
-        <Link href={all ? "/analytics?scope=all" : "/analytics"} className="inline-flex min-h-[44px] items-center font-medium text-primary-text underline">
-          Reports
-        </Link>
-        {" · "}
-        <Link href="/operations" className="inline-flex min-h-[44px] items-center font-medium text-primary-text underline">
-          Operations Center
-        </Link>
-      </p>
+        <div className="flex min-w-0 flex-col gap-4">
+          {home.salesWeek && <SalesWeek week={home.salesWeek} scopeLabel={home.scope.label} generatedAt={home.generatedAt} />}
+          {activity && <RecentActivity rows={activity} showSite={all} />}
+          <p className="flex flex-wrap items-center gap-x-4 px-1 text-[13px] text-fg-2">
+            <span>More numbers:</span>
+            <PanelLink href={all ? "/analytics?scope=all" : "/analytics"}>Reports</PanelLink>
+            <PanelLink href="/operations">Operations Center</PanelLink>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -316,10 +304,9 @@ async function QaHome({ ctx }: { ctx: AuthContext }) {
   ].sort((a, b) => a.at - b.at);
   const canDecide = ctx.can("quality.disposition.approve");
   const first = rows[0];
-  const greeting = greetingOf();
   return (
-    <div className="space-y-5">
-      <PageHeader title={`${greeting}, ${ctx.displayName.split(" ")[0]}`} subtitle={ctx.currentSite.name} />
+    <div className="space-y-4">
+      <PageHeader title="Home" subtitle={ctx.currentSite.name} />
       <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
       {first ? (
         <NextStep text={`Next: check the oldest one, ${first.text.charAt(0).toLowerCase()}${first.text.slice(1)} (${first.detail}).`} action={canDecide ? { label: first.button, href: first.href } : undefined} waitingFor={canDecide ? undefined : "Waiting for a QA person to check it."} />
@@ -338,27 +325,13 @@ async function QaHome({ ctx }: { ctx: AuthContext }) {
       </section>
       <ChecksForMe checks={checks} />
       {rows.length > 1 && (
-        <section aria-labelledby="qa-rest-h" className="rounded-[8px] border border-line bg-surface p-4 sm:p-5">
-          <h2 id="qa-rest-h" className="font-display text-section font-semibold text-fg">After that</h2>
-          <ul className="mt-1 divide-y divide-line">
+        <Panel title="After that" count={rows.length - 1} flush id="qa-rest" action={rows.length > 8 ? <PanelLink href="/quality">See all {rows.length}</PanelLink> : undefined}>
+          <ul className="divide-y divide-line">
             {rows.slice(1, 8).map((r) => (
-              <li key={r.key}>
-                <Link href={r.href} className="group flex min-h-[48px] items-center gap-3 py-2 text-[15px] text-fg">
-                  <span className="min-w-0 flex-1">
-                    <span className="block">{r.text}</span>
-                    <span className="block text-[13px] text-fg-2">{r.detail}</span>
-                  </span>
-                  <ArrowRight size={16} className="shrink-0 text-muted" aria-hidden />
-                </Link>
-              </li>
+              <PanelRow key={r.key} href={r.href} title={r.text} meta={r.detail} />
             ))}
           </ul>
-          {rows.length > 8 && (
-            <Link href="/quality" className="mt-1 inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
-              See all {rows.length}
-            </Link>
-          )}
-        </section>
+        </Panel>
       )}
     </div>
   );

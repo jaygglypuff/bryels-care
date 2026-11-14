@@ -12,6 +12,7 @@ import { earlierOrdersNeedingSameStock, orderCanShipFrom, productionOrdersForSal
 import { fmtDayMonth } from "@/lib/qty";
 import { AllocateForm, EmailConfirmation, LineChange } from "./order-actions";
 import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { Panel } from "@/ui/kit";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { Banner, StatusChip } from "@/ui/status";
@@ -296,38 +297,55 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             </Card>
           )}
 
-          <Card>
-            <CardTitle>What they ordered</CardTitle>
-            <ul className="flex flex-col divide-y divide-line">
-              {lines.map((l) => (
-                <li key={l.id} className="flex items-start justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className={D(l.qtyUnits).isZero() ? "font-medium text-muted line-through" : "font-medium"}>{l.productName}</p>
-                    {D(l.qtyUnits).isZero() ? (
-                      <p className="text-[13px] text-fg-2" data-testid="line-cancelled">Taken off the order (see What happened).</p>
-                    ) : (
-                      <p className="text-[13px] tabular text-fg-2">
-                        {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
-                        {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price changed by hand)") : ""}
-                        {showAlloc && (status === "shipped" ? ` · sent ${fmtQty(l.qtyUnits, "", 0)}` : ` · set aside ${fmtQty(l.allocated, "", 0)} of ${fmtQty(l.qtyUnits, "", 0)}`)}
-                      </p>
-                    )}
-                    <p className="font-mono text-[12px] text-muted">
-                      {l.sku}
-                      {l.customerItemCode ? ` · customer's code ${l.customerItemCode}` : ""}
-                    </p>
-                    {canAmend && !D(l.qtyUnits).isZero() && <LineChange lineId={l.id} productName={l.productName} qty={D(l.qtyUnits).toString()} sent={l.sent} />}
-                  </div>
-                  <Money className="whitespace-nowrap text-right font-semibold tabular" value={l.value} />
-                </li>
-              ))}
-              <li className="flex justify-between gap-3 py-2.5 font-semibold tabular">
-                <span>Total · {fmtQty(totalPcs, "pcs", 0)}</span>
-                <Money className="text-right" value={total} />
-              </li>
-            </ul>
-            <MaskedNote fields={data._masked} />
-          </Card>
+          {/* ADR-136: the lines as a table (numbers and money right-aligned), with the total in the footer row. */}
+          <Panel title="What they ordered" count={lines.length} flush testId="order-lines">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] border-collapse text-left text-[14px]" aria-label="What they ordered">
+                <thead>
+                  <tr className="border-b border-line bg-surface-2 text-[12px] text-fg-2">
+                    <th scope="col" className="h-9 px-4 font-medium">Product</th>
+                    <th scope="col" className="h-9 px-3 text-right font-medium">Quantity</th>
+                    <th scope="col" className="h-9 px-3 text-right font-medium">Price</th>
+                    {showAlloc && <th scope="col" className="h-9 px-3 text-right font-medium">{status === "shipped" ? "Sent" : "Set aside"}</th>}
+                    <th scope="col" className="h-9 px-4 text-right font-medium">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {lines.map((l) => {
+                    const gone = D(l.qtyUnits).isZero();
+                    return (
+                      <tr key={l.id} className="align-top">
+                        <td className="px-4 py-2.5">
+                          <p className={gone ? "font-medium text-muted line-through" : "font-medium"}>{l.productName}</p>
+                          {gone && <p className="text-[13px] text-fg-2" data-testid="line-cancelled">Taken off the order (see What happened).</p>}
+                          <p className="font-mono text-[12px] text-muted">
+                            {l.sku}
+                            {l.customerItemCode ? ` · customer's code ${l.customerItemCode}` : ""}
+                            {!gone && l.priceSource && l.priceSource !== "price_list" ? <span className="font-sans">{l.priceSource === "quote" ? " · quoted price" : " · price changed by hand"}</span> : null}
+                          </p>
+                          {canAmend && !gone && <LineChange lineId={l.id} productName={l.productName} qty={D(l.qtyUnits).toString()} sent={l.sent} />}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular">{gone ? "—" : fmtQty(l.qtyUnits, "pcs", 0)}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular"><Money value={l.unitPrice} /></td>
+                        {showAlloc && <td className="whitespace-nowrap px-3 py-2.5 text-right tabular">{gone ? "—" : status === "shipped" ? fmtQty(l.qtyUnits, "", 0) : `${fmtQty(l.allocated, "", 0)} of ${fmtQty(l.qtyUnits, "", 0)}`}</td>}
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium tabular"><Money value={l.value} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-line font-semibold">
+                    <td className="px-4 py-2.5">Total</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular">{fmtQty(totalPcs, "pcs", 0)}</td>
+                    <td />
+                    {showAlloc && <td />}
+                    <td className="whitespace-nowrap px-4 py-2.5 text-right tabular"><Money value={total} /></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {data._masked?.length ? <div className="px-4 pb-3"><MaskedNote fields={data._masked} /></div> : null}
+          </Panel>
 
           {(toMake.length > 0 || beingMade.length > 0 || comingLines.length > 0) && (
             <Card>
@@ -432,8 +450,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
           {/* W3E: set aside → get from shelf → second check of the box → send out → delivery receipt live on the fulfilment screens. */}
           <FulfilmentPanel orderId={order.id} data={fulfilment} hideNext />
 
-          <Card>
-            <CardTitle>About this order</CardTitle>
+          <Panel title="About this order">
             <Dl
               items={[
                 ["Customer", ctx.can("masterdata.customer.view") ? <Link className="text-primary-text hover:underline" href={`/sales/customers/${customer.id}`}>{customer.name}</Link> : customer.name],
@@ -462,10 +479,9 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 />
               </MoreDetails>
             </div>
-          </Card>
+          </Panel>
 
-          <Card>
-            <CardTitle>What happened</CardTitle>
+          <Panel title="What happened">
             <ol className="flex flex-col gap-2 text-[13px]" data-testid="order-history">
               {[...orderHistory(transitions, { at: order.createdAt, byName: data.createdByName }), ...data.lineChanges.map((c) => ({ key: c.id, label: c.label, at: new Date(c.at), who: c.who, reason: c.reason }))].sort((a, b) => a.at.getTime() - b.at.getTime()).map((h) => (
                 <li key={h.key} className="flex flex-col border-l-2 border-line pl-3">
@@ -478,7 +494,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 </li>
               ))}
             </ol>
-          </Card>
+          </Panel>
         </div>
       </div>
     </>

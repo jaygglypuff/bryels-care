@@ -2,7 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
 import { listProductionOrderBoard, listProductionOrders, myFloorTasks, PRODUCTION_ORDER_LABEL, type ProductionOrderRow } from "@/modules/production";
+import { Hourglass } from "lucide-react";
 import { EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { CellCode, CellMeta, DataTable, ListToolbar, TableFooter, Tabs, ToolbarSearch, readSort, sortRows, type Column } from "@/ui/kit";
+import { FilterSelect } from "@/ui/kit-client";
 import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { TaskCards } from "../task-cards";
@@ -12,7 +15,7 @@ import { PageIntro } from "@/ui/guide";
 export const metadata: Metadata = { title: "Production orders" };
 export const dynamic = "force-dynamic";
 
-/** Status pills (ADR-080 §1): Open first, then the five statuses; Failed, Cancelled and All under More details. */
+/** Status tabs (ADR-080 §1, ADR-136): Open first, then the five statuses, then Failed, Cancelled and All. */
 const MAIN_FILTERS: [string, string][] = [
   ["open", "Open"],
   ["draft", PRODUCTION_ORDER_LABEL.draft],
@@ -27,11 +30,12 @@ const MORE_FILTERS: [string, string][] = [
   ["all", "All"],
 ];
 
+/** One order as a card: the board's columns and phones (ADR-136: desktop lists are a table, OrderTable below). */
 function OrderCard({ r }: { r: ProductionOrderRow }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-[8px] border border-line bg-surface p-4">
-      <Link href={`/production/orders/${r.id}`} className="block min-w-0 hover:underline">
-        <p className="text-[18px] font-semibold leading-snug">{r.productName}</p>
+    <div className="flex min-w-0 flex-col gap-2 bg-surface p-4">
+      <Link href={`/production/orders/${r.id}`} className="block min-w-0 hover:text-primary-text">
+        <p className="text-[16px] font-semibold leading-snug">{r.productName}</p>
       </Link>
       <p className="text-[14px] text-fg-2">
         <span className="font-medium text-fg">{r.piecesText}</span>
@@ -47,14 +51,12 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
         <NeededBy date={r.neededBy} late={r.late} />
         {r.salesOrderNumber && <span className="text-[13px] text-muted">For {r.salesOrderNumber}</span>}
         {/* ADR-082: who makes it */}
-        <span className={cx("rounded-[4px] px-2.5 py-0.5 text-[12.5px] font-medium", r.assignedToMe ? "bg-primary-soft text-primary-text" : "bg-surface-2 text-fg-2")}>
-          {r.assignedToMe ? "Assigned to you" : r.assigneeName ? `Assigned to ${r.assigneeName}` : "Anyone can take it"}
-        </span>
+        <span className={cx("text-[13px]", r.assignedToMe ? "font-medium text-primary-text" : "text-fg-2")}>{whoMakes(r)}</span>
       </div>
       <div className="mt-auto pt-1">
         <ActionButton a={r.nextAction} size="md" />
         {r.nextAction.kind === "none" && (
-          <Link href={`/production/orders/${r.id}`} className="text-[14px] font-medium text-primary-text underline">
+          <Link href={`/production/orders/${r.id}`} className="text-[14px] font-medium text-primary-text hover:underline">
             Open
           </Link>
         )}
@@ -63,19 +65,38 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
   );
 }
 
-/** Operators get the filters behind one "Show more filters" disclosure; planners see them as before. */
-function FilterWrap({ operator, open, children }: { operator: boolean; open: boolean; children: React.ReactNode }) {
-  if (!operator) return <>{children}</>;
-  return (
-    <details className="mb-4 rounded-[8px] border border-line bg-surface px-3.5 py-1" open={open}>
-      <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium text-primary-text">Show more filters</summary>
-      <div className="pt-1">{children}</div>
-    </details>
-  );
+/** ADR-082: who makes it, in words. */
+const whoMakes = (r: ProductionOrderRow) => (r.assignedToMe ? "Assigned to you" : r.assigneeName ? `Assigned to ${r.assigneeName}` : "Anyone can take it");
+
+/** The next action in a table cell: a small button, or one line of who or what we wait for (the order page names the people). */
+function NextCell({ r }: { r: ProductionOrderRow }) {
+  const a = r.nextAction;
+  if (a.kind === "link")
+    return (
+      <LinkButton href={a.href} variant="secondary" size="sm">
+        {a.label}
+      </LinkButton>
+    );
+  if (a.kind === "wait")
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-fg-2">
+        <Hourglass size={13} aria-hidden className="shrink-0" /> {a.title}
+      </span>
+    );
+  return <span className="text-[13px] text-muted">—</span>;
 }
 
+const COLUMNS: Column<ProductionOrderRow>[] = [
+  { key: "product", header: "Product", sortable: true, primary: true, cell: (r) => <>{r.productName}<CellMeta>{r.piecesText}{r.piecesWord === "made" ? " made" : ""}{r.batchesNote ? ` · ${r.batchesNote}` : ""}</CellMeta></> },
+  { key: "number", header: "Order", sortable: true, cell: (r) => <CellCode>{r.number}</CellCode> },
+  { key: "status", header: "Status", cell: (r) => <span className="inline-flex flex-wrap items-center gap-1"><OrderStatusChip status={r.status} label={r.statusLabel} subtitle={r.subtitle} warn={r.warn} /><OrderWarning text={r.warning} /></span> },
+  { key: "needed", header: "Needed by", sortable: true, cell: (r) => <>{r.neededBy ? <NeededBy date={r.neededBy} late={r.late} /> : <span className="text-muted">—</span>}{r.salesOrderNumber && <CellMeta>For {r.salesOrderNumber}</CellMeta>}</> },
+  { key: "who", header: "Who makes it", hideBelow: "xl", cell: (r) => <span className={cx("text-[13px]", r.assignedToMe ? "font-medium text-primary-text" : "text-fg-2")}>{whoMakes(r)}</span> },
+  { key: "next", header: "Next", cell: (r) => <NextCell r={r} /> },
+];
+
 /** Production orders (ADR-074, ADR-080): one card per order with status v2, pieces, needed-by and one next-action button. iPad-first: cards, no wide table. */
-export default async function ProductionOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; view?: string; mine?: string }> }) {
+export default async function ProductionOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; view?: string; mine?: string; sort?: string; dir?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" permission="production.work_order.view" />;
   const sp = await searchParams;
@@ -90,14 +111,26 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
   const columns = board ? await listProductionOrderBoard(ctx) : [];
   // UX review "To do now": the same task cards as Home (batches with or without an order), first.
   const tasks = operator && !board && ctx.can("production.batch.view") ? await myFloorTasks(ctx) : null;
-  const moreActive = MORE_FILTERS.some(([k]) => k === status);
-  const mainFilters = operator ? MAIN_FILTERS.filter(([k]) => k !== "draft") : MAIN_FILTERS;
-  const filtersOpen = !operator || status !== "open" || !!sp.q || sp.mine === "0";
+  const filters = [...(operator ? MAIN_FILTERS.filter(([k]) => k !== "draft") : MAIN_FILTERS), ...MORE_FILTERS];
+  const sort = readSort(sp, ["product", "number", "needed"], { key: "", dir: "asc" });
+  const sorted =
+    sort.key === "product" ? sortRows(rows, sort.dir, (r) => r.productName)
+    : sort.key === "number" ? sortRows(rows, sort.dir, (r) => r.number)
+    : sort.key === "needed" ? sortRows(rows, sort.dir, (r) => r.neededBy)
+    : rows;
+  /** The list's address with one thing changed (status, words, whose, sort). */
+  const listHref = (over: Record<string, string | undefined>) => {
+    const p = new URLSearchParams();
+    const cur: Record<string, string | undefined> = { status: status === "open" ? undefined : status, q: sp.q || undefined, mine: mine !== operator ? (mine ? "1" : "0") : undefined, sort: sort.key || undefined, dir: sort.key ? sort.dir : undefined };
+    for (const [k, v] of Object.entries({ ...cur, ...over })) if (v && !(k === "status" && v === "open")) p.set(k, v);
+    const qs = p.toString();
+    return qs ? `/production/orders?${qs}` : "/production/orders";
+  };
   return (
     <div>
       <PageHeader
         title={operator ? "My work" : "Production orders"}
-        subtitle={`${ctx.currentSite.name} · what to make, from ordering to done`}
+        subtitle={board ? ctx.currentSite.name : `${ctx.currentSite.name} · ${rows.length} ${rows.length === 1 ? "order" : "orders"}`}
         actions={
           <>
             <Help screen="production.production_order" />
@@ -114,7 +147,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
       {board ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {columns.map((c) => (
-            <section key={c.key} className="min-w-0 rounded-[8px] bg-surface-2/60 p-2.5" aria-label={c.label}>
+            <section key={c.key} className="min-w-0 rounded-[8px] border border-line bg-surface-2 p-2.5" aria-label={c.label}>
               <h2 className="mb-2 px-1.5 text-[14px] font-semibold">
                 {c.label} <span className="font-normal text-muted">({c.rows.length})</span>
               </h2>
@@ -124,11 +157,11 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
                     g.rows.length > 0 ? (
                       <div key={g.label} className="mb-2">
                         <h3 className="mb-1.5 px-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">{g.label}</h3>
-                        <div className="space-y-2">{g.rows.map((r) => <OrderCard key={r.id} r={r} />)}</div>
+                        <div className="space-y-2">{g.rows.map((r) => <div key={r.id} className="overflow-hidden rounded-[8px] border border-line"><OrderCard r={r} /></div>)}</div>
                       </div>
                     ) : null,
                   )
-                : <div className="space-y-2">{c.rows.map((r) => <OrderCard key={r.id} r={r} />)}</div>}
+                : <div className="space-y-2">{c.rows.map((r) => <div key={r.id} className="overflow-hidden rounded-[8px] border border-line"><OrderCard r={r} /></div>)}</div>}
             </section>
           ))}
         </div>
@@ -141,45 +174,21 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
             </section>
           )}
           {operator && <h2 className="mb-2.5 text-[16px] font-semibold text-fg">My orders</h2>}
-          <FilterWrap operator={operator} open={filtersOpen}>
-            <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Whose orders">
-            {[["1", operator ? "Mine and open" : "Mine and unassigned"], ["0", "Everyone's"]].map(([v, label]) => {
-              const active = (v === "1") === mine;
-              return (
-                <Link key={v} href={`?status=${status}&mine=${v}`} aria-current={active ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-[6px] border px-4 py-2.5 text-[14px] font-medium", active ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:bg-surface-2")}>
-                  {label}
-                </Link>
-              );
-            })}
-            </nav>
-            <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Filter by status">
-            {mainFilters.map(([k, label]) => (
-              <Link key={k} href={`?status=${k}${mine !== operator ? `&mine=${mine ? 1 : 0}` : ""}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[48px] whitespace-nowrap rounded-[6px] border px-4 py-3 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
-                {label}
-              </Link>
-            ))}
-            </nav>
-            <details className="mb-4 rounded-[8px] border border-line bg-surface-2/40 px-3.5 py-1" open={moreActive || !!sp.q}>
-            <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">More details</summary>
-            <div className="flex flex-col gap-3 pb-3">
-              <nav className="flex flex-wrap gap-1.5" aria-label="More filters">
-                {MORE_FILTERS.map(([k, label]) => (
-                  <Link key={k} href={`?status=${k}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-[6px] border px-4 py-2.5 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
-                    {label}
-                  </Link>
-                ))}
-              </nav>
-              <form className="flex flex-wrap items-end gap-2" method="get">
-                <input type="hidden" name="status" value={status} />
-                <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-[13px] font-medium sm:max-w-sm">
-                  Search
-                  <input name="q" defaultValue={sp.q ?? ""} placeholder="Order number or product" className="min-h-[44px] rounded-[8px] border border-line-strong bg-surface px-3.5 text-[14px]" />
-                </label>
-                <button className="min-h-[44px] rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Search</button>
-              </form>
-            </div>
-            </details>
-          </FilterWrap>
+          {/* ADR-136: one toolbar: status tabs, the search box and "whose orders" as a dropdown (were three rows of pills). */}
+          <ListToolbar
+            tabs={<Tabs bare label="Filter by status" active={status} items={filters.map(([k, label]) => ({ key: k, label, href: listHref({ status: k }) }))} />}
+          >
+            <ToolbarSearch action="/production/orders" keep={{ status, mine: mine !== operator ? (mine ? "1" : "0") : undefined }} defaultValue={sp.q ?? ""} placeholder="Order number or product" label="Search production orders" clearHref={listHref({ q: undefined })} />
+            <FilterSelect
+              id="whose-orders"
+              label="Whose orders"
+              value={mine ? "1" : "0"}
+              options={[
+                { value: "1", label: operator ? "Mine and open" : "Mine and unassigned", href: listHref({ mine: "1" }) },
+                { value: "0", label: "Everyone's", href: listHref({ mine: "0" }) },
+              ]}
+            />
+          </ListToolbar>
           {rows.length === 0 ? (
             status === "open" && !sp.q ? (
               operator ? (
@@ -195,11 +204,18 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
               </EmptyState>
             )
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {rows.map((r) => (
-                <OrderCard key={r.id} r={r} />
-              ))}
-            </div>
+            <DataTable
+              label="Production orders"
+              testId="production-orders"
+              rows={sorted}
+              columns={COLUMNS}
+              rowKey={(r) => r.id}
+              rowHref={(r) => `/production/orders/${r.id}`}
+              rowTone={(r) => (r.late ? "bad" : r.warn ? "warn" : null)}
+              sort={{ key: sort.key, dir: sort.dir, href: (key, dir) => listHref({ sort: key, dir }) }}
+              mobile={(r) => <OrderCard r={r} />}
+              footer={<TableFooter count={rows.length} noun={["order", "orders"]} note={rows.length >= 300 ? "the newest 300; search or choose a status to see others" : undefined} />}
+            />
           )}
         </>
       )}

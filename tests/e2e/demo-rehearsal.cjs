@@ -10,7 +10,7 @@
  * Playwright is taken from the project, else from the global npm root (no NODE_PATH needed).
  *
  * The storyline (scenes of docs/demo-script.md, then the lotion order carried to the invoice):
- *   a. Owner Home: "What to do next" (scene 1).
+ *   a. Owner Home: the "Needs you" panel says what to do next (scene 1; ADR-136 replaced the green box).
  *   b. QA checks the lotion batch waiting for QA (scene 2).
  *   c. Operator: soap "Pour into moulds" done; the cure waits (scene 3).
  *   d. Warehouse puts the coconut oil away by scanning its lot label (scene 4).
@@ -191,7 +191,8 @@ const section = (name, fn) => SECTIONS.push({ name, fn });
 // ---------------------------------------------------------------- a. Owner Home
 section('a. owner Home says what to do next', async () => {
   const { page, close } = await asUser(who('owner'));
-  await expectText(page, 'What to do next');
+  // ADR-136: what to do next is the first panel, "Needs you" (its first line is the oldest decision).
+  await page.getByTestId('home-needs').getByText(/wait(s)? for your decision|Nothing needs you now/).first().waitFor();
   await expectText(page, 'finished batch waits for the QA check');
   await shot(page, 'owner-home');
   await go(page, '/production/orders');
@@ -881,7 +882,7 @@ section('s. QA traces the soap lot back to its supplier lots and forward to the 
 // ---------------------------------------------------------------- t. Scene 8: the owner sees what happened
 section('t. the owner sees what happened (scene 8)', async () => {
   const { page, close } = await asUser(who('owner'));
-  await expectText(page, 'What to do next');
+  await page.getByTestId('home-needs').waitFor();
   assert(!(await page.getByText('1 finished batch waits for the QA check').count()), 'no batch waits for QA any more');
   await go(page, '/operations/flow');
   await shot(page, 'how-work-flows', { full: true });

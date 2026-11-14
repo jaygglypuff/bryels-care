@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Hourglass, Search } from "lucide-react";
+import Decimal from "decimal.js";
 import { buttonClass, cx } from "./core";
 import { BADGE, toneClass, type BadgeTone } from "./status";
 
@@ -34,10 +35,10 @@ export type TabItem = { key: string; label: string; href: string; count?: number
  * that scrolls sideways on a phone; 40 px tall with a mouse, 44 px on touch screens. Counts sit in a grey pill after
  * the word, so a list never repeats them in stat cards.
  */
-export function Tabs({ items, active, label, className, testId }: { items: readonly TabItem[]; active: string; label: string; className?: string; testId?: string }) {
+export function Tabs({ items, active, label, className, testId, bare = false }: { items: readonly TabItem[]; active: string; label: string; className?: string; testId?: string; /** No line under the row (ListToolbar draws it). */ bare?: boolean }) {
   return (
     <nav aria-label={label} className={cx("scroll-x-hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0", className)} data-testid={testId}>
-      <ul className="flex min-w-max gap-5 border-b border-line">
+      <ul className={cx("flex min-w-max gap-5", !bare && "border-b border-line")}>
         {items.map((t) => {
           const on = t.key === active;
           return (
@@ -62,6 +63,20 @@ export function Tabs({ items, active, label, className, testId }: { items: reado
 }
 
 // ---------------------------------------------------------------- Toolbar
+
+/**
+ * The list toolbar (ADR-136): the status tabs on the left and the search box, filter dropdowns and actions on the
+ * right, on one line with one rule under it from 1024 px; on a phone the controls come first and the tabs scroll
+ * under them.
+ */
+export function ListToolbar({ tabs, children, testId }: { tabs?: ReactNode; children?: ReactNode; testId?: string }) {
+  return (
+    <div className="mb-4 flex flex-col-reverse gap-2 border-line lg:flex-row lg:items-end lg:justify-between lg:gap-6 lg:border-b" data-testid={testId}>
+      {tabs && <div className="min-w-0 lg:-mb-px lg:[&_ul]:border-b-0">{tabs}</div>}
+      {children && <div className="flex min-w-0 flex-wrap items-center gap-2 lg:ml-auto lg:flex-nowrap lg:pb-2">{children}</div>}
+    </div>
+  );
+}
 
 /** One row above a list: search box, filters and actions; wraps on a phone. */
 export function Toolbar({ children, className, label = "Filters" }: { children: ReactNode; className?: string; label?: string }) {
@@ -232,14 +247,36 @@ export function DataTable<T>({
   if (!mobile) return table;
   return (
     <>
-      <ul className="flex flex-col gap-2 md:hidden" aria-label={label}>
-        {rows.map((r) => (
-          <li key={rowKey(r)}>{mobile(r)}</li>
-        ))}
-        {footer && <li className="px-1 text-[13px] text-fg-2">{footer}</li>}
-      </ul>
+      {/* The table first in the page (desktop), the phone cards after it. */}
       {table}
+      <div className="md:hidden">
+        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface" aria-label={label}>
+          {rows.map((r) => (
+            <li key={rowKey(r)} data-testid={rowTestId}>
+              {mobile(r)}
+            </li>
+          ))}
+        </ul>
+        {footer && <div className="px-1 pt-2 text-[13px] text-fg-2">{footer}</div>}
+      </div>
     </>
+  );
+}
+
+/** A phone row of a DataTable (`mobile`): the whole row a link, title + status, one muted line, a value on the right. */
+export function MobileRow({ href, title, status, meta, aside, tone }: { href: string; title: ReactNode; status?: ReactNode; meta?: ReactNode; aside?: ReactNode; tone?: "bad" | "warn" | null }) {
+  return (
+    <Link href={href} className={cx("flex min-h-[56px] items-center gap-3 px-4 py-3 hover:bg-surface-2", tone === "bad" && "shadow-[inset_3px_0_0_var(--bad-fg)]", tone === "warn" && "shadow-[inset_3px_0_0_var(--warn-fg)]")}>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="min-w-0 break-words text-[15px] font-medium text-fg">{title}</span>
+          {status}
+        </span>
+        {meta && <span className="mt-0.5 block break-words text-[13px] text-fg-2">{meta}</span>}
+      </span>
+      {aside && <span className="shrink-0 text-right text-[14px] font-medium tabular text-fg">{aside}</span>}
+      <ChevronRight size={16} className="shrink-0 text-muted" aria-hidden />
+    </Link>
   );
 }
 
@@ -254,6 +291,8 @@ export function CellCode({ children }: { children: ReactNode }) {
 }
 
 /** Sort helper for lists that are already loaded on the server (at most a few hundred rows). */
+const DECIMAL = /^-?\d+(\.\d+)?$/;
+/** Quantities and money arrive as decimal strings: they are compared with decimal.js, never as floats. */
 export function sortRows<T>(rows: readonly T[], dir: SortDir, by: (r: T) => string | number | null | undefined): T[] {
   const m = dir === "asc" ? 1 : -1;
   return [...rows].sort((a, b) => {
@@ -262,7 +301,9 @@ export function sortRows<T>(rows: readonly T[], dir: SortDir, by: (r: T) => stri
     if (x === y) return 0;
     if (x === null || x === undefined || x === "") return 1;
     if (y === null || y === undefined || y === "") return -1;
-    return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "en", { numeric: true })) * m;
+    if (typeof x === "number" && typeof y === "number") return (x - y) * m;
+    if (typeof x === "string" && typeof y === "string" && DECIMAL.test(x) && DECIMAL.test(y)) return new Decimal(x).cmp(y) * m;
+    return String(x).localeCompare(String(y), "en", { numeric: true }) * m;
   });
 }
 
