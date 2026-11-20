@@ -91,7 +91,8 @@ export const processStepReadings = pgTable(
     index("step_readings_record_idx").on(t.processStepRecordId),
     uniqueIndex("step_readings_supersedes_uq").on(t.supersedesId).where(sql`${t.supersedesId} is not null`),
     check("step_readings_one_value_ck", sql`num_nonnulls(${t.valueNumeric}, ${t.valueText}, ${t.valueBoolean}) = 1`),
-    check("step_readings_kind_ck", sql`${t.valueKind} in ('numeric', 'text', 'boolean')`),
+    // ADR-137: `choice` = one answer chosen from the step field's list (stored in value_text).
+    check("step_readings_kind_ck", sql`${t.valueKind} in ('numeric', 'text', 'boolean', 'choice')`),
     check("step_readings_correction_ck", sql`${t.supersedesId} is null or ${t.correctionReason} is not null`),
   ],
 );

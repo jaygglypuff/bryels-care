@@ -9,7 +9,7 @@
  * company's process owners and QA; seed values are fictional placeholders.
  */
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
 import { formulaRevisions, materials, products } from "./masterdata";
@@ -384,9 +384,14 @@ export const routingSteps = pgTable(
     recordMode: text("record_mode").notNull().default("electronic"),
     minDurationMinutes: integer("min_duration_minutes"),
     expectedDurationMinutes: integer("expected_duration_minutes"),
+    /** ADR-137: the step's check must be signed by QA (a person holding quality.inspection.approve), not any checker. */
+    qaSigns: boolean("qa_signs").notNull().default(false),
+    /** ADR-137: a step the recipe writer built field by field ("Custom step"), so the wizard opens it in the step builder. */
+    isCustom: boolean("is_custom").notNull().default(false),
   },
   (t) => [
     uniqueIndex("routing_steps_rev_step_uq").on(t.routingRevisionId, t.stepNo),
+    check("routing_steps_qa_signs_ck", sql`not ${t.qaSigns} or ${t.requiresChecker}`),
     check(
       "routing_steps_kind_ck",
       sql`${t.stepKind} in ('line_clearance', 'dispensing', 'process', 'in_process_qc', 'filling', 'cutting', 'curing', 'hold', 'packaging', 'reconciliation', 'transfer', 'checklist')`,
@@ -408,17 +413,20 @@ export const routingStepParameters = pgTable(
     sequence: integer("sequence").notNull(),
     code: text("code").notNull(),
     name: text("name").notNull(),
-    /** numeric | text | boolean */
+    /** numeric | text | boolean | choice (ADR-137: one answer from `options`) */
     valueKind: text("value_kind").notNull(),
     uom: text("uom"),
     minValue: numeric("min_value", QTY),
     targetValue: numeric("target_value", QTY),
     maxValue: numeric("max_value", QTY),
     isRequired: boolean("is_required").notNull().default(true),
+    /** ADR-137 choice fields: the answers to choose from (2–12 short texts, JSON array of strings). */
+    options: jsonb("options"),
   },
   (t) => [
     uniqueIndex("routing_step_params_code_uq").on(t.routingStepId, t.code),
-    check("routing_step_params_kind_ck", sql`${t.valueKind} in ('numeric', 'text', 'boolean')`),
+    check("routing_step_params_kind_ck", sql`${t.valueKind} in ('numeric', 'text', 'boolean', 'choice')`),
+    check("routing_step_params_options_ck", sql`(${t.valueKind} = 'choice') = (${t.options} is not null)`),
     check("routing_step_params_range_ck", sql`${t.minValue} is null or ${t.maxValue} is null or ${t.minValue} <= ${t.maxValue}`),
     check(
       "routing_step_params_target_ck",

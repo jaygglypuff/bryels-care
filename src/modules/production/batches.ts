@@ -1,5 +1,6 @@
 import "server-only";
 import Decimal from "decimal.js";
+import { ScaleError, type ScaledLine, scaleLine } from "@/modules/masterdata/add-methods";
 import { db, type Tx } from "@/db/client";
 import { batchMaterials, batchStateTransitions, batches } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -110,11 +111,20 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
   const refSize = new Decimal(rev.rev.referenceBatchSizeG);
   const factor = plannedSizeG.div(refSize);
   // Proportional lines scale with the batch size; fixed lines copy (docs/data-model.md §4.4).
+  // ADR-137: lines counted or measured in units scale their units (rounded to whole units when the recipe says so, the
+  // exact number kept); the stock amount follows the units. A rounding to nothing refuses the batch with the line named.
   const scaled = lines.map(({ line, material }) => {
-    const target = line.scaling === "fixed" ? new Decimal(line.quantityG) : new Decimal(line.quantityG).mul(factor).toDecimalPlaces(6);
+    let s: ScaledLine;
+    try {
+      s = scaleLine(line, factor);
+    } catch (e) {
+      if (e instanceof ScaleError) throw new DomainError("validation", `${material.name}: ${e.message} Make a bigger batch, or ask the recipe writer to change how it rounds.`, { rule: "ADR-137", fieldErrors: { plannedSizeKg: "Too small for whole units." } });
+      throw e;
+    }
+    const target = s.targetG;
     // For an absolute tolerance the stored percentage is only the display equivalent.
     const pct = line.toleranceAbsG !== null ? (target.gt(0) ? new Decimal(line.toleranceAbsG).div(target).mul(100).toDecimalPlaces(6) : new Decimal(0)) : new Decimal(line.tolerancePct ?? 0);
-    return { line, material, target, pct };
+    return { line, material, target, pct, s };
   });
   // ADR-088 §3: packaging lines. The recipe's packaging lines (material kind packaging) are batch lines
   // as they are; when the recipe has none, the per-piece setup of the product adds them (A-G5-01).
@@ -150,7 +160,7 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
           tests: plan.tests.map((t) => ({ testCode: t.testCode, name: t.name, valueKind: t.valueKind, uom: t.uom, specMin: t.specMin, specMax: t.specMax, specText: t.specText, isRequired: t.isRequired })),
         }
       : null,
-    lines: scaled.map(({ line, material, target, pct }) => ({
+    lines: scaled.map(({ line, material, target, pct, s }) => ({
       bomLineId: line.id,
       lineNo: line.lineNo,
       materialId: material.id,
@@ -165,6 +175,24 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
       targetQtyG: target.toString(),
       requiresChecker: isPackagingKind(material.materialKind) ? false : lineNeedsCheck(line.requiresChecker),
       materialKind: material.materialKind,
+      // ADR-137: how it is added, as frozen on the batch (absent on older batches = weighed).
+      ...(line.addMethod !== "weigh"
+        ? {
+            addMethod: line.addMethod,
+            method: {
+              unit: line.methodUnit,
+              perUnit: line.methodUnitQty,
+              target: s.methodTarget?.toString() ?? null,
+              roundedFrom: s.roundedFrom?.toString() ?? null,
+              rounding: line.rounding,
+              toleranceUnits: line.toleranceUnits,
+              maxQtyG: s.maxG?.toString() ?? null,
+              spec: line.methodSpec ?? null,
+              materialUnitId: line.materialUnitId,
+            },
+          }
+        : {}),
+      ...(line.operatorNote ? { operatorNote: line.operatorNote } : {}),
     })),
     packaging: [
       ...scaled.filter(({ material }) => isPackagingKind(material.materialKind)).map(({ line, material, target }) => ({ lineNo: line.lineNo, materialId: material.id, materialCode: material.code, materialName: material.name, qty: target.toString(), baseUom: material.baseUom, source: "recipe" as const })),
@@ -210,15 +238,26 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
     })
     .returning();
   await tx.insert(batchMaterials).values([
-    ...scaled.map(({ line, material, target, pct }) => ({
+    ...scaled.map(({ line, material, target, pct, s }) => ({
       batchId: b.id,
       bomLineId: line.id,
       lineNo: line.lineNo,
       materialId: line.materialId,
       theoreticalQtyG: target.toString(),
       tolerancePct: pct.toString(),
-      toleranceAbsG: line.toleranceAbsG,
+      // As needed: the band up to the SCALED maximum (older readers of the line); the method decides with max_qty_g.
+      toleranceAbsG: line.addMethod === "as_needed" && s.maxG ? s.maxG.minus(target).toString() : line.toleranceAbsG,
       status: isPackagingKind(material.materialKind) ? PACKAGING_LINE_STATUS : "pending",
+      // ADR-137: the method frozen on the batch line (what the floor, the paper record and the BMR show).
+      addMethod: line.addMethod,
+      methodUnit: line.methodUnit,
+      methodUnitQty: line.methodUnitQty,
+      methodTargetQty: s.methodTarget?.toString() ?? null,
+      methodRoundedFrom: s.roundedFrom?.toString() ?? null,
+      methodToleranceUnits: line.toleranceUnits,
+      maxQtyG: s.maxG?.toString() ?? null,
+      methodSpec: line.methodSpec ?? null,
+      operatorNote: line.operatorNote,
     })),
     ...extraPackaging.map((p) => ({
       batchId: b.id,

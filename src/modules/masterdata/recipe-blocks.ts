@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { type AddMethod, type RecordBy, type RoundingRule, isAddMethod, readSpec, stockToUnits, unitsToStock } from "./add-methods";
 
 /**
  * Guided "New recipe" wizard (ADR-089): the pure part shared by the browser and the server.
@@ -61,21 +62,71 @@ export type RecipeLineDraft = {
   /** The number the person typed, in `src` units. */
   amount: string;
   src: AmountUnit;
-  /** "Allowed difference" when weighing: a percentage of the amount, or grams. */
-  diffKind: "pct" | "g";
+  /** "Allowed difference": a percentage of the amount, grams, or (ADR-137) units of the method (sachets, mL, scoops). */
+  diffKind: "pct" | "g" | "units";
   diff: string;
   /** "Needs a second person to check the weighing" (bom_lines.requires_checker; used when the company checks marked lines, ADR-080 §4). */
   needsCheck: boolean;
-  /** Kept as they were (advanced editing only). */
+  /** Phase (oils, water part …), shown in "More". */
   phaseCode: string | null;
-  scaling: "proportional" | "fixed";
+  scaling: "proportional" | "fixed" | "proportional_round";
   isCritical: boolean;
   /** ADR-104 §1b: approved alternatives of the line, kept as they were (edited in the advanced line editor). */
   alternatives?: { materialId: string; ratio: string; notes: string | null }[];
+  /* ADR-137 "How is it added?" (absent = weigh). */
+  method?: AddMethod;
+  /** Units typed: how many sachets, mL, containers or own units. */
+  methodQty?: string;
+  /** The material unit version (pack or mL) the line uses. */
+  unitId?: string | null;
+  /** Own way: its name, its unit word and how much one unit is in the stock unit ("" = not measured). */
+  customName?: string;
+  customUnit?: string;
+  customUnitQty?: string;
+  /** proportional_round: up | down | nearest. */
+  rounding?: RoundingRule | "";
+  /** As needed: how the amount is recorded, the reading that says enough, and the most that may be added. */
+  recordBy?: RecordBy;
+  readingName?: string;
+  readingUnit?: string;
+  readingMin?: string;
+  readingMax?: string;
+  maxAmount?: string;
+  /** A short how-to for the operator. */
+  note?: string;
 };
 
-/** Grams of one line for a batch size (exact). Empty or invalid amounts count as 0. */
-export function lineGrams(batchG: Num, l: Pick<RecipeLineDraft, "amount" | "src">): string {
+/** Stock units in one unit, by material unit id (the wizard's options; the server loads the real ones). */
+export type UnitSizes = Record<string, string>;
+
+export const methodOf = (l: Pick<RecipeLineDraft, "method">): AddMethod => l.method ?? "weigh";
+
+/** The line is typed in units (count, volume, whole container, measured own way, as needed by count/volume). */
+export function lineInUnits(l: Partial<RecipeLineDraft>): boolean {
+  const m = l.method ?? "weigh";
+  if (m === "count" || m === "volume" || m === "whole_container") return true;
+  if (m === "custom") return isDecimalText(l.customUnitQty ?? "", 6) && new Dx((l.customUnitQty ?? "").trim() || "0").gt(0);
+  if (m === "as_needed") return l.recordBy === "count" || l.recordBy === "volume";
+  return false;
+}
+
+/** Stock units in one unit of the line (its material unit, or its own measured unit); null when unknown. */
+export function linePerUnit(l: Partial<RecipeLineDraft>, units: UnitSizes = {}): string | null {
+  if (l.method === "custom") return lineInUnits(l) ? plain((l.customUnitQty ?? "").trim()) : null;
+  return l.unitId ? (units[l.unitId] ?? null) : null;
+}
+
+/** As-needed lines are added "until it is right": not part of the percent total (like packaging). */
+export const inTotal = (l: Pick<RecipeLineDraft, "method">) => methodOf(l) !== "as_needed";
+
+/** Grams (stock units) of one line for a batch size (exact). Empty or invalid amounts count as 0. */
+export function lineGrams(batchG: Num, l: Pick<RecipeLineDraft, "amount" | "src"> & Partial<RecipeLineDraft>, units: UnitSizes = {}): string {
+  if (l.method && l.method !== "weigh" && lineInUnits(l)) {
+    const per = linePerUnit(l, units);
+    const q = (l.methodQty ?? "").trim();
+    if (!per || !isDecimalText(q, GRAM_DECIMALS)) return "0";
+    return plain(unitsToStock(q, per));
+  }
   const a = l.amount.trim();
   if (!isDecimalText(a, GRAM_DECIMALS)) return "0";
   return l.src === "g" ? plain(a) : gramsFromPercent(batchG, a);
@@ -91,10 +142,10 @@ export function lineShown(batchG: Num, l: Pick<RecipeLineDraft, "amount" | "src"
 
 export type RecipeTotals = { totalG: string; batchG: string; totalPct: string; gapPct: string; gapG: string; exact: boolean };
 
-/** Totals of the ingredient lines against the batch size (exact in grams; percent shown to 4 decimals). */
-export function recipeTotals(batchG: Num, lines: Pick<RecipeLineDraft, "amount" | "src">[]): RecipeTotals {
+/** Totals of the ingredient lines against the batch size (exact in grams; percent shown to 4 decimals). As-needed lines are left out. */
+export function recipeTotals(batchG: Num, lines: (Pick<RecipeLineDraft, "amount" | "src"> & Partial<RecipeLineDraft>)[], units: UnitSizes = {}): RecipeTotals {
   const b = new Dx(batchG);
-  const total = lines.reduce((acc, l) => acc.plus(lineGrams(b, l)), new Dx(0));
+  const total = lines.filter((l) => inTotal(l)).reduce((acc, l) => acc.plus(lineGrams(b, l, units)), new Dx(0));
   const pct = b.gt(0) ? total.div(b).mul(100) : new Dx(0);
   return {
     totalG: plain(total),
@@ -124,37 +175,116 @@ export function gramsTotalText(t: RecipeTotals): string {
   return gap.gt(0) ? `${head} — ${n0(t.gapG)} g missing` : `${head} — ${n0(plain(gap.abs()))} g too much`;
 }
 
-/** Input of saveFormulaRevisionDraft for these lines (grams per reference batch, exact). */
-export function toBomLineInputs(batchG: Num, lines: RecipeLineDraft[]) {
-  return lines.map((l) => ({
-    materialId: l.materialId,
-    quantityG: lineGrams(batchG, l),
-    tolerancePct: l.diffKind === "pct" ? l.diff.trim() || null : null,
-    toleranceAbsG: l.diffKind === "g" ? l.diff.trim() || null : null,
-    phaseCode: l.phaseCode,
-    scaling: l.scaling,
-    isCritical: l.isCritical,
-    requiresChecker: l.needsCheck,
-    ...(l.alternatives?.length ? { alternatives: l.alternatives.map((a) => ({ materialId: a.materialId, ratio: a.ratio, notes: a.notes })) } : {}),
-  }));
+const blankOr = (v: string | undefined | null) => (v && v.trim() ? v.trim() : null);
+
+/**
+ * Input of saveFormulaRevisionDraft for these lines (grams per reference batch, exact). ADR-137: the method fields go
+ * with each line; the service works out the stock amount of a line in units from the unit's real size.
+ */
+export function toBomLineInputs(batchG: Num, lines: RecipeLineDraft[], units: UnitSizes = {}) {
+  return lines.map((l) => {
+    const method = methodOf(l);
+    const inUnits = method !== "weigh" && lineInUnits(l);
+    const per = linePerUnit(l, units);
+    const grams = lineGrams(batchG, l, units);
+    const tol =
+      l.diffKind === "units" && method !== "weigh"
+        ? { tolerancePct: null, toleranceAbsG: null, toleranceUnits: l.diff.trim() || null }
+        : { tolerancePct: l.diffKind === "pct" ? l.diff.trim() || null : null, toleranceAbsG: l.diffKind === "g" ? l.diff.trim() || null : null, toleranceUnits: null };
+    const asNeeded = method === "as_needed";
+    // As needed: "at most" is typed in the same unit as the guess (grams or percent, or units for count / mL).
+    const maxText = blankOr(l.maxAmount);
+    const maxG = !asNeeded || !maxText || !isDecimalText(maxText, GRAM_DECIMALS) ? null : inUnits ? (per ? plain(unitsToStock(maxText, per)) : null) : l.src === "pct" ? gramsFromPercent(batchG, maxText) : plain(maxText);
+    return {
+      materialId: l.materialId,
+      // A line in units sends a tiny placeholder until its unit is known; the service works out the real amount or names the missing field.
+      quantityG: grams === "0" && inUnits ? "0.000001" : grams,
+      ...(asNeeded ? { tolerancePct: null, toleranceAbsG: null, toleranceUnits: null } : tol),
+      phaseCode: l.phaseCode,
+      scaling: l.scaling,
+      isCritical: l.isCritical,
+      requiresChecker: l.needsCheck,
+      addMethod: method,
+      methodQty: inUnits ? blankOr(l.methodQty) : null,
+      materialUnitId: method === "custom" || method === "weigh" ? null : (l.unitId ?? null),
+      methodUnit: method === "custom" ? blankOr(l.customUnit) : null,
+      methodUnitQty: method === "custom" && inUnits ? blankOr(l.customUnitQty) : null,
+      maxQtyG: maxG,
+      rounding: l.scaling === "proportional_round" ? l.rounding || null : null,
+      methodSpec:
+        method === "custom"
+          ? { customName: (l.customName ?? "").trim() }
+          : asNeeded
+            ? { recordBy: l.recordBy ?? "weigh", reading: { name: (l.readingName ?? "").trim(), unit: (l.readingUnit ?? "").trim(), min: blankOr(l.readingMin), max: blankOr(l.readingMax) } }
+            : null,
+      operatorNote: blankOr(l.note),
+      ...(l.alternatives?.length ? { alternatives: l.alternatives.map((a) => ({ materialId: a.materialId, ratio: a.ratio, notes: a.notes })) } : {}),
+    };
+  });
 }
 
-/** Stored bom lines → wizard lines, typed in grams. */
-export function fromBomLines(
-  rows: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical: boolean; requiresChecker: boolean; alternatives?: { materialId: string; ratio: string; notes: string | null }[] }[],
-): RecipeLineDraft[] {
-  return rows.map((r) => ({
-    materialId: r.materialId,
-    amount: plain(r.quantityG),
-    src: "g",
-    diffKind: r.toleranceAbsG !== null ? "g" : "pct",
-    diff: r.toleranceAbsG !== null ? plain(r.toleranceAbsG) : r.tolerancePct !== null ? plain(r.tolerancePct) : "",
-    needsCheck: r.requiresChecker,
-    phaseCode: r.phaseCode,
-    scaling: r.scaling === "fixed" ? "fixed" : "proportional",
-    isCritical: r.isCritical,
-    ...(r.alternatives?.length ? { alternatives: r.alternatives.map((a) => ({ materialId: a.materialId, ratio: plain(a.ratio), notes: a.notes })) } : {}),
-  }));
+export type StoredLineRow = {
+  materialId: string;
+  quantityG: string;
+  tolerancePct: string | null;
+  toleranceAbsG: string | null;
+  phaseCode: string | null;
+  scaling: string;
+  isCritical: boolean;
+  requiresChecker: boolean;
+  alternatives?: { materialId: string; ratio: string; notes: string | null }[];
+  addMethod?: string;
+  methodQty?: string | null;
+  materialUnitId?: string | null;
+  methodUnit?: string | null;
+  methodUnitQty?: string | null;
+  toleranceUnits?: string | null;
+  maxQtyG?: string | null;
+  rounding?: string | null;
+  methodSpec?: unknown;
+  operatorNote?: string | null;
+};
+
+/** Stored bom lines → wizard lines, typed in grams (or in units for a line counted or measured). */
+export function fromBomLines(rows: StoredLineRow[]): RecipeLineDraft[] {
+  return rows.map((r) => {
+    const method: AddMethod = isAddMethod(r.addMethod) ? r.addMethod : "weigh";
+    const spec = readSpec(r.methodSpec);
+    const per = r.methodUnitQty ?? null;
+    const unitsBack = (g: string | null | undefined) => (g === null || g === undefined || !per ? "" : plain(stockToUnits(g, per)));
+    const hasUnits = r.toleranceUnits !== null && r.toleranceUnits !== undefined;
+    const base: RecipeLineDraft = {
+      materialId: r.materialId,
+      amount: plain(r.quantityG),
+      src: "g",
+      diffKind: hasUnits ? "units" : r.toleranceAbsG !== null ? "g" : "pct",
+      diff: hasUnits ? plain(r.toleranceUnits!) : r.toleranceAbsG !== null ? plain(r.toleranceAbsG) : r.tolerancePct !== null ? plain(r.tolerancePct) : "",
+      needsCheck: r.requiresChecker,
+      phaseCode: r.phaseCode,
+      scaling: r.scaling === "fixed" ? "fixed" : r.scaling === "proportional_round" ? "proportional_round" : "proportional",
+      isCritical: r.isCritical,
+      ...(r.alternatives?.length ? { alternatives: r.alternatives.map((a) => ({ materialId: a.materialId, ratio: plain(a.ratio), notes: a.notes })) } : {}),
+    };
+    if (method === "weigh") return r.operatorNote ? { ...base, note: r.operatorNote } : base;
+    const extra: Partial<RecipeLineDraft> = { method, unitId: r.materialUnitId ?? null, rounding: (r.rounding as RoundingRule | null) ?? "", note: r.operatorNote ?? "" };
+    if (r.methodQty !== null && r.methodQty !== undefined) extra.methodQty = plain(r.methodQty);
+    if (method === "custom") Object.assign(extra, { customName: spec.customName ?? "", customUnit: r.methodUnit ?? "", customUnitQty: per ? plain(per) : "" });
+    if (method === "as_needed") {
+      const by = spec.recordBy ?? "weigh";
+      Object.assign(extra, {
+        recordBy: by,
+        readingName: spec.reading?.name ?? "",
+        readingUnit: spec.reading?.unit ?? "",
+        readingMin: spec.reading?.min ?? "",
+        readingMax: spec.reading?.max ?? "",
+        // The band to the maximum is stored in the stock unit; the wizard shows the guess and "at most" in the line's unit.
+        diffKind: "pct",
+        diff: "",
+        ...(by === "weigh" ? { maxAmount: r.maxQtyG ? plain(r.maxQtyG) : "" } : { methodQty: unitsBack(r.quantityG), maxAmount: unitsBack(r.maxQtyG) }),
+      });
+    }
+    return { ...base, ...extra };
+  });
 }
 
 /* ------------------------------------------------------------------ batch by pieces (ADR-088 §4) */

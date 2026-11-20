@@ -6,6 +6,8 @@ import { bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, p
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertUnitsCurrent, normaliseMethodLines } from "./bom-methods";
+import { methodSentence } from "./add-methods";
 import { assignMasterCode } from "@/lib/numbering";
 import { z } from "zod";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
@@ -175,9 +177,11 @@ export async function saveFormulaRevisionDraft(ctx: AuthContext, raw: unknown) {
     }
     const matIds = [...new Set(input.lines.map((l) => l.materialId))];
     const mats = matIds.length
-      ? await tx.select({ id: materials.id }).from(materials).where(and(inArray(materials.id, matIds), eq(materials.organizationId, ctx.organizationId)))
+      ? await tx.select({ id: materials.id, name: materials.name, baseUom: materials.baseUom, materialKind: materials.materialKind }).from(materials).where(and(inArray(materials.id, matIds), eq(materials.organizationId, ctx.organizationId)))
       : [];
     if (mats.length !== matIds.length) throw new DomainError("validation", "One of the materials does not exist.", { fieldErrors: { lines: "Choose materials from the list." } });
+    // ADR-137: how each line is added; the stock amount of a counted or measured line comes from its unit.
+    const methods = await normaliseMethodLines(tx, ctx.organizationId, input.lines as Parameters<typeof normaliseMethodLines>[2], new Map(mats.map((m) => [m.id, m])));
 
     const before = await tx.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
     await tx.delete(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
@@ -187,13 +191,10 @@ export async function saveFormulaRevisionDraft(ctx: AuthContext, raw: unknown) {
           formulaRevisionId: rev.id,
           lineNo: i + 1,
           materialId: l.materialId,
-          quantityG: l.quantityG,
-          tolerancePct: l.tolerancePct,
-          toleranceAbsG: l.toleranceAbsG,
           phaseCode: l.phaseCode,
-          scaling: l.scaling,
           isCritical: l.isCritical,
           requiresChecker: l.requiresChecker,
+          ...methods[i],
         })),
       ).returning({ id: bomLines.id, lineNo: bomLines.lineNo });
       // ADR-104 §1b: "Allowed alternatives (optional)" of each line (the old rows went with the replaced lines).
@@ -238,6 +239,7 @@ export async function submitFormulaRevision(ctx: AuthContext, revisionId: string
     if (!lines.length) throw new DomainError("validation", "Add at least one ingredient line before submitting.");
     const missing = lines.filter((l) => (l.tolerancePct === null) === (l.toleranceAbsG === null));
     if (missing.length) throw new DomainError("validation", `Line ${missing[0].lineNo} needs exactly one allowed difference (percent or grams).`);
+    await assertUnitsCurrent(tx, lines);
     if (rev.revisionNo > 1 && !rev.changeSummary?.trim()) {
       throw new DomainError("validation", "Describe what changes and why (change summary) before submitting.", { fieldErrors: { changeSummary: "Required for revision 2 onwards." } });
     }
@@ -590,6 +592,18 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
       scaling: line.scaling,
       isCritical: line.isCritical,
       requiresChecker: line.requiresChecker,
+      // ADR-137: how it is added, and the one sentence the floor will show ("Count 5 sachets").
+      addMethod: line.addMethod,
+      methodQty: line.methodQty,
+      materialUnitId: line.materialUnitId,
+      methodUnit: line.methodUnit,
+      methodUnitQty: line.methodUnitQty,
+      toleranceUnits: line.toleranceUnits,
+      maxQtyG: line.maxQtyG,
+      rounding: line.rounding,
+      methodSpec: line.methodSpec,
+      operatorNote: line.operatorNote,
+      methodSentence: methodSentence({ ...line, methodTargetQty: line.methodQty, theoreticalQtyG: line.quantityG }, material.baseUom),
       alternatives: (altRows.get(line.id) ?? []).map((a) => ({ materialId: a.materialId, materialName: a.name, ratio: a.ratio, notes: a.notes })),
       ...(showPct ? { percentOfBatch: ref.gt(0) ? q.div(ref).mul(100).toDecimalPlaces(4).toString() : null } : {}),
     };
@@ -654,7 +668,9 @@ export function formulaTotals(lines: { quantityG: string; materialKind: string; 
   return { sumG, packaging };
 }
 
-type LineLike = { materialId: string; lineNo: number; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string };
+type LineLike = { materialId: string; lineNo: number; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; addMethod?: string; methodQty?: string | null; methodUnit?: string | null; methodUnitQty?: string | null; rounding?: string | null; methodSpec?: unknown; maxQtyG?: string | null };
+/** ADR-137: "Count 5 sachets" / "Weigh 125 g" for the redline. */
+const howText = (l: LineLike) => (l.addMethod && l.addMethod !== "weigh" ? `${methodSentence({ addMethod: l.addMethod, methodUnit: l.methodUnit ?? null, methodUnitQty: l.methodUnitQty ?? null, methodSpec: l.methodSpec, methodTargetQty: l.methodQty ?? null, theoreticalQtyG: l.quantityG, maxQtyG: l.maxQtyG ?? null }, "g")}${l.rounding ? ` (${l.rounding})` : ""}` : "weigh");
 const tolText = (l: LineLike) => (l.toleranceAbsG !== null ? `±${new Decimal(l.toleranceAbsG).toString()} g` : `±${new Decimal(l.tolerancePct ?? 0).toString()} %`);
 
 /** Line-level comparison by material (and occurrence), used for the redline view. */
@@ -682,6 +698,7 @@ export function diffLines(base: LineLike[], next: LineLike[], names: Map<string,
     if (tolText(o) !== tolText(l)) changes.push(`tolerance ${tolText(o)} → ${tolText(l)}`);
     if ((o.phaseCode ?? "") !== (l.phaseCode ?? "")) changes.push(`phase ${o.phaseCode ?? "—"} → ${l.phaseCode ?? "—"}`);
     if (o.scaling !== l.scaling) changes.push(`scaling ${o.scaling} → ${l.scaling}`);
+    if (howText(o) !== howText(l)) changes.push(`how it is added: ${howText(o)} → ${howText(l)}`);
     if (changes.length) out.push({ kind: "changed", material, detail: changes.join("; ") });
   }
   for (const [k, l] of a) if (!b.has(k)) out.push({ kind: "removed", material: names.get(l.materialId) ?? l.materialId, detail: `${new Decimal(l.quantityG).toString()} g` });

@@ -4,7 +4,10 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { approvalDecisions, bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
+import { approvalDecisions, bomLineAlternatives, bomLines, formulaRevisions, formulas, materialUnits, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
+import { ADD_METHODS, RECORD_BY, ROUNDING_RULES, SCALING_RULES, readSpec } from "./add-methods";
+import { materialUnitOptions } from "./material-units";
+import { listRecipeTemplates } from "./recipe-templates";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
@@ -40,6 +43,8 @@ import {
   toBomLineInputs,
   toStepInputs,
   waitToMinutes,
+  type UnitSizes,
+  lineInUnits,
 } from "./recipe-blocks";
 import { createRouting, createRoutingRevision, decideRoutingRevisionIn, deleteRoutingDraft, loadRoutingSteps, policyFor, saveRoutingRevisionDraft, submitRoutingRevision, withdrawRoutingRevision } from "./routings";
 import { AREAS, STEP_KINDS, SaveFormulaDraftInput, SaveRoutingDraftInput, parseInput } from "./schemas";
@@ -78,13 +83,28 @@ const LineSchema = z
     materialId: uuid,
     amount: str(30),
     src: z.enum(["g", "pct"]),
-    diffKind: z.enum(["pct", "g"]),
+    diffKind: z.enum(["pct", "g", "units"]),
     diff: str(30),
     needsCheck: z.boolean(),
     phaseCode: str(40).nullable(),
-    scaling: z.enum(["proportional", "fixed"]),
+    scaling: z.enum(SCALING_RULES),
     isCritical: z.boolean(),
     alternatives: z.array(z.object({ materialId: uuid, ratio: str(30), notes: str(200).nullable() }).strict()).max(5).optional(),
+    // ADR-137 "How is it added?" (absent = weigh).
+    method: z.enum(ADD_METHODS).optional(),
+    methodQty: str(30).optional(),
+    unitId: uuid.nullable().optional(),
+    customName: str(80).optional(),
+    customUnit: str(30).optional(),
+    customUnitQty: str(30).optional(),
+    rounding: z.union([z.enum(ROUNDING_RULES), z.literal("")]).optional(),
+    recordBy: z.enum(RECORD_BY).optional(),
+    readingName: str(60).optional(),
+    readingUnit: str(20).optional(),
+    readingMin: str(30).optional(),
+    readingMax: str(30).optional(),
+    maxAmount: str(30).optional(),
+    note: str(300).optional(),
   })
   .strict();
 
@@ -169,7 +189,8 @@ function renameFields(e: unknown, part: "formula" | "routing"): unknown {
  * revision ids), validated with the services' own schemas. Throws one validation error with every
  * field message found.
  */
-export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { pieceG?: string | null; draft?: boolean } = {}) {
+export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { pieceG?: string | null; draft?: boolean; units?: UnitSizes } = {}) {
+  const units = opts.units ?? {};
   // Owner bug report 2026-11-06 (ADR-116): "Save as draft" keeps an unfinished recipe. The wizard's own completeness
   // promises (percent adds up to 100 %, a waiting step has its time) are checked when it is sent for approval; what
   // the services must store correctly (a chosen ingredient, a valid amount, a step name, the batch size) still applies.
@@ -197,14 +218,34 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { piece
   });
   if (v.packaging.length && pieces === "0" && !fe.pieceG && !fe.pieces && !fe.batchKg) fe.packaging = "One batch makes less than one piece, so the packaging can't be worked out. Check the batch size.";
   v.lines.forEach((l, i) => {
-    const a = l.amount.trim();
-    const dp = l.src === "pct" ? PERCENT_DECIMALS : GRAM_DECIMALS;
-    if (!isDecimalText(a, dp) || new Decimal(a).lte(0)) fe[`lines.${i}.quantityG`] = l.src === "pct" ? `Type the percent, like 21.5 (at most ${dp} decimals).` : "Type the grams, like 3723.2.";
+    const method = l.method ?? "weigh";
+    // ADR-137: a line counted or measured in units is typed in units; the rest is typed in grams or percent.
+    if (method !== "weigh" && lineInUnits(l)) {
+      const q = (l.methodQty ?? "").trim();
+      const whole = method === "count" || method === "whole_container";
+      if (!(whole ? /^\d{1,9}$/.test(q) : isDecimalText(q, 3)) || new Decimal(q).lte(0)) fe[`lines.${i}.methodQty`] = whole ? "Type how many, as a whole number, like 5." : "Type how much, like 250.";
+      if (method !== "custom" && !l.unitId) fe[`lines.${i}.materialUnitId`] = method === "volume" || l.recordBy === "volume" ? "Choose the mL of this ingredient (grams in 1 mL)." : "Choose what you count, like a sachet.";
+    } else {
+      const a = l.amount.trim();
+      const dp = l.src === "pct" ? PERCENT_DECIMALS : GRAM_DECIMALS;
+      if (!isDecimalText(a, dp) || new Decimal(a).lte(0)) fe[`lines.${i}.quantityG`] = l.src === "pct" ? `Type the percent, like 21.5 (at most ${dp} decimals).` : "Type the grams, like 3723.2.";
+    }
+    if (method === "as_needed") {
+      const mx = (l.maxAmount ?? "").trim();
+      if (!isDecimalText(mx, 6) || new Decimal(mx).lte(0)) fe[`lines.${i}.maxQtyG`] = "Type the most you may add.";
+      if (!(l.readingName ?? "").trim()) fe[`lines.${i}.methodSpec.reading`] = "Name the reading, for example pH.";
+      for (const k of ["readingMin", "readingMax"] as const) if ((l[k] ?? "").trim() && !/^-?\d{1,9}(\.\d{1,6})?$/.test((l[k] ?? "").trim())) fe[`lines.${i}.methodSpec.reading`] = "Type the reading range as numbers, like 5.0 and 5.5.";
+      return;
+    }
+    if (method === "whole_container") return;
     const d = l.diff.trim();
-    if (!isDecimalText(d, 6)) fe[`lines.${i}.tolerancePct`] = l.diffKind === "pct" ? "Type the allowed difference in percent, like 2." : "Type the allowed difference in grams, like 5.";
+    if (!isDecimalText(d, 6)) fe[`lines.${i}.tolerancePct`] = l.diffKind === "pct" ? "Type the allowed difference in percent, like 2." : l.diffKind === "units" ? "Type the allowed difference, 0 means exactly." : "Type the allowed difference in grams, like 5.";
+    if (method === "custom" && !(l.customName ?? "").trim()) fe[`lines.${i}.methodSpec.customName`] = "Give your way a name, like \"Scoop with spoon #3\".";
+    if (method === "custom" && !(l.customUnit ?? "").trim()) fe[`lines.${i}.methodUnit`] = "Name the unit, like scoop.";
+    if (l.scaling === "proportional_round" && !l.rounding) fe[`lines.${i}.rounding`] = "Say how to round: up, down or to the nearest.";
   });
   if (!draft && fe.batchKg === undefined && fe.pieces === undefined && fe.pieceG === undefined && isDecimalText(batchKg, BATCH_KG_DECIMALS) && v.view === "pct" && v.lines.length) {
-    const t = recipeTotals(kgToGrams(batchKg), v.lines);
+    const t = recipeTotals(kgToGrams(batchKg), v.lines, units);
     if (!t.exact) fe.lines = `${percentTotalText(t)}. The amounts must add up to 100%.`;
   }
   v.steps.forEach((s, i) => {
@@ -227,7 +268,7 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { piece
     notes: v.formulaNotes.trim() || null,
     // Ingredients first (weighed, in the percent total), then the packaging lines (counted in pieces,
     // material kind packaging: ADR-092 reads them as "the recipe's packaging lines").
-    lines: [...toBomLineInputs(batchG, v.lines), ...toPackagingLineInputs(pieces, v.packaging)],
+    lines: [...toBomLineInputs(batchG, v.lines, units), ...toPackagingLineInputs(pieces, v.packaging)],
   };
   const nIngredients = v.lines.length;
   /** Service field keys of the packaging lines (lines.N after the ingredients) → packaging.i. */
@@ -264,8 +305,40 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { piece
 
 const p = (v: string | null | undefined) => (v === null || v === undefined || v === "" ? null : plain(v));
 
-function formulaCanon(x: { referenceBatchSizeG: string; theoreticalYieldPct: string; lines: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical: boolean; requiresChecker: boolean }[] }) {
-  return JSON.stringify([p(x.referenceBatchSizeG), p(x.theoreticalYieldPct), x.lines.map((l) => [l.materialId, p(l.quantityG), p(l.tolerancePct), p(l.toleranceAbsG), l.phaseCode ?? null, l.scaling, l.isCritical, l.requiresChecker])]);
+type CanonLine = {
+  materialId: string;
+  quantityG: string;
+  tolerancePct: string | null;
+  toleranceAbsG: string | null;
+  phaseCode: string | null;
+  scaling: string;
+  isCritical: boolean;
+  requiresChecker: boolean;
+  addMethod?: string;
+  methodQty?: string | null;
+  materialUnitId?: string | null;
+  methodUnit?: string | null;
+  methodUnitQty?: string | null;
+  toleranceUnits?: string | null;
+  maxQtyG?: string | null;
+  rounding?: string | null;
+  methodSpec?: unknown;
+  operatorNote?: string | null;
+};
+/** ADR-137: a weighed line compares exactly as before; the method fields count only for the other ways. */
+function formulaCanon(x: { referenceBatchSizeG: string; theoreticalYieldPct: string; lines: CanonLine[] }) {
+  return JSON.stringify([
+    p(x.referenceBatchSizeG),
+    p(x.theoreticalYieldPct),
+    x.lines.map((l) => {
+      const weigh = !l.addMethod || l.addMethod === "weigh";
+      const head = [l.materialId, weigh ? p(l.quantityG) : null, weigh || l.toleranceUnits === null || l.toleranceUnits === undefined ? p(l.tolerancePct) : null, weigh || l.toleranceUnits === null || l.toleranceUnits === undefined ? p(l.toleranceAbsG) : null, l.phaseCode ?? null, l.scaling, l.isCritical, l.requiresChecker];
+      const note = l.operatorNote ?? null;
+      if (weigh) return note ? [...head, note] : head;
+      const spec = readSpec(l.methodSpec);
+      return [...head, l.addMethod, p(l.methodQty), l.materialUnitId ?? null, l.methodUnit ?? null, l.materialUnitId ? null : p(l.methodUnitQty), p(l.toleranceUnits), p(l.maxQtyG), l.rounding ?? null, spec.customName ?? null, spec.recordBy ?? null, spec.reading ? [spec.reading.name, spec.reading.unit, p(spec.reading.min), p(spec.reading.max)] : null, note, l.addMethod === "custom" && !l.methodUnitQty ? p(l.quantityG) : null, l.addMethod === "as_needed" ? p(l.quantityG) : null];
+    }),
+  ]);
 }
 
 type StepLike = {
@@ -436,7 +509,10 @@ export async function saveRecipe(ctx: AuthContext, raw: unknown): Promise<Recipe
       pieceG: "Your role can't save this to the product.",
     });
   }
-  const prep = prepareRecipe(v, { pieceG: storedPieceG ?? (savePieceG ? typedPieceG : null) });
+  // ADR-137: the real sizes of the units the lines use (never the browser's numbers).
+  const unitIds = [...new Set(v.lines.map((l) => l.unitId).filter((x): x is string => !!x))];
+  const unitRows = unitIds.length ? await db.select({ id: materialUnits.id, qty: materialUnits.qtyPerUnit }).from(materialUnits).where(and(eq(materialUnits.organizationId, ctx.organizationId), inArray(materialUnits.id, unitIds))) : [];
+  const prep = prepareRecipe(v, { pieceG: storedPieceG ?? (savePieceG ? typedPieceG : null), units: Object.fromEntries(unitRows.map((u) => [u.id, u.qty])) });
   await assertMaterialKinds(ctx.organizationId, v);
 
   // ---- plan the formula part
@@ -716,9 +792,15 @@ export async function recipeWizardOptions(ctx: AuthContext) {
     getSetting(db, O, "masterdata.recipe.default_allowed_difference_pct"),
     getSetting(db, O, "production.weighing.second_person_check", ctx.currentSiteId),
   ]);
+  // ADR-137: the packs and mL of each ingredient (count, whole container, volume), and the reusable templates of the
+  // person's sites (custom ways of adding and custom steps).
+  const unitRows = await materialUnitOptions(db, O, mats.map((m) => m.id));
+  const templates = await listRecipeTemplates(ctx).catch(() => []);
   return {
     products: prods.map((p) => ({ ...p, pieceG: p.pieceG ? plain(p.pieceG) : null })),
     materials: mats,
+    units: unitRows.map((u) => ({ ...u, qtyPerUnit: plain(u.qtyPerUnit) })),
+    templates,
     families: families.map((f) => ({ code: f.value, label: f.label })),
     copySources: ctx.can("masterdata.routing.view") ? recipeRows : [],
     defaultDiffPct: String(diff),
@@ -732,6 +814,10 @@ export async function recipeWizardOptions(ctx: AuthContext) {
       submit: ctx.can("masterdata.formula.submit") && ctx.can("masterdata.routing.submit"),
       createProduct: ctx.can("masterdata.product.create"),
       createMaterial: ctx.can("masterdata.material.create"),
+      /** ADR-137: add a pack size or the mL of an ingredient from the wizard. */
+      editMaterial: ctx.can("masterdata.material.edit"),
+      /** ADR-137: save a custom way of adding / a custom step for later recipes (at the current site). */
+      saveTemplate: ctx.can("masterdata.formula.edit") || ctx.can("masterdata.routing.edit"),
       activateProduct: ctx.can("masterdata.product.edit"),
       /** Save a missing weight per piece to the product (ADR-088 §4). */
       editProduct: ctx.can("masterdata.product.edit"),

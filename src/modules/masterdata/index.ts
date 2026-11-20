@@ -243,6 +243,10 @@ export {
   type RecipeView,
 } from "./recipes";
 export * from "./recipe-blocks";
+// ADR-137: how each ingredient is added, material units (packs, mL) and reusable recipe templates
+export * from "./add-methods";
+export { addMaterialUnit, changeMaterialUnit, retireMaterialUnit, listMaterialUnits, materialUnitOptions, materialUnitById, type MaterialUnitRow } from "./material-units";
+export { listRecipeTemplates, saveRecipeTemplate, retireRecipeTemplate, AddMethodTemplateBody, StepTemplateBody, type RecipeTemplateRow } from "./recipe-templates";
 export { recipeReadiness, productReadiness } from "./recipe-readiness";
 export { readiness, readinessSentence, type PartState, type Readiness } from "./recipe-readiness-words";
 // ADR-117: recipe, steps and how-to sheet versions in "To approve" (owner approves alone while the setting is on)

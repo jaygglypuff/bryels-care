@@ -16,7 +16,8 @@ import { assertLocationNotHeld, resolveLotRef } from "@/modules/inventory/holds"
 import { DEVIATION_UNAVAILABLE, executionHooks } from "./execution-hooks";
 import { type BatchRow, type PaperStepFacts, type SnapshotStep, findStepOfKind, openStep, paperAuditFields, stepRecord } from "./execution";
 import type { Tx } from "@/db/client";
-import { assertStockCovers, postBatchMovement, postDispenseConsumption } from "./execution-postings";
+import { assertStockCovers, freeQtyAt, postBatchMovement, postDispenseConsumption } from "./execution-postings";
+import { WHOLE_UNIT_METHODS, entersUnits, judgeAsNeeded, judgeUnits, judgedInUnits, readSpec, readingRangeText, readingWithin, stockToUnits, unitWindow, unitWord, unitsText, unitsToStock } from "@/modules/masterdata/add-methods";
 import { useEquipment } from "./process";
 import { convertReservations, expectedLots } from "./staging";
 import { type FormulaSnapshot, WEIGHING_STEP_KINDS, idempotent, lockBatch, productNameOf } from "./shared";
@@ -49,6 +50,56 @@ export function toBaseQty(qty: string, uom: string, baseUom: string): { base: De
   const base = entered.mul(f);
   if (base.decimalPlaces() > 3) throw new DomainError("validation", `The weight can have at most 3 decimals in ${baseUom}.`, { field: "qty" });
   return { base, entered };
+}
+
+type LineRow = typeof batchMaterials.$inferSelect;
+
+/**
+ * ADR-137: how a line total is judged. Lines in units (count, volume, whole container, measured own way) against the
+ * unit window; as-needed lines against their maximum (the reading is judged apart); the rest in the stock unit with the
+ * weighing window (weigh-window.ts) exactly as before.
+ */
+export function lineJudge(bm: LineRow, material: { name: string; baseUom: string }, liveRows: { actualQtyG: string; enteredQty: string | null }[], unitsNow: Decimal | null, total: Decimal) {
+  const facts = { ...bm, methodSpec: bm.methodSpec };
+  const g = (v: Decimal.Value) => `${new Decimal(v).toDecimalPlaces(3).toString()} ${material.baseUom}`;
+  if (judgedInUnits(facts) && unitsNow) {
+    const w = unitWindow(facts)!;
+    const before = bm.addMethod === "whole_container" ? new Decimal(liveRows.length) : liveRows.reduce((s, r) => s.plus(r.enteredQty ?? 0), new Decimal(0));
+    const unitsTotal = before.plus(unitsNow);
+    const v = judgeUnits(w, unitsTotal);
+    const unit = w.unit;
+    return {
+      ok: v.kind === "ok",
+      complete: v.kind === "ok",
+      high: v.kind === "high",
+      min: w.min,
+      max: w.max,
+      range: w.min.eq(w.max) ? `exactly ${unitsText(w.target, unit)}` : `${w.min.toString()}–${unitsText(w.max, unit)}`,
+      shownTotal: `${unitsText(unitsTotal, unit)} (${g(total)})`,
+      target: unitsText(w.target, unit),
+      redo: bm.addMethod === "volume" ? "Measure again." : "Count again.",
+    };
+  }
+  if (bm.addMethod === "as_needed" && bm.maxQtyG !== null) {
+    const v = judgeAsNeeded(bm.maxQtyG, total);
+    const per = bm.methodUnitQty;
+    const inUnits = entersUnits(facts) && per;
+    const show = (x: Decimal.Value) => (inUnits ? `${unitsText(stockToUnits(x, per!), bm.methodUnit)} (${g(x)})` : g(x));
+    return { ok: v.kind === "ok", complete: false, high: v.kind === "high", min: new Decimal(0), max: new Decimal(bm.maxQtyG), range: `at most ${show(bm.maxQtyG)}`, shownTotal: show(total), target: show(bm.theoreticalQtyG), redo: "Use less." };
+  }
+  const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct, bm.toleranceAbsG);
+  const ok = total.gte(min) && total.lte(max);
+  return {
+    ok,
+    complete: ok,
+    high: total.gt(max),
+    min,
+    max,
+    range: `${min.toDecimalPlaces(3).toString()}–${max.toDecimalPlaces(3).toString()} ${material.baseUom}`,
+    shownTotal: `${total.toString()} ${material.baseUom}`,
+    target: new Decimal(bm.theoreticalQtyG).toString(),
+    redo: "Re-weigh.",
+  };
 }
 
 export type DispenseInput = {
@@ -92,6 +143,15 @@ export type DispenseInput = {
   offPlanReasonCode?: string | null;
   offPlanNote?: string | null;
   idempotencyKey?: string | null;
+  /**
+   * ADR-137: how much was counted or measured, in the line's unit (5 sachets, 250 mL, 3 scoops), for a line that is not
+   * weighed. Also accepted as `qty` with `uom` = the line's unit (offline queue, paper entry).
+   */
+  units?: string | null;
+  /** ADR-137 "whole container": the whole content of the scanned lot at that place goes in (nothing typed). */
+  wholeContainer?: boolean;
+  /** ADR-137 "as needed": the reading reached (pH 5.3); required on the row that completes the line. */
+  reading?: string | null;
   /**
    * ADR-134 "Enter from the paper record": the weighing happened on paper (time, who weighed, who checked, page). Set
    * only by paper-entry.ts after it validated the page, the time and the people. The row is marked `entry_source =
@@ -229,14 +289,30 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         throw new DomainError("state", `${material.name} has already been weighed for batch ${batch.batchNumber}. A correction needs the weighing voided first.`);
       }
 
-      // Amount.
-      let net: Decimal;
-      let entered: { qty: Decimal; uom: string };
+      // Amount. ADR-137: a line counted or measured in units is typed in units and converted to the stock unit with the
+      // unit size frozen on the batch line; a whole container takes what is left in the scanned lot at that place.
+      const facts = { addMethod: bm.addMethod, methodUnit: bm.methodUnit, methodUnitQty: bm.methodUnitQty, methodSpec: bm.methodSpec };
+      const spec = readSpec(bm.methodSpec);
+      const isWhole = bm.addMethod === "whole_container";
+      const inUnits = !isWhole && entersUnits(facts);
+      let net: Decimal = new Decimal(0);
+      let entered: { qty: Decimal; uom: string } = { qty: new Decimal(0), uom: material.baseUom };
+      let unitsNow: Decimal | null = null;
       const uom = input.uom || material.baseUom;
-      const tare = input.tare?.trim() ? toBaseQty(input.tare, uom, material.baseUom).base : null;
-      const gross = input.gross?.trim() ? toBaseQty(input.gross, uom, material.baseUom).base : null;
+      const tare = !inUnits && !isWhole && input.tare?.trim() ? toBaseQty(input.tare, uom, material.baseUom).base : null;
+      const gross = !inUnits && !isWhole && input.gross?.trim() ? toBaseQty(input.gross, uom, material.baseUom).base : null;
       if ((tare === null) !== (gross === null)) throw new DomainError("validation", "Enter both gross and tare, or the net weight only.", { field: "tare" });
-      if (input.qty?.trim()) {
+      if (isWhole) {
+        unitsNow = new Decimal(1); // one container per row; the amount is read from the stock below
+      } else if (inUnits) {
+        const word = bm.methodUnit ?? "units";
+        const raw = (input.units ?? (input.qty && (!input.uom || input.uom === bm.methodUnit) ? input.qty : "") ?? "").trim().replace(/,/g, "");
+        if (!/^\d{1,9}(\.\d{1,3})?$/.test(raw) || new Decimal(raw).lte(0)) throw new DomainError("validation", `Type how many ${unitWord(word, 2)}, as a number above 0.`, { field: "units", fieldErrors: { units: "Type the number." } });
+        unitsNow = new Decimal(raw);
+        if ((WHOLE_UNIT_METHODS.includes(bm.addMethod) || readSpec(bm.methodSpec).recordBy === "count") && !unitsNow.isInteger()) throw new DomainError("validation", `Count whole ${unitWord(word, 2)} only.`, { field: "units", fieldErrors: { units: "Whole numbers only." } });
+        net = unitsToStock(unitsNow, bm.methodUnitQty!);
+        entered = { qty: unitsNow, uom: word };
+      } else if (input.qty?.trim()) {
         const c = toBaseQty(input.qty, uom, material.baseUom);
         net = c.base;
         entered = { qty: c.entered, uom };
@@ -284,6 +360,12 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       const lotConfirmedBy = paper ? "paper" : !input.lotPreselected && input.lotVia ? checkEntryMode(input.lotVia, "lotRef", typedAllowed) : confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia, typedAllowed);
       const loc = await resolveSourceLocation(tx, ctx, batch.siteId, lot.id, lot.lotNumber, input.locationRef);
       await assertLocationNotHeld(tx, loc);
+      if (isWhole) {
+        // ADR-137: the whole container = all of this lot still free at this place (A-ADDM-04: one scanned lot label = one container).
+        net = await freeQtyAt(tx, lot, loc);
+        if (net.lte(0)) throw new DomainError("insufficient_stock", `Lot ${lot.lotNumber} at ${loc.code} is empty. Scan a full ${bm.methodUnit ?? "container"}.`, { field: "lot" });
+        entered = { qty: new Decimal(1), uom: bm.methodUnit ?? "container" };
+      }
       await assertStockCovers(tx, lot, loc, net);
 
       // Scale (V-CAL) and capacity.
@@ -296,7 +378,8 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         }
         equipmentId = e.id;
         scaleCode = e.code;
-      } else if (step.requiresEquipment) {
+      } else if (step.requiresEquipment && (bm.addMethod === "weigh" || (bm.addMethod === "as_needed" && (spec.recordBy ?? "weigh") === "weigh"))) {
+        // ADR-137: only weighed amounts need the scale; counting, measuring and whole containers do not.
         throw new DomainError("validation", `Select the ${step.equipmentKind ?? "scale"} you weigh on.`, { field: "equipment" });
       }
 
@@ -311,20 +394,30 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         supersedesId = prev.id;
       }
 
-      // Tolerance on the line total (V-TOL).
-      const before = live.filter((r) => !r.voidedAt).reduce((s, r) => s.plus(r.actualQtyG), new Decimal(0));
+      // Tolerance on the line total (V-TOL). ADR-137: lines in units are judged in units (exact counts, ± mL); an
+      // as-needed line is judged by its maximum and the reading reached; everything else in the stock unit as before.
+      const liveRows = live.filter((r) => !r.voidedAt);
+      const before = liveRows.reduce((s, r) => s.plus(r.actualQtyG), new Decimal(0));
       const total = before.plus(net);
-      const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct, bm.toleranceAbsG);
-      const range = `${min.toDecimalPlaces(3).toString()}–${max.toDecimalPlaces(3).toString()} ${material.baseUom}`;
+      const judge = lineJudge(bm, material, liveRows, unitsNow, total);
+      const { min, max, range, shownTotal } = judge;
+      // As needed: the reading reached, required when the line is completed.
+      let reading: { value: string; within: boolean } | null = null;
+      if (bm.addMethod === "as_needed" && !input.partial) {
+        const raw = (input.reading ?? "").trim();
+        const ok = raw ? readingWithin(spec, raw) : null;
+        if (ok === null) throw new DomainError("validation", `Type the ${spec.reading?.name ?? "reading"} you measured, as a number.`, { field: "reading", fieldErrors: { reading: "Type the reading." } });
+        reading = { value: raw.replace(/,/g, ""), within: ok };
+      }
       let within: boolean;
       let exception: { approver: AuthContext; reason: string; deviationId: string } | null = null;
       let paperDeviationId: string | null = null;
       if (input.partial) {
-        if (total.gte(min) && total.lte(max)) throw new DomainError("validation", `This weighing brings ${material.name} to ${total.toString()} ${material.baseUom}, within ${range}: untick "another lot follows" to complete the line.`, { field: "partial" });
-        if (total.gt(max)) throw new DomainError("out_of_tolerance", `The line total ${total.toString()} ${material.baseUom} would be above ${range}. Re-weigh.`, { rule: "V-TOL", min: min.toString(), max: max.toString(), actual: total.toString() });
+        if (judge.complete) throw new DomainError("validation", `This brings ${material.name} to ${shownTotal}, within ${range}: untick "another lot follows" to complete the line.`, { field: "partial" });
+        if (judge.high) throw new DomainError("out_of_tolerance", `The line total ${shownTotal} would be above ${range}. ${judge.redo}`, { rule: "V-TOL", min: min.toString(), max: max.toString(), actual: total.toString() });
         within = true;
       } else {
-        within = total.gte(min) && total.lte(max);
+        within = judge.ok && (reading?.within ?? true);
         if (!within && paper) {
           // ADR-134: the weighing already happened on paper. It is recorded as it was written, never accepted: a
           // deviation goes to QA and the line stays an exception until QA decides (docs/offline-sync.md §3).
@@ -337,7 +430,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
             batchNumber: batch.batchNumber,
             siteId: batch.siteId,
             lotId: lot.id,
-            description: `From the paper record ${paper.paperReference} (${paper.occurredAt.toISOString()}): ${material.name} weighed ${total.toString()} ${material.baseUom} by ${paper.doneBy.name}, allowed ${range}. Typed in by ${ctx.displayName}. QA decides.`,
+            description: `From the paper record ${paper.paperReference} (${paper.occurredAt.toISOString()}): ${material.name} ${shownTotal} by ${paper.doneBy.name}, allowed ${range}${reading ? `; ${spec.reading?.name ?? "reading"} ${reading.value}${reading.within ? "" : ` (wanted ${readingRangeText(spec)})`}` : ""}. Typed in by ${ctx.displayName}. QA decides.`,
             approvedBy: ctx.userId,
           });
           paperDeviationId = deviationId;
@@ -347,8 +440,12 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           if (!approver) {
             throw new DomainError(
               "out_of_tolerance",
-              `${total.toString()} ${material.baseUom} is outside the tolerance ${range} (target ${new Decimal(bm.theoreticalQtyG).toString()}). Re-weigh, or request an exception: QA must approve on this device.`,
-              { rule: "V-TOL", min: min.toString(), max: max.toString(), actual: total.toString() },
+              reading && !reading.within && judge.ok
+                ? `${spec.reading?.name ?? "The reading"} ${reading.value} is outside ${readingRangeText(spec)}. Add a little more and measure again, or ask QA to approve on this device.`
+                : bm.addMethod === "as_needed"
+                  ? `${shownTotal} is more than the most you may add (${range}). QA must approve on this device.`
+                  : `${shownTotal} is outside the tolerance ${range} (target ${judge.target}). ${judge.redo} Or request an exception: QA must approve on this device.`,
+              { rule: "V-TOL", min: min.toString(), max: max.toString(), actual: total.toString(), ...(reading ? { reading: reading.value, readingWithin: reading.within } : {}) },
             );
           }
           approver.require("production.over_tolerance_dispense.approve");
@@ -363,7 +460,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
             batchNumber: batch.batchNumber,
             siteId: batch.siteId,
             lotId: lot.id,
-            description: `${material.name} weighed ${total.toString()} ${material.baseUom}, tolerance ${range}. ${reason}`,
+            description: `${material.name} ${shownTotal}, allowed ${range}${reading ? `; ${spec.reading?.name ?? "reading"} ${reading.value} (wanted ${readingRangeText(spec)})` : ""}. ${reason}`,
             approvedBy: approver.userId,
           });
           exception = { approver, reason, deviationId };
@@ -405,6 +502,12 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           ...(paper ? { entrySource: "paper", paperRecordId: paper.paperRecordId, occurredAt: paper.occurredAt, enteredBy: ctx.userId, outageReason: paper.outageReason } : {}),
           supersedesId,
           correctionReason: supersedesId ? input.correctionReason!.trim() : null,
+          // ADR-137: how it was added, the unit size used, the reading reached, a whole container.
+          addMethod: bm.addMethod,
+          methodUnitQty: inUnits ? bm.methodUnitQty : null,
+          readingValue: reading?.value ?? null,
+          readingWithin: reading?.within ?? null,
+          wholeContainer: isWhole,
         })
         .returning();
       const status = input.partial ? "partial" : exception || paperDeviationId ? "exception" : "dispensed";
@@ -436,6 +539,10 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           actualQtyG: net.toString(),
           entered: `${entered.qty.toString()} ${entered.uom}`,
           lineTotal: total.toString(),
+          addMethod: bm.addMethod,
+          ...(inUnits ? { unitSize: `${bm.methodUnitQty} ${material.baseUom} per ${bm.methodUnit}` } : {}),
+          ...(isWhole ? { wholeContainer: true } : {}),
+          ...(reading ? { reading: reading.value, readingWithin: reading.within } : {}),
           partial: !!input.partial,
           withinTolerance: within,
           status,
@@ -463,7 +570,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           entityNumber: batch.batchNumber,
           siteId: batch.siteId,
           reason: exception.reason,
-          after: { material: material.code, actualQtyG: total.toString(), tolerance: range, deviationId: exception.deviationId, operator: ctx.displayName },
+          after: { material: material.code, actualQtyG: total.toString(), tolerance: range, deviationId: exception.deviationId, operator: ctx.displayName, ...(reading ? { reading: reading.value, readingWithin: reading.within } : {}) },
         });
       }
       if (checker) {
@@ -493,6 +600,95 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       return { dispenseRecordId: rec2.id, materialName: material.name, withinTolerance: within, status, lineTotalG: total.toString(), checked: !!checker || !!paperChecker, needsCheck, siteId: batch.siteId, deviationId: paperDeviationId };
     });
     return result;
+  });
+}
+
+/**
+ * ADR-137 "As needed — none was needed": the reading was already right before anything was added (pH already 5.2). The
+ * line is done with 0 used; the reading, who and when are kept on the batch line and in the audit. Only for an
+ * as-needed line with nothing added yet, with the reading inside its range. A line that needs a second person needs the
+ * checker's own sign-in on this device (there is no weighing for them to check later). Nothing is posted to stock.
+ */
+export async function recordNoneNeeded(ctx: AuthContext, input: { batchId: string; batchMaterialId: string; reading: string; idempotencyKey?: string | null }, signers: { checker?: AuthContext | null } = {}) {
+  ctx.require("production.dispense_record.create");
+  return db.transaction(async (tx) => {
+    const batch = await lockBatch(tx, ctx, input.batchId);
+    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.batch_material.none_needed", async () => {
+      if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}. This is only possible while the batch is being made.`);
+      const step = findStepOfKind(batch, WEIGHING_STEP_KINDS);
+      if (!step) throw new DomainError("state", "This batch's routing has no weighing step.");
+      await openStep(tx, ctx, batch, step);
+      const [row] = await tx
+        .select({ bm: batchMaterials, material: materials })
+        .from(batchMaterials)
+        .innerJoin(materials, eq(materials.id, batchMaterials.materialId))
+        .where(and(eq(batchMaterials.id, input.batchMaterialId), eq(batchMaterials.batchId, batch.id)))
+        .for("update", { of: batchMaterials })
+        .limit(1);
+      if (!row) throw new DomainError("not_found", "Ingredient line not found on this batch.");
+      const { bm, material } = row;
+      if (bm.addMethod !== "as_needed") throw new DomainError("validation", `${material.name} is not added "until it is right". Record what you used.`);
+      if (bm.status !== "pending") throw new DomainError("state", `Something of ${material.name} is already recorded. Finish it with the amount used and the reading.`);
+      const spec = readSpec(bm.methodSpec);
+      const raw = (input.reading ?? "").trim();
+      const ok = raw ? readingWithin(spec, raw) : null;
+      if (ok === null) throw new DomainError("validation", `Type the ${spec.reading?.name ?? "reading"} you measured, as a number.`, { field: "reading", fieldErrors: { reading: "Type the reading." } });
+      if (!ok) throw new DomainError("out_of_tolerance", `${spec.reading?.name ?? "The reading"} ${raw} is outside ${readingRangeText(spec)}, so some is needed. Add it and record what you used.`, { field: "reading", fieldErrors: { reading: "Outside the range." } });
+      const needsCheck = (batch.formulaSnapshot as FormulaSnapshot).lines.find((l) => l.lineNo === bm.lineNo)?.requiresChecker !== false;
+      const checker = signers.checker ?? null;
+      if (needsCheck && !checker) throw new DomainError("validation", "A second person must confirm the reading on this device (their own sign-in).", { field: "checker", fieldErrors: { checkerPassword: "The checker signs here." } });
+      if (checker) {
+        ctx.assertSeparation(checker.userId === ctx.userId, "The checker must be a different person from the operator.", { rule: "V-SOD" });
+        checker.require("production.dispense_record.approve");
+        checker.requireSite(batch.siteId);
+      }
+      const now = new Date();
+      await tx.update(batchMaterials).set({ status: "dispensed", dispensedQtyG: "0", noneNeeded: true, noneNeededBy: ctx.userId, noneNeededAt: now, noneNeededReading: raw.replace(/,/g, "") }).where(eq(batchMaterials.id, bm.id));
+      await audit(tx, ctx, {
+        action: "production.batch_material.none_needed",
+        entityType: "batch_material",
+        entityId: bm.id,
+        entityNumber: batch.batchNumber,
+        siteId: batch.siteId,
+        before: { status: bm.status },
+        after: { batchId: batch.id, material: material.code, materialName: material.name, reading: raw, readingRange: readingRangeText(spec), usedG: "0", checkedBy: checker?.displayName ?? null },
+      });
+      if (checker) {
+        await audit(tx, checker, { action: "production.batch_material.none_needed_checked", entityType: "batch_material", entityId: bm.id, entityNumber: batch.batchNumber, siteId: batch.siteId, after: { material: material.code, reading: raw, operator: ctx.displayName, signedOn: checker.signedOn } });
+      }
+      return { batchMaterialId: bm.id, materialName: material.name, status: "dispensed" as const };
+    });
+    return result;
+  });
+}
+
+/** ADR-137: "None was needed" was wrong — undone with a reason while the weighing step is open (append-only audit). */
+export async function undoNoneNeeded(ctx: AuthContext, input: { batchMaterialId: string; reason: string }) {
+  ctx.require("production.dispense_record.void");
+  const reason = input.reason?.trim() ?? "";
+  if (reason.length < 5) throw new DomainError("validation", "Give the reason (at least 5 characters).", { field: "reason" });
+  return db.transaction(async (tx) => {
+    const [bm0] = await tx.select().from(batchMaterials).where(eq(batchMaterials.id, input.batchMaterialId)).limit(1);
+    if (!bm0) throw new DomainError("not_found", "Ingredient line not found.");
+    const batch = await lockBatch(tx, ctx, bm0.batchId);
+    if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is past this step.`);
+    const step = findStepOfKind(batch, WEIGHING_STEP_KINDS);
+    const stepRec = step ? await stepRecord(tx, batch.id, step.stepNo) : null;
+    if (stepRec && stepRec.status !== "in_progress") throw new DomainError("state", "The weighing step is already signed off. A correction now needs a deviation through QA.");
+    const [bm] = await tx.select().from(batchMaterials).where(eq(batchMaterials.id, bm0.id)).for("update").limit(1);
+    if (!bm.noneNeeded) throw new DomainError("state", "This line was not marked \"none was needed\".");
+    await tx.update(batchMaterials).set({ status: "pending", noneNeeded: false, noneNeededBy: null, noneNeededAt: null, noneNeededReading: null }).where(eq(batchMaterials.id, bm.id));
+    await audit(tx, ctx, {
+      action: "production.batch_material.none_needed_undone",
+      entityType: "batch_material",
+      entityId: bm.id,
+      entityNumber: batch.batchNumber,
+      siteId: batch.siteId,
+      reason,
+      before: { status: bm.status, noneNeeded: true, reading: bm.noneNeededReading, by: bm.noneNeededBy, at: bm.noneNeededAt?.toISOString() ?? null },
+      after: { status: "pending", noneNeeded: false },
+    });
+    return { status: "pending" as const };
   });
 }
 

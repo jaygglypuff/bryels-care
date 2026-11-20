@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DomainError } from "@/lib/errors";
+import { ADD_METHODS, MethodSpecSchema, ROUNDING_RULES, SCALING_RULES } from "./add-methods";
 
 /**
  * Zod command schemas for production engineering master data (ADR-008). Services parse their
@@ -65,9 +66,23 @@ export const BomLineInput = z
     tolerancePct: optDec("the tolerance %"),
     toleranceAbsG: optDec("the tolerance in grams"),
     phaseCode: optText(40),
-    scaling: z.enum(["proportional", "fixed"]).default("proportional"),
+    scaling: z.enum(SCALING_RULES).default("proportional"),
     isCritical: z.boolean().default(true),
     requiresChecker: z.boolean().default(true),
+    /**
+     * ADR-137 "How is it added?" (bom-methods.ts checks the combination and works out the stock amount from the units).
+     * Absent = weigh, as before.
+     */
+    addMethod: z.enum(ADD_METHODS).default("weigh"),
+    methodQty: optDec("how many", 6),
+    materialUnitId: z.union([uuid, z.null(), z.undefined()]).transform((v) => v ?? null),
+    methodUnit: optText(30),
+    methodUnitQty: optDec("how much one unit is", 6),
+    toleranceUnits: optDec("the allowed difference", 6),
+    maxQtyG: optDec("the most you may add", 6),
+    rounding: z.union([z.enum(ROUNDING_RULES), z.null(), z.undefined()]).transform((v) => v ?? null),
+    methodSpec: z.union([MethodSpecSchema, z.null(), z.undefined()]).transform((v) => v ?? null),
+    operatorNote: optText(300),
     /** ADR-104 §1b: approved alternatives for this line ("Allowed alternatives (optional)"), approved with the recipe. */
     alternatives: z
       .array(z.object({ materialId: uuid, ratio: optDec("the amount factor"), notes: optText(200) }).strict())
@@ -80,7 +95,9 @@ export const BomLineInput = z
       if (a.materialId === l.materialId) ctx.addIssue({ code: "custom", path: ["alternatives", i, "materialId"], message: "An alternative must be another ingredient." });
       if (a.ratio !== null && a.ratio !== undefined && (Number(a.ratio) <= 0 || Number(a.ratio) > 10)) ctx.addIssue({ code: "custom", path: ["alternatives", i, "ratio"], message: "The amount factor must be more than 0 and at most 10 (1 = the same amount)." });
     }
-    if ((l.tolerancePct === null) === (l.toleranceAbsG === null)) {
+    // ADR-137: a line judged in units may give its allowed difference in units instead (bom-methods.ts turns it into grams).
+    const tolerances = [l.tolerancePct, l.toleranceAbsG, l.toleranceUnits].filter((x) => x !== null).length;
+    if (l.addMethod !== "as_needed" && l.addMethod !== "whole_container" && tolerances !== 1 && !(tolerances === 2 && l.toleranceUnits !== null && l.toleranceAbsG !== null)) {
       ctx.addIssue({ code: "custom", path: ["tolerancePct"], message: "Enter exactly one tolerance per line: a percentage or an absolute amount in grams." });
     }
     if (Number(l.quantityG) <= 0) ctx.addIssue({ code: "custom", path: ["quantityG"], message: "Quantity must be greater than zero." });

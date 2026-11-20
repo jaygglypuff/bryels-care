@@ -1,5 +1,6 @@
 import "server-only";
 import Decimal from "decimal.js";
+import { type AddMethod, entersUnits, methodSentence, readSpec, readingRangeText, roundedText, unitWindow } from "@/modules/masterdata/add-methods";
 import { db } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { typedChecksAllowed } from "@/lib/scan/typed-check";
@@ -108,6 +109,8 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
       /** This line replaced the recipe's ingredient for this batch ("Instead of Coconut Oil"). */
       insteadOf: swappedFrom ? { materialName: swappedFrom.materialName, sentence: swappedFrom.sentence } : null,
       lotChanges: changes.filter((c) => c.batchMaterialId === bm.id && (c.kind === "floor_lot" || c.kind === "qa_lot")).map((c) => c.sentence),
+      /** ADR-137: how this line is added and what the card asks for (count, mL, whole container, reading, own way). */
+      method: methodCard(ing, live, snapLine?.method?.rounding ?? null),
     });
   }
   const weighedCount = cards.filter((c) => c.done).length;
@@ -161,3 +164,38 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
   };
 }
 export type WeighView = Awaited<ReturnType<typeof getWeighView>>;
+
+type Ing = Awaited<ReturnType<typeof getBatchExecution>>["ingredients"][number];
+
+/**
+ * ADR-137: what the Weigh card needs for a line that is not simply weighed. Numbers are strings (decimal.js on both
+ * sides). `window` is in units for lines judged in units; `maxG` for as-needed lines; `unitsDone` = units recorded so far.
+ */
+export function methodCard(ing: Ing, live: Ing["weighings"], rounding: string | null) {
+  const m = ing.method;
+  const facts = { addMethod: m.addMethod, methodUnit: m.methodUnit, methodUnitQty: m.methodUnitQty, methodSpec: m.methodSpec, methodTargetQty: m.methodTargetQty, theoreticalQtyG: ing.theoreticalQtyG, maxQtyG: m.maxQtyG };
+  const spec = readSpec(m.methodSpec);
+  const w = unitWindow({ ...facts, tolerancePct: ing.tolerancePct, toleranceAbsG: ing.toleranceAbsG, methodToleranceUnits: m.methodToleranceUnits });
+  const unitsDone = m.addMethod === "whole_container" ? new Decimal(live.length) : live.reduce((t, x) => t.plus(x.entered ? x.entered.split(" ")[0] : 0), new Decimal(0));
+  return {
+    addMethod: m.addMethod as AddMethod,
+    sentence: methodSentence(facts, ing.baseUom),
+    rounded: roundedText(m.methodRoundedFrom, m.methodTargetQty, m.methodUnit, rounding),
+    window: w ? { min: w.min.toString(), max: w.max.toString(), unit: w.unit } : null,
+    entersUnits: entersUnits(facts),
+    unit: m.addMethod === "volume" || spec.recordBy === "volume" ? "mL" : m.methodUnit,
+    perUnit: m.methodUnitQty ? new Decimal(m.methodUnitQty).toString() : null,
+    targetUnits: m.methodTargetQty ? new Decimal(m.methodTargetQty).toString() : null,
+    unitsDone: unitsDone.toString(),
+    wholeUnits: m.addMethod === "count" || m.addMethod === "whole_container" || spec.recordBy === "count",
+    maxG: m.maxQtyG ? new Decimal(m.maxQtyG).toString() : null,
+    reading: spec.reading ?? null,
+    readingText: readingRangeText(spec),
+    recordBy: spec.recordBy ?? null,
+    customName: spec.customName ?? null,
+    note: m.operatorNote,
+    needsScale: m.addMethod === "weigh" || (m.addMethod === "as_needed" && (spec.recordBy ?? "weigh") === "weigh"),
+    noneNeeded: m.noneNeeded ? { reading: m.noneNeededReading, by: m.noneNeededBy, at: m.noneNeededAt } : null,
+    lastReading: [...live].reverse().find((x) => x.reading)?.reading ?? null,
+  };
+}

@@ -158,6 +158,16 @@ export async function unpostedClaimsQty(q: DbOrTx, lotId: string, locationId: st
 }
 
 /** Refuses when the location cannot cover `qty` after earlier unposted claims (V-NEG ahead of posting). */
+/** ADR-137 "whole container": what of this lot is still free at this place (on hand minus unposted weighings and issues). */
+export async function freeQtyAt(q: DbOrTx, lot: typeof inventoryLots.$inferSelect, location: { id: string }): Promise<Decimal> {
+  const [bal] = await q
+    .select({ qty: inventoryBalances.qtyBase })
+    .from(inventoryBalances)
+    .where(and(eq(inventoryBalances.lotId, lot.id), eq(inventoryBalances.locationId, location.id)))
+    .limit(1);
+  return new Decimal(bal?.qty ?? 0).minus(await unpostedClaimsQty(q, lot.id, location.id));
+}
+
 export async function assertStockCovers(q: DbOrTx, lot: typeof inventoryLots.$inferSelect, location: { id: string; code: string }, qty: Decimal) {
   const [bal] = await q
     .select({ qty: inventoryBalances.qtyBase })

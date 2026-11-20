@@ -134,6 +134,25 @@ export const batchMaterials = pgTable("batch_materials", {
    * (data-model "complete"); `exception` = accepted outside tolerance under CX-TOL.
    */
   status: text("status").notNull().default("pending"),
+  /**
+   * ADR-137: how the line is added, frozen from the recipe line at batch creation. theoretical_qty_g and the tolerance stay
+   * in the stock unit (the weigh service judges every method there); the method fields are what the operator sees:
+   * method_target_qty in method_unit (rounded when the recipe says so; method_rounded_from keeps the exact number).
+   */
+  addMethod: text("add_method").notNull().default("weigh"),
+  methodUnit: text("method_unit"),
+  methodUnitQty: numeric("method_unit_qty", QTY),
+  methodTargetQty: numeric("method_target_qty", QTY),
+  methodRoundedFrom: numeric("method_rounded_from", QTY),
+  methodToleranceUnits: numeric("method_tolerance_units", QTY),
+  maxQtyG: numeric("max_qty_g", QTY),
+  methodSpec: jsonb("method_spec"),
+  operatorNote: text("operator_note"),
+  /** As needed: nothing had to be added (the reading was already right), who said so, when and the reading. */
+  noneNeeded: boolean("none_needed").notNull().default(false),
+  noneNeededBy: uuid("none_needed_by").references(() => users.id),
+  noneNeededAt: timestamp("none_needed_at", { withTimezone: true }),
+  noneNeededReading: text("none_needed_reading"),
 });
 
 /**
@@ -191,6 +210,16 @@ export const dispenseRecords = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true }),
     enteredBy: uuid("entered_by").references(() => users.id),
     outageReason: text("outage_reason"),
+    /**
+     * ADR-137: the method the amount was taken by (from the batch line), the stock units in one method unit used for the
+     * conversion (entered_qty × method_unit_qty = actual_qty_g, rounded to 3 decimals), the reading reached on the row that
+     * completes an as-needed line, and whether the whole container was used.
+     */
+    addMethod: text("add_method").notNull().default("weigh"),
+    methodUnitQty: numeric("method_unit_qty", QTY),
+    readingValue: text("reading_value"),
+    readingWithin: boolean("reading_within"),
+    wholeContainer: boolean("whole_container").notNull().default(false),
   },
   (t) => [
     uniqueIndex("dispense_records_line_seq_uq").on(t.batchMaterialId, t.sequence),

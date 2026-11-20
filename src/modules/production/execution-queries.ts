@@ -106,6 +106,7 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
   const nm = await names([
     ...recs.flatMap((r) => [r.conductedBy, r.checkedBy, r.exceptionApprovedBy]),
     ...disp.flatMap((d) => [d.d.operatorId, d.d.checkerId, d.d.exceptionApprovedBy, d.d.voidedBy]),
+    ...lines.map((l) => l.bm.noneNeededBy),
     ...allReadings.map((r) => r.recordedBy),
     ...uses.map((u) => u.use.operatorId),
     ...pkg.flatMap((p) => [p.r.issuedBy, p.r.countedBy]),
@@ -230,7 +231,28 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
         fromPaper: d.d.entrySource === "paper",
         occurredAt: d.d.occurredAt,
         enteredBy: n(d.d.enteredBy),
+        // ADR-137: how it was added (whole container, the reading reached).
+        addMethod: d.d.addMethod,
+        wholeContainer: d.d.wholeContainer,
+        reading: d.d.readingValue,
+        readingWithin: d.d.readingWithin,
       })),
+    // ADR-137: how the line is added, frozen on the batch line.
+    method: {
+      addMethod: bm.addMethod,
+      methodUnit: bm.methodUnit,
+      methodUnitQty: bm.methodUnitQty,
+      methodTargetQty: bm.methodTargetQty,
+      methodRoundedFrom: bm.methodRoundedFrom,
+      methodToleranceUnits: bm.methodToleranceUnits,
+      maxQtyG: bm.maxQtyG,
+      methodSpec: bm.methodSpec,
+      operatorNote: bm.operatorNote,
+      noneNeeded: bm.noneNeeded,
+      noneNeededReading: bm.noneNeededReading,
+      noneNeededBy: n(bm.noneNeededBy),
+      noneNeededAt: bm.noneNeededAt,
+    },
   }));
 
   const cy = yields.find((y) => y.isCurrent) ?? null;

@@ -41,6 +41,20 @@ export type FormulaSnapshot = {
     requiresChecker?: boolean;
     /** Material kind at snapshot time (ADR-088 §3; absent on older batches = ingredient). */
     materialKind?: string;
+    /** ADR-137: how it is added (absent = weigh) and the method frozen for this batch. */
+    addMethod?: string;
+    method?: {
+      unit: string | null;
+      perUnit: string | null;
+      target: string | null;
+      roundedFrom: string | null;
+      rounding: string | null;
+      toleranceUnits: string | null;
+      maxQtyG: string | null;
+      spec: unknown;
+      materialUnitId: string | null;
+    };
+    operatorNote?: string;
   }[];
   /**
    * ADR-088 §3: the packaging lines of the batch (wrappers, labels, boxes): the recipe's packaging lines

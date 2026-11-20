@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
+import { scaleLineOverBatches } from "@/modules/masterdata/add-methods";
 import type { DbOrTx, Tx } from "@/db/client";
 import { batchMaterialStagings, batchMaterials, batches, bomLines, formulaRevisions, formulas, inventoryLots, locations, materials, products, stockReservations, workOrders } from "@/db/schema";
 import { audit } from "@/lib/audit";
@@ -50,7 +51,8 @@ export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "f
   const totalFactor = sizes.reduce((t, g) => t.plus(g.div(rev.referenceBatchSizeG)), new Decimal(0));
   const out = new Map<string, MaterialRequirement>();
   for (const { line, material } of lines) {
-    const qty = (line.scaling === "fixed" ? new Decimal(line.quantityG).mul(sizes.length) : new Decimal(line.quantityG).mul(totalFactor)).toDecimalPlaces(6);
+    // ADR-137: a line rounded to whole units rounds per batch (8 sachets + 3 sachets), like each batch's own list.
+    const qty = (line.scaling === "proportional_round" ? safeRounded(line, rev.referenceBatchSizeG, sizes, totalFactor) : line.scaling === "fixed" ? new Decimal(line.quantityG).mul(sizes.length) : new Decimal(line.quantityG).mul(totalFactor)).toDecimalPlaces(6);
     const r = out.get(material.id);
     if (r) r.required = r.required.plus(qty);
     else out.set(material.id, { materialId: material.id, materialCode: material.code, materialName: material.name, materialKind: material.materialKind, baseUom: material.baseUom, required: qty });
@@ -256,4 +258,13 @@ export async function locationCodes(q: DbOrTx, ids: string[]) {
 /** Batches of a work order (for progress and guards). */
 export async function batchesOfWorkOrder(q: DbOrTx, workOrderId: string) {
   return q.select().from(batches).where(eq(batches.workOrderId, workOrderId));
+}
+
+/** A rounded line over several batches; a batch too small for one whole unit is refused at batch creation, so here it counts unrounded. */
+function safeRounded(line: Parameters<typeof scaleLineOverBatches>[0], refG: string, sizes: Decimal[], totalFactor: Decimal): Decimal {
+  try {
+    return scaleLineOverBatches(line, refG, sizes);
+  } catch {
+    return new Decimal(line.quantityG).mul(totalFactor);
+  }
 }

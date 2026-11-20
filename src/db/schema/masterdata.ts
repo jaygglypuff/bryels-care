@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id, updatedAt } from "./_common";
 import { organizations, sites, users } from "./identity";
 import { LOCATION_SECTIONS } from "../../lib/location-sections";
@@ -102,6 +102,54 @@ export const materials = pgTable(
     check("materials_kind_ck", sql`${t.materialKind} in ('raw_material', 'intermediate', 'packaging', 'consumable')`),
     check("materials_status_ck", sql`${t.status} in ('draft', 'active', 'blocked', 'discontinued')`),
     check("materials_allocation_ck", sql`${t.allocationRule} in ('fefo', 'fifo')`),
+  ],
+);
+
+/**
+ * ADR-137: named units of one material ("1 sachet = 25 g", "1 drum = 25,000 g", "1 mL = 0.92 g"), so a recipe line can
+ * say "add 5 sachets" or "add 250 mL" and the stock is still posted in the material's stock unit (`base_uom`).
+ * `kind` pack = a whole unit you count (sachet, bottle, drum, pail, piece); `volume` = the density row (name "mL",
+ * `qty_per_unit` = stock units in 1 mL: g per mL for a gram material, 1 for a mL material).
+ * Versioned, never rewritten: a row's numbers never change (trigger `tg_material_units_immutable`, src/db/sql/adr137.sql);
+ * a new size retires the row and adds version n+1 under the same `unit_key`. Recipe lines and batch records keep the
+ * number they were made with (`bom_lines.method_unit_qty`, `batch_materials.method_unit_qty`).
+ */
+export const MATERIAL_UNIT_KINDS = ["pack", "volume"] as const;
+export const materialUnits = pgTable(
+  "material_units",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    materialId: uuid("material_id").notNull().references(() => materials.id),
+    /** Same for every version of one unit. */
+    unitKey: uuid("unit_key").notNull(),
+    versionNo: integer("version_no").notNull().default(1),
+    kind: text("kind").notNull(),
+    /** What people call one unit: "sachet", "bottle", "drum"; always "mL" for the volume row. */
+    name: text("name").notNull(),
+    /** How much one unit is in the material's stock unit (exact decimal). */
+    qtyPerUnit: numeric("qty_per_unit", QTY).notNull(),
+    /** The material's stock unit when this version was made (g, mL, pcs). */
+    baseUom: text("base_uom").notNull(),
+    note: text("note"),
+    status: text("status").notNull().default("active"),
+    supersedesId: uuid("supersedes_id").references((): AnyPgColumn => materialUnits.id),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    retiredBy: uuid("retired_by").references(() => users.id),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    retiredReason: text("retired_reason"),
+  },
+  (t) => [
+    uniqueIndex("material_units_key_version_uq").on(t.unitKey, t.versionNo),
+    uniqueIndex("material_units_active_name_uq").on(t.materialId, sql`lower(${t.name})`).where(sql`${t.status} = 'active'`),
+    index("material_units_material_idx").on(t.materialId),
+    check("material_units_kind_ck", sql`${t.kind} in ('pack', 'volume')`),
+    check("material_units_status_ck", sql`${t.status} in ('active', 'retired')`),
+    check("material_units_qty_ck", sql`${t.qtyPerUnit} > 0`),
+    check("material_units_name_ck", sql`length(btrim(${t.name})) between 1 and 30`),
+    check("material_units_volume_ck", sql`${t.kind} <> 'volume' or ${t.name} = 'mL'`),
+    check("material_units_retired_ck", sql`${t.status} <> 'retired' or (${t.retiredBy} is not null and ${t.retiredAt} is not null and ${t.retiredReason} is not null)`),
   ],
 );
 
@@ -217,13 +265,75 @@ export const bomLines = pgTable(
     scaling: text("scaling").notNull().default("proportional"),
     isCritical: boolean("is_critical").notNull().default(true),
     requiresChecker: boolean("requires_checker").notNull().default(true),
+    /**
+     * ADR-137 "How is it added?": weigh (default; every line before ADR-137) | count | volume | whole_container |
+     * as_needed | custom. `quantity_g` stays the planned amount in the material's stock unit for EVERY method (what
+     * planning, set-aside, buying and costing use); the method fields say how the operator measures it.
+     */
+    addMethod: text("add_method").notNull().default("weigh"),
+    /** Method units per reference batch (5 sachets, 250 mL, 1 drum, 3 scoops); null for weigh. */
+    methodQty: numeric("method_qty", QTY),
+    /** The material unit version used (count, whole container, volume). */
+    materialUnitId: uuid("material_unit_id").references(() => materialUnits.id),
+    /** The unit word shown ("sachet", "mL", "scoop"). */
+    methodUnit: text("method_unit"),
+    /** Stock units in one method unit, frozen on the line (null = a custom method that is not measured). */
+    methodUnitQty: numeric("method_unit_qty", QTY),
+    /** Allowed difference typed in method units (± 1 sachet, ± 5 mL); tolerance_abs_g holds the stock-unit equivalent. */
+    toleranceUnits: numeric("tolerance_units", QTY),
+    /** As needed: the most that may be added without QA (stock unit). */
+    maxQtyG: numeric("max_qty_g", QTY),
+    /** proportional_round: up | down | nearest (whole method units). */
+    rounding: text("rounding"),
+    /** Method details (custom method name, as-needed reading and how it is recorded); validated by Zod (add-methods.ts). */
+    methodSpec: jsonb("method_spec"),
+    /** A short how-to for the operator ("Shake the bottle first"). */
+    operatorNote: text("operator_note"),
   },
   (t) => [
     uniqueIndex("bom_lines_rev_line_uq").on(t.formulaRevisionId, t.lineNo),
     check("bom_lines_tolerance_one_ck", sql`num_nonnulls(${t.tolerancePct}, ${t.toleranceAbsG}) = 1`),
     check("bom_lines_tolerance_non_negative_ck", sql`coalesce(${t.tolerancePct}, 0) >= 0 and coalesce(${t.toleranceAbsG}, 0) >= 0`),
     check("bom_lines_qty_ck", sql`${t.quantityG} > 0`),
-    check("bom_lines_scaling_ck", sql`${t.scaling} in ('proportional', 'fixed')`),
+    check("bom_lines_scaling_ck", sql`${t.scaling} in ('proportional', 'fixed', 'proportional_round')`),
+    check("bom_lines_add_method_ck", sql`${t.addMethod} in ('weigh', 'count', 'volume', 'whole_container', 'as_needed', 'custom')`),
+    check("bom_lines_rounding_ck", sql`(${t.scaling} = 'proportional_round') = (${t.rounding} is not null) and (${t.rounding} is null or ${t.rounding} in ('up', 'down', 'nearest'))`),
+    check("bom_lines_method_numbers_ck", sql`coalesce(${t.methodQty}, 1) > 0 and coalesce(${t.methodUnitQty}, 1) > 0 and coalesce(${t.toleranceUnits}, 0) >= 0`),
+    check("bom_lines_whole_units_ck", sql`${t.addMethod} not in ('count', 'whole_container') or (${t.scaling} <> 'proportional' and ${t.methodQty} is not null and ${t.methodUnitQty} is not null)`),
+    check("bom_lines_round_units_ck", sql`${t.scaling} <> 'proportional_round' or (${t.methodQty} is not null and ${t.methodUnitQty} is not null)`),
+    check("bom_lines_as_needed_ck", sql`(${t.addMethod} = 'as_needed') = (${t.maxQtyG} is not null) and (${t.maxQtyG} is null or ${t.maxQtyG} >= ${t.quantityG})`),
+  ],
+);
+
+/**
+ * ADR-137: a custom step or a custom "how is it added" a site saved to use again in later recipes. `body` is the
+ * wizard's step or line method as saved (validated by Zod in src/modules/masterdata/recipe-templates.ts). Retired,
+ * never deleted.
+ */
+export const RECIPE_TEMPLATE_KINDS = ["step", "add_method"] as const;
+export const recipeTemplates = pgTable(
+  "recipe_templates",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    siteId: uuid("site_id").notNull().references(() => sites.id),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    body: jsonb("body").notNull(),
+    status: text("status").notNull().default("active"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    retiredBy: uuid("retired_by").references(() => users.id),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    retiredReason: text("retired_reason"),
+  },
+  (t) => [
+    uniqueIndex("recipe_templates_active_name_uq").on(t.siteId, t.kind, sql`lower(${t.name})`).where(sql`${t.status} = 'active'`),
+    index("recipe_templates_org_kind_idx").on(t.organizationId, t.kind),
+    check("recipe_templates_kind_ck", sql`${t.kind} in ('step', 'add_method')`),
+    check("recipe_templates_status_ck", sql`${t.status} in ('active', 'retired')`),
+    check("recipe_templates_name_ck", sql`length(btrim(${t.name})) between 1 and 80`),
+    check("recipe_templates_retired_ck", sql`${t.status} <> 'retired' or (${t.retiredBy} is not null and ${t.retiredAt} is not null and ${t.retiredReason} is not null)`),
   ],
 );
 
