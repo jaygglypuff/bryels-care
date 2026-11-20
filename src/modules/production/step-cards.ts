@@ -13,7 +13,7 @@ import { currentStepOf, isWaitStep, shortDay, waitLabel } from "./flow-facts";
 import { currentPackaging, RECONCILED_STEP_KINDS } from "./packaging";
 import { batchLabelInfo, issueTakenPackagingLocked, packagingLinesOf } from "./packaging-flow";
 import { currentReadings, recordReadingInTx } from "./process";
-import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
+import { type FormulaSnapshot, QA_SIGN_PERMISSION, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { stepBlockers } from "./steps";
 import { plainWords } from "./plain-words";
 import { pauseOfBatch } from "./batch-days";
@@ -64,7 +64,8 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
   const viewer = {
     userId: ctx.userId,
     displayName: ctx.displayName,
-    canCheck: ctx.can(checkPerm) && ctx.canAt(checkPerm, b.siteId),
+    // ADR-137: a step QA must sign is checked by QA only.
+    canCheck: ctx.can(checkPerm) && ctx.canAt(checkPerm, b.siteId) && (!step.qaSigns || (ctx.can(QA_SIGN_PERMISSION) && ctx.canAt(QA_SIGN_PERMISSION, b.siteId))),
     isDoer: !!step.record && step.record.conductedById === ctx.userId,
   };
   // Equipment of the step (old workspace parity): chosen on the step screen, not on the batch record.
@@ -77,7 +78,8 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
         canChoose: ctx.can("production.equipment_use.create"),
       }
     : null;
-  const checkers = step.requiresChecker ? await signerOptions(ctx, b.siteId, checkPermission(step.stepKind)) : [];
+  const qaIds = step.qaSigns ? new Set((await signerOptions(ctx, b.siteId, QA_SIGN_PERMISSION)).map((c) => c.id)) : new Set<string>();
+  const checkers = step.requiresChecker ? (await signerOptions(ctx, b.siteId, checkPermission(step.stepKind))).filter((c) => !step.qaSigns || qaIds.has(c.id)) : [];
   const approvers = isWaitStep(step.stepKind) || step.parameters.length ? await signerOptions(ctx, b.siteId, "production.over_tolerance_dispense.approve") : [];
   // ADR-088 §3: the packaging step shows the wrappers/labels taken at Get materials and the label button.
   const isPackaging = (RECONCILED_STEP_KINDS as readonly string[]).includes(step.stepKind);
@@ -96,6 +98,8 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
       index: idx + 1,
       total: ex.steps.length,
       requiresChecker: step.requiresChecker,
+      /** ADR-137: QA signs this step's check. */
+      qaSigns: !!step.qaSigns,
       requiresEquipment: !!step.requiresEquipment,
       equipmentKind: step.equipmentKind ?? null,
       checklist: step.checklist,

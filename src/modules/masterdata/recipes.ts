@@ -109,7 +109,7 @@ const LineSchema = z
   .strict();
 
 const ReadingSchema = z
-  .object({ name: str(120), kind: z.enum(["number", "yesno", "text"]), unit: str(20), min: str(30), max: str(30), target: str(30), code: str(40), required: z.boolean() })
+  .object({ name: str(120), kind: z.enum(["number", "yesno", "text", "choice"]), unit: str(20), min: str(30), max: str(30), target: str(30), code: str(40), required: z.boolean(), options: z.array(str(40)).max(12).optional() })
   .strict();
 
 const StepSchema = z
@@ -127,6 +127,9 @@ const StepSchema = z
     keep: z
       .object({ code: str(40).nullable(), workInstructionRevisionId: uuid.nullable(), blocksUntilComplete: z.boolean(), requiresEquipment: z.boolean(), equipmentKind: str(40).nullable() })
       .strict(),
+    // ADR-137: QA signs the step; the step was built in the step builder.
+    qaSigns: z.boolean().optional(),
+    isCustom: z.boolean().optional(),
   })
   .strict();
 
@@ -332,11 +335,39 @@ function formulaCanon(x: { referenceBatchSizeG: string; theoreticalYieldPct: str
     p(x.theoreticalYieldPct),
     x.lines.map((l) => {
       const weigh = !l.addMethod || l.addMethod === "weigh";
-      const head = [l.materialId, weigh ? p(l.quantityG) : null, weigh || l.toleranceUnits === null || l.toleranceUnits === undefined ? p(l.tolerancePct) : null, weigh || l.toleranceUnits === null || l.toleranceUnits === undefined ? p(l.toleranceAbsG) : null, l.phaseCode ?? null, l.scaling, l.isCritical, l.requiresChecker];
       const note = l.operatorNote ?? null;
-      if (weigh) return note ? [...head, note] : head;
+      if (weigh) {
+        const head = [l.materialId, p(l.quantityG), p(l.tolerancePct), p(l.toleranceAbsG), l.phaseCode ?? null, l.scaling, l.isCritical, l.requiresChecker];
+        return note ? [...head, note] : head;
+      }
+      // The stored line also carries numbers the service works out (the stock amount and band of a line in units, the
+      // band of an as-needed line): only what the writer chooses is compared.
+      const hasUnits = l.toleranceUnits !== null && l.toleranceUnits !== undefined;
+      const noTol = l.addMethod === "as_needed" || l.addMethod === "whole_container";
+      const tol = noTol ? null : hasUnits ? ["units", p(l.toleranceUnits)] : [p(l.tolerancePct), p(l.toleranceAbsG)];
       const spec = readSpec(l.methodSpec);
-      return [...head, l.addMethod, p(l.methodQty), l.materialUnitId ?? null, l.methodUnit ?? null, l.materialUnitId ? null : p(l.methodUnitQty), p(l.toleranceUnits), p(l.maxQtyG), l.rounding ?? null, spec.customName ?? null, spec.recordBy ?? null, spec.reading ? [spec.reading.name, spec.reading.unit, p(spec.reading.min), p(spec.reading.max)] : null, note, l.addMethod === "custom" && !l.methodUnitQty ? p(l.quantityG) : null, l.addMethod === "as_needed" ? p(l.quantityG) : null];
+      const ownMeasured = l.addMethod === "custom" && !!l.methodUnitQty;
+      const inUnits = ownMeasured || !!l.materialUnitId && l.addMethod !== "as_needed";
+      return [
+        l.materialId,
+        inUnits ? null : p(l.quantityG),
+        tol,
+        l.phaseCode ?? null,
+        l.scaling,
+        l.isCritical,
+        l.requiresChecker,
+        l.addMethod,
+        p(l.methodQty),
+        l.materialUnitId ?? null,
+        l.addMethod === "custom" ? (l.methodUnit ?? null) : null,
+        l.addMethod === "custom" ? p(l.methodUnitQty) : null,
+        p(l.maxQtyG),
+        l.rounding ?? null,
+        spec.customName ?? null,
+        spec.recordBy ?? null,
+        spec.reading ? [spec.reading.name, spec.reading.unit, p(spec.reading.min), p(spec.reading.max)] : null,
+        note,
+      ];
     }),
   ]);
 }
@@ -353,8 +384,10 @@ type StepLike = {
   requiresEquipment: boolean;
   equipmentKind: string | null;
   minDurationMinutes: number | null;
-  parameters: { code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean }[];
+  parameters: { code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean; options?: unknown }[];
   checklistItems: { text: string; requiresPhoto: boolean; isBlocking: boolean }[];
+  qaSigns?: boolean;
+  isCustom?: boolean;
 };
 function routingCanon(steps: StepLike[]) {
   return JSON.stringify(
@@ -370,8 +403,11 @@ function routingCanon(steps: StepLike[]) {
       s.requiresEquipment,
       s.equipmentKind ?? null,
       s.minDurationMinutes ?? null,
-      s.parameters.map((x) => [x.code, x.name, x.valueKind, x.uom ?? null, p(x.minValue), p(x.targetValue), p(x.maxValue), x.isRequired]),
+      s.parameters.map((x) => [x.code, x.name, x.valueKind, x.uom ?? null, p(x.minValue), p(x.targetValue), p(x.maxValue), x.isRequired, ...(Array.isArray(x.options) && x.options.length ? [x.options] : [])]),
       s.checklistItems.map((c) => [c.text, c.requiresPhoto, c.isBlocking]),
+      // ADR-137: only present when set, so steps saved before compare exactly as before.
+      ...(s.qaSigns ? ["qa"] : []),
+      ...(s.isCustom ? ["custom"] : []),
     ]),
   );
 }

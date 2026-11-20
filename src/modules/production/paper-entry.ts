@@ -35,7 +35,7 @@ import { currentPackaging } from "./packaging";
 import { issueTakenPackagingLocked } from "./packaging-flow";
 import { isPackagingKind } from "./packaging-lines";
 import { recordReadingInTx, useEquipment } from "./process";
-import { CHECKER_PERMISSION, type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
+import { CHECKER_PERMISSION, QA_SIGN_PERMISSION, type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { stepBlockers } from "./steps";
 import { toleranceRange } from "./weigh-window";
 
@@ -152,8 +152,10 @@ async function resolvePaperFacts(tx: Tx, ctx: AuthContext, batch: BatchRow, step
   if (input.checkedById) {
     ctx.assertSeparation(input.checkedById === input.doneById, "The person who checked must be a different person from the one who did it.", { rule: "V-SOD", field: "checkedById" });
     const checkers = await eligibleSigners(tx, ctx.organizationId, batch.siteId, perms.checkPermissionCode);
-    const c = checkers.find((u) => u.id === input.checkedById);
-    if (!c) throw new DomainError("validation", "Choose the person written on the paper as the checker. Only people who may check this step at this site are listed.", { field: "checkedById", fieldErrors: { checkedById: "Choose the checker." } });
+    // ADR-137: a step QA must sign is checked on paper by a QA person too.
+    const qa = step.qaSigns ? new Set((await eligibleSigners(tx, ctx.organizationId, batch.siteId, QA_SIGN_PERMISSION)).map((u) => u.id)) : null;
+    const c = checkers.find((u) => u.id === input.checkedById && (!qa || qa.has(u.id)));
+    if (!c) throw new DomainError("validation", step.qaSigns ? "QA must sign this step. Choose the QA person written on the paper." : "Choose the person written on the paper as the checker. Only people who may check this step at this site are listed.", { field: "checkedById", fieldErrors: { checkedById: "Choose the checker." } });
     checkedBy = { id: c.id, name: c.displayName };
   }
   return { paperRecordId: page.id, paperReference: page.paperReference, occurredAt, startedAt, doneBy: { id: doneBy.id, name: doneBy.displayName }, checkedBy, outageReason };

@@ -9,7 +9,7 @@ import { checkPermission } from "./execution";
 import { finishHref, flowHref } from "./flow-paths";
 import { finishCheckFacts, type FinishCheckSummary } from "./finish-check";
 import { plainWords } from "./plain-words";
-import { type FormulaSnapshot } from "./shared";
+import { type FormulaSnapshot, QA_SIGN_PERMISSION } from "./shared";
 import { plainNumber, weighUnitFor } from "./floor-words";
 
 /**
@@ -157,7 +157,10 @@ export async function checkerQueue(ctx: AuthContext): Promise<CheckerQueue> {
     .leftJoin(users, eq(users.id, processStepRecords.conductedBy))
     .where(and(inArray(processStepRecords.batchId, [...byId.keys()]), eq(processStepRecords.status, "awaiting_check")))
     .orderBy(asc(processStepRecords.stepNo));
-  const mine = steps.filter((s) => s.conductedBy !== ctx.userId && ctx.canAt(checkPermission(s.kind ?? ""), siteId));
+  // ADR-137: a step QA must sign is on QA's list only.
+  const snaps = steps.length ? await db.select({ id: batches.id, snap: batches.formulaSnapshot }).from(batches).where(inArray(batches.id, [...new Set(steps.map((s) => s.batchId))])) : [];
+  const qaStep = (batchId: string, stepNo: number) => !!(snaps.find((x) => x.id === batchId)?.snap as FormulaSnapshot | undefined)?.steps.find((t) => t.stepNo === stepNo)?.qaSigns;
+  const mine = steps.filter((s) => s.conductedBy !== ctx.userId && ctx.canAt(checkPermission(s.kind ?? ""), siteId) && (!qaStep(s.batchId, s.stepNo) || (ctx.can(QA_SIGN_PERMISSION) && ctx.canAt(QA_SIGN_PERMISSION, siteId))));
   const readings = mine.length
     ? await db
         .select({ recId: processStepReadings.processStepRecordId, id: processStepReadings.id, supersedesId: processStepReadings.supersedesId, name: processStepReadings.parameterName, num: processStepReadings.valueNumeric, text: processStepReadings.valueText, bool: processStepReadings.valueBoolean, uom: processStepReadings.uom, within: processStepReadings.isWithinLimits })

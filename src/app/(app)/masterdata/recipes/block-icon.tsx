@@ -1,4 +1,4 @@
-import { Blend, CirclePlus, ClipboardCheck, CupSoda, Flame, Hourglass, Milk, Package, Scale, Scissors, Snowflake, Sparkles, Truck, Wrench, type LucideIcon } from "lucide-react";
+import { Blend, Camera, CirclePlus, ClipboardCheck, CupSoda, Eye, Flame, Hourglass, ListChecks, Lock, Milk, Package, Scale, Scissors, Snowflake, Sparkles, SprayCan, SquarePen, Tag, TestTube, Thermometer, Truck, Wrench, type LucideIcon } from "lucide-react";
 import { cx } from "@/ui/core";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -15,6 +15,17 @@ const ICONS: Record<string, LucideIcon> = {
   fill: Milk,
   qc: ClipboardCheck,
   move: Truck,
+  // ADR-137
+  keep_warm: Thermometer,
+  homogenise: Blend,
+  look: Eye,
+  sample: TestTube,
+  clean_tools: SprayCan,
+  seal: Lock,
+  label: Tag,
+  photo: Camera,
+  checklist: ListChecks,
+  custom: SquarePen,
   other: Wrench,
 };
 

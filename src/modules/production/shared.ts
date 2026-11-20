@@ -72,7 +72,10 @@ export type FormulaSnapshot = {
     requiresEquipment?: boolean;
     equipmentKind?: string | null;
     workInstruction?: { code: string; name: string; revisionNo: number; revisionId: string; bodyMarkdown: string } | null;
-    parameters?: { id: string; code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean }[];
+    parameters?: { id: string; code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean; options?: string[] }[];
+    /** ADR-137: the check of this step is signed by QA (QA_SIGN_PERMISSION); built in the step builder. */
+    qaSigns?: boolean;
+    isCustom?: boolean;
     checklistItems?: { id: string; itemNo: number; text: string; requiresPhoto: boolean; isBlocking: boolean }[];
   }[];
 };
@@ -80,6 +83,9 @@ export type FormulaSnapshot = {
 /** Step kinds that hold the ingredient weighing (MVP "weighing", routing vocabulary "dispensing"). */
 export const WEIGHING_STEP_KINDS = ["dispensing", "weighing"] as const;
 export const isWeighingStep = (kind: string) => (WEIGHING_STEP_KINDS as readonly string[]).includes(kind);
+
+/** ADR-137: the permission a person must hold to sign a step marked "QA must sign" (on top of the step's check permission). */
+export const QA_SIGN_PERMISSION = "quality.inspection.approve" as const;
 
 /** The permission a person must hold at the batch site to sign as checker (weighing and steps). */
 export const CHECKER_PERMISSION = "production.dispense_record.approve" as const;

@@ -8,7 +8,7 @@ import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { getSetting } from "@/lib/settings";
 import { executionHooks } from "./execution-hooks";
-import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch, productNameOf } from "./shared";
+import { type FormulaSnapshot, QA_SIGN_PERMISSION, idempotent, isWeighingStep, lockBatch, productNameOf } from "./shared";
 import { MessageTitle } from "@/lib/message-titles";
 import { transitionBatch } from "./state";
 import { syncWorkOrderProgress } from "./work-orders";
@@ -186,7 +186,11 @@ export async function openStep(tx: Tx, ctx: AuthContext, batch: BatchRow, step: 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** A co-signed checker must hold the check permission at the batch site and not be the conductor. */
-export function assertCheckerFor(checker: AuthContext, conductorId: string, kind: string, siteId: string) {
+export function assertCheckerFor(checker: AuthContext, conductorId: string, kind: string, siteId: string, qaSigns = false) {
+  // ADR-137 "QA must sign": only a person holding the QA sign permission at the site may sign this step's check.
+  if (qaSigns && !(checker.can(QA_SIGN_PERMISSION) && checker.canAt(QA_SIGN_PERMISSION, siteId))) {
+    throw new DomainError("forbidden", "QA must sign this step. Ask a QA person to check it.", { rule: "ADR-137", permission: QA_SIGN_PERMISSION });
+  }
   if (checker.sodBlocks(checker.userId === conductorId, "The checker must be a different person from the one who conducted the step.")) {
     throw new DomainError("separation_of_duties", "The checker must be a different person from the one who conducted the step.", { ...checker.refusalDetails(), rule: "V-SOD" });
   }
@@ -236,7 +240,7 @@ export async function finishStep(
   if (rec.status !== "in_progress") throw new DomainError("state", `${capital(stepLabel(step))} is ${rec.status.replace(/_/g, " ")}.`);
   const checker = opts.checker ?? null;
   const paper = opts.paper ?? null;
-  if (checker) assertCheckerFor(checker, ctx.userId, step.stepKind, batch.siteId);
+  if (checker) assertCheckerFor(checker, ctx.userId, step.stepKind, batch.siteId, !!step.qaSigns);
   // ADR-134: typed from paper — the people and the time written on the page (validated by paper-entry.ts).
   const now = paper ? paper.occurredAt : new Date();
   const conductor = paper ? paper.doneBy : { id: ctx.userId, name: ctx.displayName };
@@ -362,7 +366,7 @@ export async function checkStep(checker: AuthContext, input: { batchId: string; 
       if (!rec || rec.status !== "awaiting_check") {
         throw new DomainError("state", `${capital(stepLabel(step))} is ${rec ? rec.status.replace(/_/g, " ") : "not started"}; only a step waiting for its checker can be checked.`);
       }
-      assertCheckerFor(checker, rec.conductedBy, step.stepKind, batch.siteId);
+      assertCheckerFor(checker, rec.conductedBy, step.stepKind, batch.siteId, !!step.qaSigns);
       const now = new Date();
       await tx.update(processStepRecords).set({ status: "completed", checkedBy: checker.userId, checkedAt: now, completedAt: now }).where(eq(processStepRecords.id, rec.id));
       await audit(tx, checker, {

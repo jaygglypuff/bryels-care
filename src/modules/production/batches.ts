@@ -208,10 +208,13 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
       requiresChecker: s.requiresChecker,
       requiresEquipment: s.requiresEquipment,
       equipmentKind: s.equipmentKind,
+      // ADR-137: QA signs the check of this step; a step built in the step builder.
+      ...(s.qaSigns ? { qaSigns: true } : {}),
+      ...(s.isCustom ? { isCustom: true } : {}),
       workInstruction: s.workInstruction
         ? { code: s.workInstruction.code, name: s.workInstruction.name, revisionNo: s.workInstruction.revisionNo, revisionId: s.workInstruction.revisionId, bodyMarkdown: s.workInstruction.bodyMarkdown }
         : null,
-      parameters: s.parameters.map((p) => ({ id: p.id, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired })),
+      parameters: s.parameters.map((p) => ({ id: p.id, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired, ...(p.options ? { options: p.options as string[] } : {}) })),
       checklistItems: s.checklistItems.map((c) => ({ id: c.id, itemNo: c.itemNo, text: c.text, requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
     })),
   };

@@ -181,6 +181,13 @@ export function evaluateReading(p: Param, raw: string) {
     const b = ["yes", "true", "pass"].includes(t);
     return { valueNumeric: null, valueText: null, valueBoolean: b, within: b };
   }
+  if (p.valueKind === "choice") {
+    // ADR-137: one of the step's answers (any listed answer is accepted; the writer decides what each one means).
+    const opts = p.options ?? [];
+    const hit = opts.find((o) => o.toLowerCase() === v.toLowerCase());
+    if (!hit) throw new DomainError("validation", `${p.name}: choose one of ${opts.join(", ")}.`, { field: `param-${p.id}` });
+    return { valueNumeric: null, valueText: hit, valueBoolean: null, within: true };
+  }
   if (v.length > 500) throw new DomainError("validation", `${p.name} can have at most 500 characters.`, { field: `param-${p.id}` });
   return { valueNumeric: null, valueText: v, valueBoolean: null, within: true };
 }

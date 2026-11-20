@@ -65,7 +65,7 @@ export async function submitChecklist(ctx: AuthContext, input: SubmitChecklistIn
       const step = findStep(batch, input.stepNo);
       const items = step.checklistItems ?? [];
       if (!items.length) throw new DomainError("validation", `${stepLabel(step)} has no checklist items in its routing revision.`);
-      if (signers.checker) assertCheckerFor(signers.checker, ctx.userId, step.stepKind, batch.siteId);
+      if (signers.checker) assertCheckerFor(signers.checker, ctx.userId, step.stepKind, batch.siteId, !!step.qaSigns);
       const rec = await openStep(tx, ctx, batch, step);
       await writeChecklistAnswersInTx(tx, ctx, batch, step, rec, input.answers);
       const blockers = await checklistBlockers(tx, step, rec);

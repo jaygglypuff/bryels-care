@@ -107,8 +107,10 @@ function canonicalStep(s: RoutingStepFull) {
     eq: [s.requiresEquipment, s.equipmentKind],
     mode: s.recordMode,
     min: s.minDurationMinutes,
-    params: s.parameters.map((p) => [p.code, p.name, p.valueKind, p.uom, p.minValue, p.targetValue, p.maxValue, p.isRequired]),
+    params: s.parameters.map((p) => [p.code, p.name, p.valueKind, p.uom, p.minValue, p.targetValue, p.maxValue, p.isRequired, ...(p.options ? [p.options] : [])]),
     items: s.checklistItems.map((i) => [i.text, i.requiresPhoto, i.isBlocking]),
+    ...(s.qaSigns ? { qa: true } : {}),
+    ...(s.isCustom ? { custom: true } : {}),
   });
 }
 
@@ -137,11 +139,13 @@ async function insertSteps(tx: Tx, revisionId: string, steps: ReturnType<typeof 
         requiresEquipment: s.requiresEquipment,
         equipmentKind: s.equipmentKind,
         minDurationMinutes: s.minDurationMinutes,
+        qaSigns: s.qaSigns,
+        isCustom: s.isCustom,
       })
       .returning({ id: routingSteps.id });
     if (s.parameters.length) {
       await tx.insert(routingStepParameters).values(
-        s.parameters.map((p, j) => ({ routingStepId: row.id, sequence: j + 1, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired })),
+        s.parameters.map((p, j) => ({ routingStepId: row.id, sequence: j + 1, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired, options: p.options })),
       );
     }
     if (s.checklistItems.length) {
@@ -211,7 +215,9 @@ export async function createRoutingRevision(ctx: AuthContext, input: { routingId
           requiresEquipment: s.requiresEquipment,
           equipmentKind: s.equipmentKind as never,
           minDurationMinutes: s.minDurationMinutes,
-          parameters: s.parameters.map((p) => ({ code: p.code, name: p.name, valueKind: p.valueKind as never, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired })),
+          qaSigns: s.qaSigns,
+          isCustom: s.isCustom,
+          parameters: s.parameters.map((p) => ({ code: p.code, name: p.name, valueKind: p.valueKind as never, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired, options: (p.options as string[] | null) ?? null })),
           checklistItems: s.checklistItems.map((c) => ({ text: c.text, requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
         })),
       );

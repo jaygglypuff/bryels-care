@@ -70,7 +70,7 @@ export async function completeStep(ctx: AuthContext, input: CompleteStepInput, s
         const existing = await stepRecord(tx, batch.id, step.stepNo);
         if (!existing) throw new DomainError("validation", `Answer the checklist of ${stepLabel(step)}.`);
       }
-      if (signers.checker) assertCheckerFor(signers.checker, ctx.userId, step.stepKind, batch.siteId);
+      if (signers.checker) assertCheckerFor(signers.checker, ctx.userId, step.stepKind, batch.siteId, !!step.qaSigns);
       const rec = await openStep(tx, ctx, batch, step);
       // ADR-088 §3: wrappers and labels taken at Get materials are recorded on the packaging step (no scan).
       await issueTakenPackagingLocked(tx, ctx, batch, step, rec);

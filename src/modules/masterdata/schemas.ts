@@ -164,7 +164,11 @@ export const ParameterInput = z
       .toLowerCase()
       .regex(/^[a-z][a-z0-9_]{0,39}$/, "Parameter code: lower-case letters, digits and underscore."),
     name: reqText("the parameter name", 120),
-    valueKind: z.enum(["numeric", "text", "boolean"]),
+    /** ADR-137: `choice` = one answer from `options` (a custom step field "choose from a list"). */
+    valueKind: z.enum(["numeric", "text", "boolean", "choice"]),
+    options: z
+      .union([z.array(z.string().trim().min(1, "An answer cannot be empty.").max(40, "Use at most 40 characters per answer.")).max(12, "At most 12 answers."), z.null(), z.undefined()])
+      .transform((v) => (v && v.length ? v : null)),
     uom: optText(20),
     minValue: optSignedDec("the minimum"),
     targetValue: optSignedDec("the target"),
@@ -181,6 +185,9 @@ export const ParameterInput = z
     const [mi, ta, ma] = [n(p.minValue), n(p.targetValue), n(p.maxValue)];
     if (mi !== null && ma !== null && mi > ma) ctx.addIssue({ code: "custom", path: ["minValue"], message: `Parameter ${p.code}: minimum is above maximum.` });
     if (ta !== null && ((mi !== null && ta < mi) || (ma !== null && ta > ma))) ctx.addIssue({ code: "custom", path: ["targetValue"], message: `Parameter ${p.code}: target is outside the limits.` });
+    if (p.valueKind === "choice" && (!p.options || p.options.length < 2)) ctx.addIssue({ code: "custom", path: ["options"], message: `${p.name}: give at least 2 answers to choose from.` });
+    if (p.valueKind === "choice" && p.options && new Set(p.options.map((o) => o.toLowerCase())).size !== p.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: `${p.name}: the answers must be different.` });
+    if (p.valueKind !== "choice" && p.options) ctx.addIssue({ code: "custom", path: ["options"], message: `${p.name}: answers to choose from are only for a "choose from a list" field.` });
   });
 
 export const ChecklistItemInput = z
@@ -208,9 +215,14 @@ export const StepInput = z
     minDurationMinutes: z.number().int().positive().max(100_000).nullable().default(null),
     parameters: z.array(ParameterInput).max(30).default([]),
     checklistItems: z.array(ChecklistItemInput).max(40).default([]),
+    /** ADR-137: the step's check is signed by QA (not any checker); a QA-signed step always has a checker. */
+    qaSigns: z.boolean().default(false),
+    /** ADR-137: built field by field in the step builder ("Custom step"). */
+    isCustom: z.boolean().default(false),
   })
   .strict()
   .superRefine((s, ctx) => {
+    if (s.qaSigns && !s.requiresChecker) ctx.addIssue({ code: "custom", path: ["requiresChecker"], message: `${s.name}: a step QA must sign also needs the second check.` });
     if (s.stepKind === "line_clearance" && !s.area) ctx.addIssue({ code: "custom", path: ["area"], message: `${s.name}: a line clearance needs its area (weighing, production, packaging…).` });
     if (s.requiresEquipment && !s.equipmentKind) ctx.addIssue({ code: "custom", path: ["equipmentKind"], message: `${s.name}: choose the equipment type the step needs.` });
     const codes = s.parameters.map((p) => p.code);

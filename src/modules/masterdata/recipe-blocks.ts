@@ -461,6 +461,17 @@ export const RECIPE_BLOCKS = [
   { key: "fill", label: "Fill bottles", icon: "milk", stepKind: "filling", help: "Fill, close and label the bottles." },
   { key: "qc", label: "Quality check", icon: "clipboard-check", stepKind: "in_process_qc", help: "Check the product during making, for example how it looks or its pH." },
   { key: "move", label: "Move to the hold area", icon: "truck", stepKind: "transfer", help: "Put the finished pieces in the hold area until the quality check passes. Done on the Finish screen." },
+  // ADR-137: more ready-made blocks (each saves as an existing step kind; limits stay empty for the writer and QA).
+  { key: "keep_warm", label: "Keep warm for a time", icon: "thermometer", stepKind: "hold", help: "Keep it at one temperature for a set time.", reading: { name: "Temperature", unit: "°C" } },
+  { key: "homogenise", label: "Homogenise", icon: "blend", stepKind: "process", help: "Run the homogeniser at a set speed for a set time.", readings: [{ name: "Speed", unit: "rpm" }, { name: "Time", unit: "min" }] },
+  { key: "look", label: "Check how it looks", icon: "eye", stepKind: "in_process_qc", help: "Look at the colour and the thickness and say if it is right.", yesno: "Looks right?" },
+  { key: "sample", label: "Take a QA sample", icon: "test-tube", stepKind: "in_process_qc", help: "Take a small sample for QA and label it.", check: "Sample taken and labelled", qa: true },
+  { key: "clean_tools", label: "Clean the tools", icon: "spray-can", stepKind: "process", help: "Wash the pots, mixers and tools after use.", check: "Tools washed and put away" },
+  { key: "seal", label: "Close and seal", icon: "lock", stepKind: "process", help: "Close every bottle or jar and check the seal.", check: "Every cap is tight" },
+  { key: "label", label: "Put on labels", icon: "tag", stepKind: "checklist", help: "Stick the labels and check they are straight and easy to read.", check: "Labels are straight and easy to read" },
+  { key: "photo", label: "Take a photo", icon: "camera", stepKind: "checklist", help: "Take a photo for the record, for example of the colour.", photo: "Photo taken" },
+  { key: "checklist", label: "Checklist", icon: "list-checks", stepKind: "checklist", help: "A list of things to tick, one by one." },
+  { key: "custom", label: "My own step", icon: "square-pen", stepKind: "process", help: "Build your own step: give it a name, the instructions and the fields to fill in." },
   { key: "other", label: "Another step", icon: "wrench", stepKind: "process", help: "Any other job. Give it a clear name." },
 ] as const;
 export type RecipeBlockKey = (typeof RECIPE_BLOCKS)[number]["key"];
@@ -484,7 +495,17 @@ export const STEP_KIND_WORDS: Record<string, string> = {
 };
 
 /** The block of a stored step: by kind, and for "process" steps by the first word of the name. */
-export function blockFor(stepKind: string, name: string): RecipeBlockKey {
+export function blockFor(stepKind: string, name: string, isCustom = false): RecipeBlockKey {
+  if (isCustom) return "custom";
+  const nm = name.toLowerCase();
+  // ADR-137 blocks are found again by kind and name.
+  if (stepKind === "hold" && /keep warm|\bhold\b/.test(nm)) return "keep_warm";
+  if (stepKind === "process" && /homogeni[sz]/.test(nm)) return "homogenise";
+  if (stepKind === "process" && /\bseal|\bcap\b|\bclose/.test(nm)) return "seal";
+  if (stepKind === "process" && /\bclean|\bwash/.test(nm)) return "clean_tools";
+  if (stepKind === "in_process_qc" && /sample/.test(nm)) return "sample";
+  if (stepKind === "in_process_qc" && /\blook|appearance|colou?r/.test(nm)) return "look";
+  if (stepKind === "checklist") return /photo/.test(nm) ? "photo" : /label/.test(nm) ? "label" : "checklist";
   switch (stepKind) {
     case "dispensing":
       return "weigh";
@@ -549,8 +570,10 @@ export function waitText(min: number | null | undefined): string {
 
 export type RecipeReadingDraft = {
   name: string;
-  /** number = a measured number with a unit; yesno = a yes/no answer; text = a short note. */
-  kind: "number" | "yesno" | "text";
+  /** number = a measured number with a unit; yesno = a yes/no answer; text = a short note; choice = one answer from a list (ADR-137). */
+  kind: "number" | "yesno" | "text" | "choice";
+  /** choice: the answers to choose from. */
+  options?: string[];
   unit: string;
   min: string;
   max: string;
@@ -577,6 +600,10 @@ export type RecipeStepDraft = {
   readings: RecipeReadingDraft[];
   /** Advanced fields the wizard does not show; saved back unchanged. */
   keep: { code: string | null; workInstructionRevisionId: string | null; blocksUntilComplete: boolean; requiresEquipment: boolean; equipmentKind: string | null };
+  /** ADR-137: QA must sign this step's check (also needs the second check). */
+  qaSigns?: boolean;
+  /** ADR-137: built in the step builder ("My own step"). */
+  isCustom?: boolean;
 };
 
 export const emptyKeep = (): RecipeStepDraft["keep"] => ({ code: null, workInstructionRevisionId: null, blocksUntilComplete: true, requiresEquipment: false, equipmentKind: null });
@@ -584,20 +611,30 @@ export const emptyKeep = (): RecipeStepDraft["keep"] => ({ code: null, workInstr
 /** A new step from a block, with the block's usual reading (empty limits). */
 export function newStep(key: RecipeBlockKey): RecipeStepDraft {
   const b = blockByKey(key);
-  const reading = "reading" in b ? b.reading : null;
+  const num = (name: string, unit: string): RecipeReadingDraft => ({ name, kind: "number", unit, min: "", max: "", target: "", code: "", required: true });
+  const readings: RecipeReadingDraft[] = [];
+  if ("reading" in b) readings.push(num(b.reading.name, b.reading.unit));
+  if ("readings" in b) for (const r of b.readings) readings.push(num(r.name, r.unit));
+  if ("yesno" in b) readings.push({ name: b.yesno, kind: "yesno", unit: "", min: "", max: "", target: "", code: "", required: true });
+  const checklist: RecipeChecklistItem[] = [];
+  if ("check" in b) checklist.push({ text: b.check, requiresPhoto: false, isBlocking: true });
+  if ("photo" in b) checklist.push({ text: b.photo, requiresPhoto: true, isBlocking: true });
+  const qa = "qa" in b && b.qa;
   return {
     block: b.key,
     stepKind: b.stepKind,
-    name: b.key === "other" ? "" : b.label.replace(" / ", " and "),
+    name: b.key === "other" || b.key === "custom" || b.key === "checklist" ? "" : b.label.replace(" / ", " and "),
     instruction: "",
-    // Only weighing starts with a second-person check (owner usability test); the author changes it per step.
-    needsCheck: b.key === "weigh",
+    // Only weighing (and a QA sample) starts with a second-person check (owner usability test); the author changes it per step.
+    needsCheck: b.key === "weigh" || qa,
     waitAmount: "",
-    waitUnit: "days",
+    waitUnit: b.key === "keep_warm" ? "minutes" : "days",
     area: b.key === "clean" ? "production" : "",
-    checklist: [],
-    readings: reading ? [{ name: reading.name, kind: "number", unit: reading.unit, min: "", max: "", target: "", code: "", required: true }] : [],
+    checklist,
+    readings,
     keep: emptyKeep(),
+    ...(qa ? { qaSigns: true } : {}),
+    ...(b.key === "custom" ? { isCustom: true } : {}),
   };
 }
 
@@ -641,18 +678,23 @@ export function toStepInputs(steps: RecipeStepDraft[]) {
       minDurationMinutes: minutes,
       parameters: s.readings.map((r, j) => {
         const numeric = r.kind === "number";
+        const options = r.kind === "choice" ? (r.options ?? []).map((o) => o.trim()).filter(Boolean) : null;
         return {
           code: r.code.trim() || readingCode(r.name, j, taken),
           name: r.name.trim(),
-          valueKind: numeric ? "numeric" : r.kind === "yesno" ? "boolean" : "text",
+          valueKind: numeric ? "numeric" : r.kind === "yesno" ? "boolean" : r.kind === "choice" ? "choice" : "text",
           uom: numeric ? blank(r.unit) : null,
           minValue: numeric ? blank(r.min) : null,
           targetValue: numeric ? blank(r.target) : null,
           maxValue: numeric ? blank(r.max) : null,
           isRequired: r.required,
+          ...(options ? { options } : {}),
         };
       }),
       checklistItems: s.checklist.filter((c) => c.text.trim()).map((c) => ({ text: c.text.trim(), requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
+      // ADR-137: a QA-signed step always has the second check.
+      ...(s.qaSigns ? { qaSigns: true, requiresChecker: true } : {}),
+      ...(s.isCustom ? { isCustom: true } : {}),
     };
   });
 }
@@ -671,14 +713,18 @@ export function fromRoutingSteps(
     requiresEquipment: boolean;
     equipmentKind: string | null;
     minDurationMinutes: number | null;
-    parameters: { code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean }[];
+    parameters: { code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean; options?: unknown }[];
     checklistItems: { text: string; requiresPhoto: boolean; isBlocking: boolean }[];
+    qaSigns?: boolean;
+    isCustom?: boolean;
   }[],
 ): RecipeStepDraft[] {
   return steps.map((s) => {
     const w = minutesToWait(s.minDurationMinutes);
     return {
-      block: blockFor(s.stepKind, s.name),
+      ...(s.qaSigns ? { qaSigns: true } : {}),
+      ...(s.isCustom ? { isCustom: true } : {}),
+      block: blockFor(s.stepKind, s.name, !!s.isCustom),
       stepKind: s.stepKind,
       name: s.name,
       instruction: s.instruction ?? "",
@@ -689,7 +735,8 @@ export function fromRoutingSteps(
       checklist: s.checklistItems.map((c) => ({ text: c.text, requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
       readings: s.parameters.map((p) => ({
         name: p.name,
-        kind: p.valueKind === "numeric" ? "number" : p.valueKind === "boolean" ? "yesno" : "text",
+        kind: p.valueKind === "numeric" ? "number" : p.valueKind === "boolean" ? "yesno" : p.valueKind === "choice" ? "choice" : "text",
+        ...(p.valueKind === "choice" && Array.isArray(p.options) ? { options: (p.options as unknown[]).map(String) } : {}),
         unit: p.uom ?? "",
         min: p.minValue !== null ? plain(p.minValue) : "",
         max: p.maxValue !== null ? plain(p.maxValue) : "",
@@ -703,9 +750,10 @@ export function fromRoutingSteps(
 }
 
 /** "Temperature 60–70 °C", "Temperature at least 60 °C", "pH", "Looks right? (yes/no)". */
-export function readingText(r: Pick<RecipeReadingDraft, "name" | "kind" | "unit" | "min" | "max">): string {
+export function readingText(r: Pick<RecipeReadingDraft, "name" | "kind" | "unit" | "min" | "max" | "options">): string {
   const name = r.name.trim() || "Reading";
   if (r.kind === "yesno") return `${name} (yes/no)`;
+  if (r.kind === "choice") return `${name} (${(r.options ?? []).filter((o) => o.trim()).join(" / ") || "choose"})`;
   if (r.kind === "text") return `${name} (note)`;
   const u = r.unit.trim() ? ` ${r.unit.trim()}` : "";
   const mi = r.min.trim();
@@ -723,7 +771,8 @@ export function stepPreviewLine(s: RecipeStepDraft, i: number, total: number): s
   const m = isWait ? waitToMinutes(s.waitAmount, s.waitUnit) : null;
   if (m && !Number.isNaN(m)) parts.push(`Wait at least ${waitText(m)}`);
   for (const r of s.readings) parts.push(readingText(r));
-  if (s.needsCheck) parts.push("Second person checks");
+  for (const c of s.checklist) if (c.requiresPhoto && c.text.trim()) parts.push(`Photo: ${c.text.trim()}`);
+  if (s.needsCheck) parts.push(s.qaSigns ? "QA signs" : "Second person checks");
   return parts.join(" · ");
 }
 
