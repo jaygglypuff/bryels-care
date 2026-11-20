@@ -77,7 +77,16 @@ function PaperFacts({ id, fe, people, checkers, outage, outageReasons, showStart
   );
 }
 
-export type WeighLine = { batchMaterialId: string; materialName: string; materialCode: string; uom: string; targetText: string; rangeText: string };
+export type WeighLine = {
+  batchMaterialId: string;
+  materialName: string;
+  materialCode: string;
+  uom: string;
+  targetText: string;
+  rangeText: string;
+  /** ADR-137: how the line is added (paperEntryView). */
+  method: { addMethod: string; sentence: string; entersUnits: boolean; unitLabel: string | null; wholeContainer: boolean; reading: { name: string; range: string } | null };
+};
 
 export function WeighLineForm({ batchId, paperRecordId, line, people, checkers, scales, outageReasons }: { batchId: string; paperRecordId: string; line: WeighLine; people: Person[]; checkers: Person[]; scales: Choice[]; outageReasons: Choice[] }) {
   const id = `w-${line.batchMaterialId.slice(-8)}`;
@@ -86,24 +95,44 @@ export function WeighLineForm({ batchId, paperRecordId, line, people, checkers, 
       {(fe) => (
         <div className="flex flex-col gap-3">
           <p className="text-[14px]">
+            {line.method.addMethod !== "weigh" && <b className="block" data-testid="paper-method">{line.method.sentence}</b>}
             Target <b>{line.targetText}</b> · allowed {line.rangeText}
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Lot number on the paper" htmlFor={`${id}-lot`} error={fe.lotRef ?? fe.lot}>
               <Input id={`${id}-lot`} name="lotRef" required autoComplete="off" className="min-h-[44px] font-mono uppercase" />
             </Field>
-            <Field label="Weight on the paper" htmlFor={`${id}-qty`} error={fe.qty}>
-              <Input id={`${id}-qty`} name="qty" required inputMode="decimal" autoComplete="off" className="min-h-[44px]" />
-            </Field>
-            <Field label="Unit" htmlFor={`${id}-uom`} error={fe.uom}>
-              <Select id={`${id}-uom`} name="uom" defaultValue={line.uom} className="min-h-[44px]">
-                {(line.uom === "g" ? ["g", "kg"] : line.uom === "mL" ? ["mL", "L"] : [line.uom]).map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {line.method.wholeContainer ? (
+              // ADR-137: the whole container went in: nothing to type, the stock left in that lot is used.
+              <p className="self-end text-[14px] text-fg-2">
+                <input type="hidden" name="wholeContainer" value="1" />
+                The whole container went in. What is left of this lot at its place is used.
+              </p>
+            ) : line.method.entersUnits ? (
+              <Field label={`${line.method.unitLabel} on the paper`} htmlFor={`${id}-units`} error={fe.units}>
+                <Input id={`${id}-units`} name="units" required inputMode="decimal" autoComplete="off" className="min-h-[44px]" />
+              </Field>
+            ) : (
+              <>
+                <Field label="Weight on the paper" htmlFor={`${id}-qty`} error={fe.qty}>
+                  <Input id={`${id}-qty`} name="qty" required inputMode="decimal" autoComplete="off" className="min-h-[44px]" />
+                </Field>
+                <Field label="Unit" htmlFor={`${id}-uom`} error={fe.uom}>
+                  <Select id={`${id}-uom`} name="uom" defaultValue={line.uom} className="min-h-[44px]">
+                    {(line.uom === "g" ? ["g", "kg"] : line.uom === "mL" ? ["mL", "L"] : [line.uom]).map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </>
+            )}
+            {line.method.reading && (
+              <Field label={`${line.method.reading.name} reached (${line.method.reading.range})`} htmlFor={`${id}-reading`} error={fe.reading}>
+                <Input id={`${id}-reading`} name="reading" required inputMode="decimal" autoComplete="off" className="min-h-[44px]" />
+              </Field>
+            )}
           </div>
           {scales.length > 0 && (
             <Field label="Scale" htmlFor={`${id}-scale`} error={fe.equipment ?? fe.equipmentRef}>
@@ -139,7 +168,9 @@ export type StepForm = {
   requiresEquipment: boolean;
   isHold: boolean;
   checklist: { id: string; itemNo: number; text: string }[];
-  parameters: { id: string; name: string; uom: string | null; limits: string | null; valueKind: string }[];
+  parameters: { id: string; name: string; uom: string | null; limits: string | null; valueKind: string; options?: string[] | null }[];
+  /** ADR-137: the person written as checker must be QA. */
+  qaSigns?: boolean;
 };
 
 export function StepFromPaperForm({ batchId, step, people, checkers, equipment, outageReasons }: { batchId: string; step: StepForm; people: Person[]; checkers: Person[]; equipment: Choice[]; outageReasons: Choice[] }) {
@@ -178,8 +209,20 @@ export function StepFromPaperForm({ batchId, step, people, checkers, equipment, 
           {step.parameters.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2">
               {step.parameters.map((p) => (
-                <Field key={p.id} label={`${p.name}${p.uom ? ` (${p.uom})` : ""}`} htmlFor={`${id}-${p.id}`} hint={p.limits ? `Limits: ${p.limits}` : undefined}>
-                  <Input id={`${id}-${p.id}`} name={`reading-${p.id}`} inputMode={p.valueKind === "numeric" ? "decimal" : undefined} autoComplete="off" className="min-h-[44px]" />
+                <Field key={p.id} label={`${p.name}${p.uom ? ` (${p.uom})` : ""}`} htmlFor={`${id}-${p.id}`} hint={p.limits && p.valueKind !== "choice" ? `Limits: ${p.limits}` : undefined}>
+                  {p.valueKind === "choice" ? (
+                    // ADR-137: the answer circled on the paper, one of the step's list.
+                    <Select id={`${id}-${p.id}`} name={`reading-${p.id}`} defaultValue="" className="min-h-[44px]">
+                      <option value="">Choose what is circled</option>
+                      {(p.options ?? []).map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input id={`${id}-${p.id}`} name={`reading-${p.id}`} inputMode={p.valueKind === "numeric" ? "decimal" : undefined} autoComplete="off" className="min-h-[44px]" />
+                  )}
                 </Field>
               ))}
             </div>

@@ -68,6 +68,10 @@ export async function enterWeighingFromPaperAction(_: ActionState, fd: FormData)
       lotRef: String(fd.get("lotRef") ?? "").trim(),
       qty: opt(fd, "qty"),
       uom: opt(fd, "uom") ?? undefined,
+      // ADR-137: counted or measured units, the whole container, the reading reached (as needed).
+      units: opt(fd, "units"),
+      wholeContainer: fd.get("wholeContainer") === "1",
+      reading: opt(fd, "reading"),
       equipmentRef: opt(fd, "equipmentRef"),
       offPlanReasonCode: opt(fd, "offPlanReasonCode"),
       offPlanNote: opt(fd, "offPlanNote"),

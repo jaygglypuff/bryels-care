@@ -21,6 +21,7 @@ export { type FormulaSnapshot, manilaToday, addDays, CHECKER_PERMISSION, isWeigh
 export { STEP_STATUSES, STEP_TRANSITIONS, canStepTransition, checkStep, returnStep, eligibleSigners, checkPermission, performPermission, type StepStatus } from "./execution";
 export { registerExecutionHooks, resetExecutionHooks, DEVIATION_UNAVAILABLE, type ExecutionHooks, type OpenDeviationInput, type DeviationKind, type InProcessQcStatus } from "./execution-hooks";
 export { submitChecklist, type ClearanceAnswer, type SubmitChecklistInput } from "./line-clearance";
+export { attachStepPhoto } from "./step-photos";
 export { recordDispense, recordNoneNeeded, undoNoneNeeded, checkDispense, checkDispenses, voidDispense, returnDispense, toleranceRange, toBaseQty, lineJudge, type DispenseInput } from "./dispensing";
 export { checkerQueue, checksWaitingCount, type CheckCard, type CheckerQueue, type WeighingToCheck } from "./checker-queue";
 export { CHECKS_HREF } from "./checks-href";

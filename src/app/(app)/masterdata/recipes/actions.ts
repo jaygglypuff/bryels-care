@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { type AuthContext, getContext } from "@/lib/auth/context";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
-import { createRecipeIngredient, createRecipePackaging, createRecipeProduct, getRecipeCopy, saveRecipe } from "@/modules/masterdata";
+import { addMaterialUnit, createRecipeIngredient, createRecipePackaging, createRecipeProduct, getRecipeCopy, saveRecipe, saveRecipeTemplate } from "@/modules/masterdata";
 
 /**
  * Server actions of the guided recipe wizard (ADR-089): thin adapters that call the masterdata
@@ -81,5 +81,26 @@ export async function loadRecipeCopyAction(formulaId: string) {
     const ctx = await requireContext();
     const c = await getRecipeCopy(ctx, formulaId);
     return { data: c, message: `Copied the ingredients and steps of ${c.from}.` };
+  });
+}
+
+/** ADR-137: "Add a pack size" / "Add mL" from the wizard (masterdata.material.edit, checked by the service). */
+export async function addMaterialUnitAction(payload: unknown) {
+  return run(
+    async () => {
+      const ctx = await requireContext();
+      const u = await addMaterialUnit(ctx, payload);
+      return { data: u, message: `Saved: 1 ${u.name} = ${Number(u.qtyPerUnit).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${u.baseUom}.` };
+    },
+    ["/masterdata/materials"],
+  );
+}
+
+/** ADR-137: "Save this for later recipes" (a custom step or a custom way of adding, at the current site). */
+export async function saveRecipeTemplateAction(payload: unknown) {
+  return run(async () => {
+    const ctx = await requireContext();
+    const t = await saveRecipeTemplate(ctx, { ...(payload as object), siteId: ctx.currentSiteId });
+    return { data: t, message: `Saved "${t.name}" for later recipes at this site.` };
   });
 }

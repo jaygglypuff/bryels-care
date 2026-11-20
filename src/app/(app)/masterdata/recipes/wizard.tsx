@@ -11,6 +11,8 @@ import {
   type RecipePackagingDraft,
   type RecipeReadingDraft,
   type RecipeStepDraft,
+  type UnitSizes,
+  inTotal,
   PER_PIECE_DECIMALS,
   RECIPE_BLOCKS,
   WAIT_UNITS,
@@ -36,8 +38,10 @@ import type { RecipeWizardOptions } from "@/modules/masterdata";
 import { copiedWithAnswers, planRecipeCopy, sizeQuestion, type RecipeCopyPlan, type RecipeCopySource, type SizeAnswer } from "@/modules/masterdata/recipe-copy";
 import { Button, Card, Input, Select, Textarea, cx } from "@/ui/core";
 import { BlockIcon } from "./block-icon";
+import { HowAdded, type MethodTemplate, type UnitOption } from "./how-added";
+import { ADD_METHOD_WORDS } from "@/modules/masterdata/add-methods";
 import { RecipeSummary, batchPiecesSentence, piecesPerBatch } from "./recipe-summary";
-import { createRecipeIngredientAction, createRecipePackagingAction, createRecipeProductAction, loadRecipeCopyAction, saveRecipeAction } from "./actions";
+import { createRecipeIngredientAction, createRecipePackagingAction, createRecipeProductAction, loadRecipeCopyAction, saveRecipeAction, saveRecipeTemplateAction } from "./actions";
 import { clearKept, fingerprint, keptKey, keptTime, readKept, safeCall, writeKept } from "./wizard-keep";
 
 type Errors = Record<string, string>;
@@ -142,6 +146,9 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const [products, setProducts] = useState<Product[]>(options.products);
   const [materials, setMaterials] = useState<Material[]>(options.materials);
+  // ADR-137: the packs and mL of the ingredients (more can be added from a line), and their sizes for the totals.
+  const [units, setUnits] = useState<UnitOption[]>(options.units);
+  const sizes = useMemo<UnitSizes>(() => Object.fromEntries(units.map((u) => [u.id, u.qtyPerUnit])), [units]);
   const [activate, setActivate] = useState(true);
   const [pending, startTransition] = useTransition();
   /** A copy kept on this device was put back (ADR-116); offers "Start over". */
@@ -182,7 +189,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
   const pieceG = pieceGOf(d);
   const batchG = isDecimalText(d.batchKg, 3) ? kgToGrams(d.batchKg) : "0";
   const pieces = draftPieces(d, pieceG);
-  const totals = useMemo(() => recipeTotals(batchG, d.lines), [batchG, d.lines]);
+  const totals = useMemo(() => recipeTotals(batchG, d.lines, sizes), [batchG, d.lines, sizes]);
   /** By pieces, the kilograms are always worked out from the pieces (the same function the server uses). */
   const sync = (x: WDraft): WDraft => (x.batchBy === "pcs" ? { ...x, batchKg: piecesToBatchKg(x.pieces, pieceGOf(x), x.expectedPct) ?? "" } : x);
   const set = (patch: Partial<WDraft>) => setD((x) => sync({ ...x, ...patch }));
@@ -404,10 +411,26 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
           onMaterialCreated={(m) => setMaterials((ms) => [...ms, m].sort((a, b) => a.name.localeCompare(b.name)))}
           pieces={pieces}
           family={product?.family ?? null}
+          units={units}
+          sizes={sizes}
+          onUnitAdded={(u) => setUnits((us) => [...us, u])}
+          canEditMaterial={options.can.editMaterial}
+          canSaveTemplate={options.can.saveTemplate}
+          methodTemplates={options.templates.filter((t) => t.kind === "add_method").map((t) => ({ id: t.id, name: t.name, body: t.body }))}
         />
       )}
 
-      {screen === 4 && <StepsScreen d={d} set={set} setStep={setStep} errors={errors} locked={start.locks.steps} />}
+      {screen === 4 && (
+        <StepsScreen
+          d={d}
+          set={set}
+          setStep={setStep}
+          errors={errors}
+          locked={start.locks.steps}
+          stepTemplates={options.templates.filter((t) => t.kind === "step").map((t) => ({ id: t.id, name: t.name, body: t.body }))}
+          canSaveTemplate={options.can.saveTemplate}
+        />
+      )}
 
       {screen === 5 && (
         <Card>
@@ -416,6 +439,7 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
             product={product ? { unitNetMassG: product.unitNetMassG, family: product.family, pieceG } : null}
             draft={d}
             materialName={matName}
+            units={Object.fromEntries(units.map((u) => [u.id, { name: u.name, qtyPerUnit: u.qtyPerUnit }]))}
             ingredientsLabel={start.ingredientsLabel}
             stepsLabel={start.stepsLabel}
           />
@@ -990,7 +1014,19 @@ function IngredientsScreen({
   onMaterialCreated,
   pieces,
   family,
+  units,
+  sizes,
+  onUnitAdded,
+  canEditMaterial,
+  canSaveTemplate,
+  methodTemplates,
 }: {
+  units: UnitOption[];
+  sizes: UnitSizes;
+  onUnitAdded: (u: UnitOption) => void;
+  canEditMaterial: boolean;
+  canSaveTemplate: boolean;
+  methodTemplates: MethodTemplate[];
   d: WDraft;
   set: (p: Partial<WDraft>) => void;
   setLine: (i: number, p: Partial<RecipeLineDraft>) => void;
@@ -1029,7 +1065,8 @@ function IngredientsScreen({
         <ol className="flex flex-col divide-y divide-line">
           {d.lines.map((l, i) => (
             <li key={i} className="py-2 text-[14px]">
-              {i + 1}. {matName(l.materialId)} · {fmt(lineGrams(batchG, l), 6)} g · {fmt(percentFromGrams(batchG, lineGrams(batchG, l)))}%
+              {i + 1}. {matName(l.materialId)} · {fmt(lineGrams(batchG, l, sizes), 6)} g{inTotal(l) ? ` · ${fmt(percentFromGrams(batchG, lineGrams(batchG, l, sizes)))}%` : ""}
+              {(l.method ?? "weigh") !== "weigh" && <span className="block text-[13px] text-fg-2">{ADD_METHOD_WORDS[l.method ?? "weigh"].label}</span>}
             </li>
           ))}
         </ol>
@@ -1077,7 +1114,7 @@ function IngredientsScreen({
 
       {d.lines.map((l, i) => {
         const err = (k: string) => errors[`lines.${i}.${k}`];
-        const g = lineGrams(batchG, l);
+        const g = lineGrams(batchG, l, sizes);
         const other = unit === "g" ? `= ${fmt(percentFromGrams(batchG, g))}% of the batch` : `= ${fmt(g, 6)} g`;
         return (
           <Card key={i} className="flex flex-col gap-3 !p-4" data-testid={`ingredient-${i + 1}`}>
@@ -1122,6 +1159,23 @@ function IngredientsScreen({
                 Allowed alternatives (optional): {(l.alternatives ?? []).map((a) => matName(a.materialId)).join(", ")}. Change them in the advanced recipe editor.
               </p>
             )}
+            {l.materialId && (
+            <HowAdded
+              l={l}
+              i={i}
+              setLine={setLine}
+              err={err}
+              batchG={batchG}
+              baseUom={materials.find((m) => m.id === l.materialId)?.baseUom ?? "g"}
+              materialName={matName(l.materialId)}
+              units={units}
+              sizes={sizes}
+              canEditMaterial={canEditMaterial}
+              canSaveTemplate={canSaveTemplate}
+              onUnitAdded={onUnitAdded}
+              templates={methodTemplates}
+              defaultDiff={defaultDiff}
+              weighFields={
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={`amt-${i}`} className="text-[14px] font-semibold">
@@ -1158,10 +1212,13 @@ function IngredientsScreen({
                 </WhatIsThis>
               </div>
             </div>
+              }
+            />
+            )}
             <label className="flex min-h-[44px] items-start gap-3 text-[14px]">
               <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0" checked={l.needsCheck} onChange={(e) => setLine(i, { needsCheck: e.target.checked })} />
               <span>
-                <b>Needs a second person to check the weighing</b>
+                <b>{(l.method ?? "weigh") === "weigh" ? "Needs a second person to check the weighing" : "Needs a second person to check it"}</b>
                 <span className="block text-[12px] text-muted">{checkHint}</span>
               </span>
             </label>
@@ -1402,7 +1459,23 @@ function IngredientPicker({
 
 /* ================================================================== 4. steps */
 
-function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: Partial<WDraft>) => void; setStep: (i: number, p: Partial<RecipeStepDraft>) => void; errors: Errors; locked: boolean }) {
+function StepsScreen({
+  d,
+  set,
+  setStep,
+  errors,
+  locked,
+  stepTemplates,
+  canSaveTemplate,
+}: {
+  d: WDraft;
+  set: (p: Partial<WDraft>) => void;
+  setStep: (i: number, p: Partial<RecipeStepDraft>) => void;
+  errors: Errors;
+  locked: boolean;
+  stepTemplates: MethodTemplate[];
+  canSaveTemplate: boolean;
+}) {
   const [open, setOpen] = useState<number | null>(null);
   if (locked) {
     return (
@@ -1457,7 +1530,7 @@ function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: 
                     </IconButton>
                   </div>
                 </div>
-                {isOpen && <StepFields s={s} i={i} setStep={setStep} errors={errors} />}
+                {isOpen && <StepFields s={s} i={i} setStep={setStep} errors={errors} canSaveTemplate={canSaveTemplate} />}
               </Card>
             </li>
           );
@@ -1473,14 +1546,66 @@ function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: 
             </button>
           ))}
         </div>
+        {stepTemplates.length > 0 && (
+          <>
+            <h3 className="mt-2 text-[15px] font-semibold">Steps saved before</h3>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="step-templates">
+              {stepTemplates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    set({ steps: [...d.steps, stepFromTemplate(t.body)] });
+                    setOpen(d.steps.length);
+                  }}
+                  className="flex min-h-[56px] items-center gap-3 rounded-[8px] border border-line bg-surface px-3 text-left hover:bg-surface-2"
+                >
+                  <BlockIcon block="custom" />
+                  <span className="text-[14px] font-semibold leading-tight">{t.name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </section>
       <ErrorText text={errors.steps} />
     </div>
   );
 }
 
-function StepFields({ s, i, setStep, errors }: { s: RecipeStepDraft; i: number; setStep: (i: number, p: Partial<RecipeStepDraft>) => void; errors: Errors }) {
+/** ADR-137: a saved step becomes a new custom step of this recipe (a copy: changing it later never changes the template). */
+function stepFromTemplate(body: unknown): RecipeStepDraft {
+  const b = (body ?? {}) as Partial<RecipeStepDraft> & { readings?: Partial<RecipeReadingDraft>[] };
+  const base = newStep("custom");
+  return {
+    ...base,
+    name: b.name ?? "",
+    instruction: b.instruction ?? "",
+    stepKind: b.stepKind ?? "process",
+    needsCheck: !!b.needsCheck || !!b.qaSigns,
+    qaSigns: !!b.qaSigns,
+    waitAmount: b.waitAmount ?? "",
+    waitUnit: b.waitUnit ?? "minutes",
+    checklist: (b.checklist ?? []).map((c) => ({ text: c.text, requiresPhoto: !!c.requiresPhoto, isBlocking: c.isBlocking !== false })),
+    readings: (b.readings ?? []).map((r) => ({ name: r.name ?? "", kind: r.kind ?? "number", unit: r.unit ?? "", min: r.min ?? "", max: r.max ?? "", target: r.target ?? "", code: "", required: r.required !== false, ...(r.options ? { options: r.options } : {}) })),
+  };
+}
+
+function StepFields({ s, i, setStep, errors, canSaveTemplate }: { s: RecipeStepDraft; i: number; setStep: (i: number, p: Partial<RecipeStepDraft>) => void; errors: Errors; canSaveTemplate: boolean }) {
   const err = (k: string) => errors[`steps.${i}.${k}`];
+  const [tplMsg, setTplMsg] = useState<string | null>(null);
+  const saveTemplate = async () => {
+    setTplMsg(null);
+    const r = await safeCall(() =>
+      saveRecipeTemplateAction({
+        kind: "step",
+        name: s.name.trim(),
+        body: { name: s.name.trim(), instruction: s.instruction, stepKind: s.stepKind === "hold" ? "hold" : "process", needsCheck: s.needsCheck, qaSigns: !!s.qaSigns, waitAmount: s.waitAmount, waitUnit: s.waitUnit, checklist: s.checklist.filter((c) => c.text.trim()), readings: s.readings },
+      }),
+    );
+    setTplMsg(r?.message ?? "Not saved.");
+  };
+  const canTick = s.stepKind !== "line_clearance" && s.stepKind !== "dispensing" && s.stepKind !== "transfer";
   const isWait = s.stepKind === "curing" || s.stepKind === "hold";
   const setReading = (k: number, patch: Partial<RecipeReadingDraft>) => setStep(i, { readings: s.readings.map((r, j) => (j === k ? { ...r, ...patch } : r)) });
   const readingErr = (k: number) => Object.entries(errors).find(([key]) => key.startsWith(`steps.${i}.parameters.${k}.`))?.[1];
@@ -1500,6 +1625,16 @@ function StepFields({ s, i, setStep, errors }: { s: RecipeStepDraft; i: number; 
         <Textarea id={`si-${i}`} value={s.instruction} placeholder="Tell the worker what to do, in short sentences." onChange={(e) => setStep(i, { instruction: e.target.value })} />
         <ErrorText text={err("instruction")} />
       </div>
+
+      {s.isCustom && (
+        <label className="flex min-h-[44px] items-start gap-3 text-[14px]">
+          <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0" checked={isWait} onChange={(e) => setStep(i, { stepKind: e.target.checked ? "hold" : "process", waitUnit: e.target.checked ? "minutes" : s.waitUnit })} data-testid={`step-timer-${i + 1}`} />
+          <span>
+            <b>Has a timer (wait at least …)</b>
+            <span className="block text-[12px] text-muted">The step can&apos;t be finished before the time is over.</span>
+          </span>
+        </label>
+      )}
 
       {isWait && (
         <div className="flex flex-col gap-2">
@@ -1569,9 +1704,10 @@ function StepFields({ s, i, setStep, errors }: { s: RecipeStepDraft; i: number; 
             <div key={k} className="flex flex-col gap-2 rounded-[8px] border border-line p-3">
               <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
                 <Input aria-label={`What to write down ${k + 1}`} placeholder="Temperature" value={r.name} onChange={(e) => setReading(k, { name: e.target.value })} />
-                <Select aria-label="Kind of answer" value={r.kind} onChange={(e) => setReading(k, { kind: e.target.value as RecipeReadingDraft["kind"] })}>
+                <Select aria-label="Kind of answer" value={r.kind} onChange={(e) => setReading(k, { kind: e.target.value as RecipeReadingDraft["kind"], ...(e.target.value === "choice" && !r.options?.length ? { options: ["", ""] } : {}) })}>
                   <option value="number">a number</option>
                   <option value="yesno">yes or no</option>
+                  <option value="choice">choose from a list</option>
                   <option value="text">a short note</option>
                 </Select>
                 <IconButton label={`Remove ${r.name || "this"}`} danger onClick={() => setStep(i, { readings: s.readings.filter((_, j) => j !== k) })}>
@@ -1594,6 +1730,24 @@ function StepFields({ s, i, setStep, errors }: { s: RecipeStepDraft; i: number; 
                   </div>
                 </div>
               )}
+              {r.kind === "choice" && (
+                <div className="flex flex-col gap-1" data-testid={`choice-options-${i + 1}-${k + 1}`}>
+                  <span className="text-[12px] text-muted">The answers to choose from (2 to 12)</span>
+                  {(r.options ?? []).map((o, oi) => (
+                    <div key={oi} className="flex items-center gap-2">
+                      <Input aria-label={`Answer ${oi + 1}`} value={o} placeholder={oi === 0 ? "Light green" : oi === 1 ? "Green" : "Answer"} onChange={(e) => setReading(k, { options: (r.options ?? []).map((x, j) => (j === oi ? e.target.value : x)) })} />
+                      <IconButton label={`Remove answer ${oi + 1}`} danger onClick={() => setReading(k, { options: (r.options ?? []).filter((_, j) => j !== oi) })}>
+                        <Trash2 size={18} />
+                      </IconButton>
+                    </div>
+                  ))}
+                  {(r.options ?? []).length < 12 && (
+                    <Button type="button" variant="ghost" onClick={() => setReading(k, { options: [...(r.options ?? []), ""] })}>
+                      <Plus size={18} aria-hidden /> Add an answer
+                    </Button>
+                  )}
+                </div>
+              )}
               <label className="flex min-h-[40px] items-center gap-2 text-[13px]">
                 <input type="checkbox" className="h-5 w-5" checked={r.required} onChange={(e) => setReading(k, { required: e.target.checked })} />
                 Must be filled in
@@ -1608,13 +1762,56 @@ function StepFields({ s, i, setStep, errors }: { s: RecipeStepDraft; i: number; 
         </div>
       )}
 
+      {canTick && (
+        <div className="flex flex-col gap-2">
+          <span className="text-[14px] font-semibold">Things to tick or take a photo of (optional)</span>
+          {s.checklist.map((c, k) => (
+            <div key={k} className="flex flex-col gap-1 rounded-[8px] border border-line p-2 sm:flex-row sm:items-center sm:gap-2">
+              <Input aria-label={`Thing to tick ${k + 1}`} value={c.text} placeholder="Sample taken and labelled" onChange={(e) => setStep(i, { checklist: s.checklist.map((x, j) => (j === k ? { ...x, text: e.target.value } : x)) })} />
+              <label className="flex min-h-[40px] shrink-0 items-center gap-2 text-[13px]">
+                <input type="checkbox" className="h-5 w-5" checked={c.requiresPhoto} onChange={(e) => setStep(i, { checklist: s.checklist.map((x, j) => (j === k ? { ...x, requiresPhoto: e.target.checked } : x)) })} />
+                Needs a photo
+              </label>
+              <IconButton label={`Remove thing to tick ${k + 1}`} danger onClick={() => setStep(i, { checklist: s.checklist.filter((_, j) => j !== k) })}>
+                <Trash2 size={18} />
+              </IconButton>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" onClick={() => setStep(i, { checklist: [...s.checklist, { text: "", requiresPhoto: false, isBlocking: true }] })}>
+              <Plus size={18} aria-hidden /> Add a thing to tick
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setStep(i, { checklist: [...s.checklist, { text: "Photo taken", requiresPhoto: true, isBlocking: true }] })} data-testid={`add-photo-${i + 1}`}>
+              <Plus size={18} aria-hidden /> Add a photo
+            </Button>
+          </div>
+        </div>
+      )}
+
       <label className="flex min-h-[44px] items-start gap-3 text-[14px]">
-        <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0" checked={s.needsCheck} onChange={(e) => setStep(i, { needsCheck: e.target.checked })} />
+        <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0" checked={s.needsCheck} onChange={(e) => setStep(i, { needsCheck: e.target.checked, ...(e.target.checked ? {} : { qaSigns: false }) })} />
         <span>
           <b>Needs a second person to check</b>
           <span className="block text-[12px] text-muted">Another person looks and signs before the step counts as done.</span>
         </span>
       </label>
+      {canTick && (
+        <label className="flex min-h-[44px] items-start gap-3 text-[14px]">
+          <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0" checked={!!s.qaSigns} onChange={(e) => setStep(i, { qaSigns: e.target.checked, ...(e.target.checked ? { needsCheck: true } : {}) })} data-testid={`step-qa-${i + 1}`} />
+          <span>
+            <b>QA must sign</b>
+            <span className="block text-[12px] text-muted">Only a QA person can be the second person for this step.</span>
+          </span>
+        </label>
+      )}
+      {s.isCustom && canSaveTemplate && s.name.trim() && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={saveTemplate} data-testid={`save-step-template-${i + 1}`}>
+            Save this step for later recipes
+          </Button>
+          {tplMsg && <span className="text-[13px] text-fg-2">{tplMsg}</span>}
+        </div>
+      )}
       {(s.keep.workInstructionRevisionId || s.keep.requiresEquipment) && (
         <p className="text-[12px] text-muted">This step also has settings from advanced editing (a linked instruction or equipment); they are kept.</p>
       )}

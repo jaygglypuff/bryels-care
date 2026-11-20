@@ -129,7 +129,7 @@ export async function issuePageInTx(
         parameters: (step.parameters ?? []).map((p) => ({
           name: p.name,
           uom: p.uom,
-          limits: [p.minValue ? `min ${p.minValue}` : null, p.targetValue ? `target ${p.targetValue}` : null, p.maxValue ? `max ${p.maxValue}` : null].filter(Boolean).join(" · ") || "—",
+          limits: p.valueKind === "choice" ? `circle one: ${(p.options ?? []).join(" / ")}` : [p.minValue ? `min ${p.minValue}` : null, p.targetValue ? `target ${p.targetValue}` : null, p.maxValue ? `max ${p.maxValue}` : null].filter(Boolean).join(" · ") || "—",
         })),
         checklist: (step.checklistItems ?? []).map((c) => ({ itemNo: c.itemNo, text: c.text })),
         issuedBy: ctx.displayName,

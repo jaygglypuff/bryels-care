@@ -38,6 +38,7 @@ import { recordReadingInTx, useEquipment } from "./process";
 import { CHECKER_PERMISSION, QA_SIGN_PERMISSION, type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { stepBlockers } from "./steps";
 import { toleranceRange } from "./weigh-window";
+import { entersUnits, methodSentence, readSpec, readingRangeText, unitWord } from "@/modules/masterdata/add-methods";
 
 /**
  * ADR-134 — "Enter from the paper record". After the connection is back, a person types the paper batch record in the
@@ -340,6 +341,8 @@ export async function paperEntryView(ctx: AuthContext, batchId: string) {
         status: l.bm.status,
         done: l.bm.status === "dispensed" || l.bm.status === "exception",
         fromPaper: live.some((d) => d.entrySource === "paper"),
+        // ADR-137: what the paper row asked for, so the typing form asks the same (units, whole container, reading).
+        method: paperEntryMethod(l.bm, l.m.baseUom),
       };
     });
   const pageViews = [];
@@ -360,7 +363,8 @@ export async function paperEntryView(ctx: AuthContext, batchId: string) {
       requiresEquipment: step?.requiresEquipment ?? false,
       equipmentKind: step?.equipmentKind ?? null,
       checklist: (step?.checklistItems ?? []).map((c) => ({ id: c.id, itemNo: c.itemNo, text: c.text })),
-      parameters: (step?.parameters ?? []).map((p) => ({ id: p.id, name: p.name, uom: p.uom, valueKind: p.valueKind, isRequired: p.isRequired, limits: [p.minValue ? `min ${p.minValue}` : null, p.maxValue ? `max ${p.maxValue}` : null].filter(Boolean).join(" · ") || null })),
+      parameters: (step?.parameters ?? []).map((p) => ({ id: p.id, name: p.name, uom: p.uom, valueKind: p.valueKind, isRequired: p.isRequired, options: p.options ?? null, limits: p.valueKind === "choice" ? `one of: ${(p.options ?? []).join(" / ")}` : [p.minValue ? `min ${p.minValue}` : null, p.maxValue ? `max ${p.maxValue}` : null].filter(Boolean).join(" · ") || null })),
+      qaSigns: !!step?.qaSigns,
       stepStatus: rec?.status ?? "pending",
       stepFromPaper: rec?.entrySource === "paper",
       weighings: step && isWeighingStep(step.stepKind) ? weighLines : [],
@@ -386,3 +390,20 @@ export async function paperEntryView(ctx: AuthContext, batchId: string) {
 }
 
 export type PaperEntryView = Awaited<ReturnType<typeof paperEntryView>>;
+
+/** ADR-137: how a paper weighing row is typed in: units counted or measured, the whole container, the reading reached. */
+function paperEntryMethod(bm: typeof batchMaterials.$inferSelect, baseUom: string) {
+  const facts = { addMethod: bm.addMethod, methodUnit: bm.methodUnit, methodUnitQty: bm.methodUnitQty, methodSpec: bm.methodSpec, methodTargetQty: bm.methodTargetQty, theoreticalQtyG: bm.theoreticalQtyG, maxQtyG: bm.maxQtyG };
+  const spec = readSpec(bm.methodSpec);
+  const inUnits = bm.addMethod !== "whole_container" && entersUnits(facts);
+  const unit = bm.addMethod === "volume" || spec.recordBy === "volume" ? "mL" : (bm.methodUnit ?? "");
+  return {
+    addMethod: bm.addMethod,
+    sentence: methodSentence(facts, baseUom),
+    entersUnits: inUnits,
+    unit: inUnits ? unit : baseUom,
+    unitLabel: inUnits ? `How many ${unitWord(unit, 2)}` : bm.addMethod === "whole_container" ? null : `Amount (${baseUom})`,
+    wholeContainer: bm.addMethod === "whole_container",
+    reading: bm.addMethod === "as_needed" ? { name: spec.reading?.name ?? "Reading", range: readingRangeText(spec) } : null,
+  };
+}

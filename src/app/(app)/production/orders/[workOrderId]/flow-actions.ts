@@ -8,8 +8,8 @@ import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
 import { markLabelJobPrinted } from "@/modules/documents";
 import type { PrintLabelsState } from "@/ui/labels/actions";
-import { floorCheckNext } from "@/modules/production";
-import { approveStepException, batchSiteId, requestMaterialSubstitution, stopForToday, useApprovedAlternative, withdrawMaterialSubstitution, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
+import { attachStepPhoto, floorCheckNext } from "@/modules/production";
+import { approveStepException, batchSiteId, requestMaterialSubstitution, stopForToday, useApprovedAlternative, withdrawMaterialSubstitution, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, recordNoneNeeded, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 import { correctionReasonText } from "@/modules/production/floor-words";
 import { plainWords } from "@/modules/production/plain-words";
@@ -108,10 +108,32 @@ export async function weighAction(_: FlowActionState, fd: FormData): Promise<Flo
       offPlanReasonCode: opt(fd, "offPlanReasonCode"),
       offPlanNote: opt(fd, "offPlanNote"),
       idempotencyKey: opt(fd, "idempotencyKey"),
+      // ADR-137: counted or measured units, a whole container, the reading reached (as needed), another lot follows.
+      units: opt(fd, "units"),
+      wholeContainer: str(fd, "wholeContainer") === "1",
+      reading: opt(fd, "reading"),
+      partial: str(fd, "partial") === "1",
     });
     refreshCurrentPage();
     const needsCheck = r.needsCheck;
     return { ok: true, message: needsCheck ? `${r.materialName}: saved. Second check needed.` : `${r.materialName}: saved.`, dispenseRecordId: r.dispenseRecordId, needsCheck, next: needsCheck ? await nextCheck(ctx, "weighing_check", batchId) : null };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/**
+ * ADR-137 "None was needed": an as-needed line whose reading was already right. The second person signs here with their
+ * own password when the line needs a check (there is no weighing for them to check later).
+ */
+export async function noneNeededAction(_: FlowActionState, fd: FormData): Promise<FlowActionState> {
+  try {
+    const ctx = await requireContext();
+    const batchId = uuid.parse(str(fd, "batchId"));
+    const checker = await signer(ctx, fd, "checker", "production.dispense_record.approve", batchId);
+    const r = await recordNoneNeeded(ctx, { batchId, batchMaterialId: uuid.parse(str(fd, "batchMaterialId")), reading: str(fd, "reading") ?? "", idempotencyKey: opt(fd, "idempotencyKey") }, { checker });
+    refreshCurrentPage();
+    return { ok: true, message: `${r.materialName}: none was needed. Saved.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -143,8 +165,17 @@ export async function checklistCardAction(_: ActionState, fd: FormData): Promise
     const answers = itemIds.map((itemId) => {
       const a = allOk ? "yes" : str(fd, `answer-${itemId}`);
       if (a !== "yes" && a !== "no") throw new DomainError("validation", "Answer every check with Yes or No.", { fieldErrors: { [`answer-${itemId}`]: "Yes or No." } });
-      return { itemId, answer: a as "yes" | "no", note: allOk ? null : opt(fd, `note-${itemId}`) };
+      return { itemId, answer: a as "yes" | "no", note: allOk ? null : opt(fd, `note-${itemId}`), photoAttachmentId: null as string | null };
     });
+    // ADR-137 "Take a photo": a photo taken on this phone is stored first and the answer points at it.
+    for (const ans of answers) {
+      const f = fd.get(`photo-${ans.itemId}`);
+      if (f && typeof f === "object" && "arrayBuffer" in f && (f as File).size > 0) {
+        const file = f as File;
+        const r = await attachStepPhoto(ctx, { batchId, stepNo, itemId: ans.itemId, fileName: file.name, declaredType: file.type, bytes: new Uint8Array(await file.arrayBuffer()), idempotencyKey: `${opt(fd, "idempotencyKey") ?? crypto.randomUUID()}-${ans.itemId}` });
+        ans.photoAttachmentId = r.attachmentId;
+      }
+    }
     const checker = await signer(ctx, fd, "checker", "production.line_clearance.approve", batchId);
     const r = await submitChecklist(ctx, { batchId, stepNo, answers, idempotencyKey: opt(fd, "idempotencyKey") }, { checker });
     refreshCurrentPage();

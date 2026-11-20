@@ -223,6 +223,39 @@ export function toBomLineInputs(batchG: Num, lines: RecipeLineDraft[], units: Un
   });
 }
 
+/**
+ * ADR-137: one plain sentence for a wizard line that is not weighed ("Count 5 sachets", "Measure 250 mL", "Add the whole
+ * pail", "Add until pH 5.0–5.5, at most 40 g", "Scoop with spoon #3: 3 scoops"); null for a weighed line.
+ */
+export function lineHowText(l: RecipeLineDraft, unitNames: Record<string, string> = {}): string | null {
+  const m = methodOf(l);
+  const q = (l.methodQty ?? "").trim() || "?";
+  const unit = l.unitId ? (unitNames[l.unitId] ?? "unit") : "unit";
+  const plural = (u: string, c: string) => (c === "1" ? u : /(s|x|ch|sh)$/i.test(u) ? `${u}es` : `${u}s`);
+  const round = l.scaling === "proportional_round" && l.rounding ? ` (bigger or smaller batch: ${l.rounding === "nearest" ? "round to the nearest" : `round ${l.rounding}`})` : l.scaling === "fixed" ? " (same for every batch)" : "";
+  switch (m) {
+    case "count":
+      return `Count ${q} ${plural(unit, q)}${round}`;
+    case "volume":
+      return `Measure ${q} mL${round}`;
+    case "whole_container":
+      return q === "1" ? `Add the whole ${unit}` : `Add ${q} whole ${plural(unit, q)}`;
+    case "as_needed": {
+      const r = (l.readingName ?? "").trim() || "it is right";
+      const range = l.readingMin && l.readingMax ? ` ${l.readingMin}–${l.readingMax}` : l.readingMin ? ` at least ${l.readingMin}` : l.readingMax ? ` at most ${l.readingMax}` : "";
+      const u = l.recordBy === "volume" ? "mL" : l.recordBy === "count" ? plural(unit, "2") : "g";
+      return `Add until ${r}${range}${l.readingUnit ? ` ${l.readingUnit}` : ""}${l.maxAmount ? `, at most ${l.maxAmount} ${u}` : ""}`;
+    }
+    case "custom": {
+      const name = (l.customName ?? "").trim() || "My own way";
+      const cu = (l.customUnit ?? "").trim() || "unit";
+      return lineInUnits(l) ? `${name}: ${q} ${plural(cu, q)}${round}` : `${name}: write down what was used`;
+    }
+    default:
+      return null;
+  }
+}
+
 export type StoredLineRow = {
   materialId: string;
   quantityG: string;

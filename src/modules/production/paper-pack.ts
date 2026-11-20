@@ -15,6 +15,7 @@ import { isPackagingKind } from "./packaging-lines";
 import { composePaperPack } from "./paper-pack-html";
 import { type FormulaSnapshot, addDays, isWeighingStep, lockBatch, manilaToday } from "./shared";
 import { toleranceRange } from "./weigh-window";
+import { entersUnits, methodSentence, readSpec, readingRangeText, unitWindow, unitWord, unitsText } from "@/modules/masterdata/add-methods";
 
 /**
  * ADR-134 — the paper batch record pack: one printable set of pages per batch, one issued page per routing step (each
@@ -39,6 +40,31 @@ function gramsText(v: Decimal.Value) {
   return fmtQty(d.toDecimalPlaces(3), "g", dp);
 }
 
+/** ADR-137: the paper row of a line that is counted, measured, added whole, added as needed or an own way. */
+function paperMethod(bm: typeof batchMaterials.$inferSelect, baseUom: string) {
+  const facts = { addMethod: bm.addMethod, methodUnit: bm.methodUnit, methodUnitQty: bm.methodUnitQty, methodSpec: bm.methodSpec, methodTargetQty: bm.methodTargetQty, theoreticalQtyG: bm.theoreticalQtyG, maxQtyG: bm.maxQtyG };
+  const spec = readSpec(bm.methodSpec);
+  const w = unitWindow({ ...facts, tolerancePct: bm.tolerancePct, toleranceAbsG: bm.toleranceAbsG, methodToleranceUnits: bm.methodToleranceUnits });
+  const unit = bm.addMethod === "volume" || spec.recordBy === "volume" ? "mL" : bm.methodUnit;
+  const out: { howText: string; amountUnit: string; targetText?: string; rangeText?: string; toleranceText?: string; readingText?: string; noteText?: string } = {
+    howText: methodSentence(facts, baseUom),
+    amountUnit: entersUnits(facts) ? unitWord(unit ?? "", 2) : bm.addMethod === "whole_container" ? "✓ whole" : baseUom,
+  };
+  if (w) {
+    out.targetText = `${unitsText(w.target, w.unit)}${bm.methodUnitQty ? ` (${gramsText(bm.theoreticalQtyG)})` : ""}`;
+    out.rangeText = w.min.eq(w.max) ? `exactly ${unitsText(w.target, w.unit)}` : `${w.min.toString()} – ${unitsText(w.max, w.unit)}`;
+    out.toleranceText = bm.addMethod === "whole_container" ? "the whole container" : bm.methodToleranceUnits !== null ? `± ${unitsText(bm.methodToleranceUnits, w.unit)}` : `± ${fmtQty(bm.tolerancePct, "%", 2)}`;
+  }
+  if (bm.addMethod === "as_needed") {
+    out.targetText = `about ${gramsText(bm.theoreticalQtyG)}`;
+    out.rangeText = `at most ${gramsText(bm.maxQtyG ?? bm.theoreticalQtyG)}`;
+    out.toleranceText = "more needs QA";
+    out.readingText = `${readingRangeText(spec)} reached`;
+  }
+  if (bm.operatorNote) out.noteText = bm.operatorNote;
+  return out;
+}
+
 /** The ingredient lines of the weighing page and the finish counts of the last page (pure data, frozen on the page). */
 async function packExtras(q: DbOrTx, b: typeof batches.$inferSelect) {
   const snap = b.formulaSnapshot as FormulaSnapshot;
@@ -58,7 +84,7 @@ async function packExtras(q: DbOrTx, b: typeof batches.$inferSelect) {
     .map((l) => {
       const { min, max } = toleranceRange(l.bm.theoreticalQtyG, l.bm.tolerancePct, l.bm.toleranceAbsG);
       const lots = reserved.filter((r) => r.materialId === l.m.id).map((r) => r.lotNumber);
-      return {
+      const base = {
         lineNo: l.bm.lineNo,
         materialName: l.m.name,
         materialCode: l.m.code,
@@ -68,6 +94,8 @@ async function packExtras(q: DbOrTx, b: typeof batches.$inferSelect) {
         needsCheck: snap.lines.find((x) => x.lineNo === l.bm.lineNo)?.requiresChecker !== false,
         lotHint: lots.length ? lots.join(", ").slice(0, 120) : null,
       };
+      // ADR-137: a line that is not weighed says how it is added, what to write in the amount box, and the reading.
+      return l.bm.addMethod === "weigh" ? (l.bm.operatorNote ? { ...base, noteText: l.bm.operatorNote } : base) : { ...base, ...paperMethod(l.bm, l.m.baseUom) };
     });
   const packaging = lines.filter((l) => isPackagingKind(l.m.materialKind));
   const finishCounts: NonNullable<PaperPageExtras["finishCounts"]> = [

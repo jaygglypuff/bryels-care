@@ -93,6 +93,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
           lines={v.lines.map((l) => ({
             id: l.batchMaterialId,
             name: l.materialName,
+            how: l.how,
             qty: l.qty,
             uom: l.baseUom,
             state: l.state,

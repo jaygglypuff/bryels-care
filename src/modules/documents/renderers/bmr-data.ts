@@ -36,6 +36,8 @@ const dispenseRow = z.object({
   /** Voided or superseded weighing: printed struck through with the reason (append-only). */
   struck: z.boolean(),
   struckReason: opt,
+  /** Optional (ADR-137): how this amount was taken ("5 sachets counted", "252 mL measured", "the whole pail", "pH 5.3"). */
+  howText: opt.optional(),
 });
 
 const materialLine = z.object({
@@ -48,6 +50,8 @@ const materialLine = z.object({
   actualText: text,
   status: text,
   records: z.array(dispenseRow).max(50),
+  /** Optional (ADR-137): how the recipe says to add it ("Count 8 sachets"; rounded or "none was needed" in words). */
+  howText: opt.optional(),
 });
 
 const section = <T extends z.ZodTypeAny>(row: T) => z.object({ available: z.boolean(), rows: z.array(row).max(2000) });
@@ -201,7 +205,7 @@ export const bmrPaperPageDataSchema = z.object({
      * weight, time, done by and checked by. Absent on pages issued before ADR-134 (their text is unchanged).
      */
     weighings: z
-      .array(z.object({ lineNo: z.number().int(), materialName: text, materialCode: text, targetText: text, toleranceText: text, rangeText: text, needsCheck: z.boolean(), lotHint: opt }))
+      .array(z.object({ lineNo: z.number().int(), materialName: text, materialCode: text, targetText: text, toleranceText: text, rangeText: text, needsCheck: z.boolean(), lotHint: opt, /** ADR-137: how it is added (absent = weigh) */ howText: opt.optional(), amountUnit: opt.optional(), readingText: opt.optional(), noteText: opt.optional() }))
       .max(80)
       .optional(),
     /** ADR-134: the last page lists the finish counts to write in (good pieces, rejects, packaging). */

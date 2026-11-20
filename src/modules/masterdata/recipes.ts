@@ -944,6 +944,8 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
     ownerAlone: alone,
     draft,
     materialNames: Object.fromEntries(lineMats.map((m) => [m.id, m.name])),
+    /** ADR-137: the packs and mL the lines use (any version), for amounts typed in units. */
+    units: Object.fromEntries((lines.some((l) => l.materialUnitId) ? await db.select({ id: materialUnits.id, name: materialUnits.name, qty: materialUnits.qtyPerUnit }).from(materialUnits).where(inArray(materialUnits.id, lines.map((l) => l.materialUnitId).filter((x): x is string => !!x))) : []).map((u) => [u.id, { name: u.name, qtyPerUnit: plain(u.qty) }])),
     can: {
       edit: ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.edit"),
       newVersion: ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create"),

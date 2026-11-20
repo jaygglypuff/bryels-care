@@ -1,7 +1,10 @@
 "use server";
 import type { ActionState } from "@/lib/errors";
 import {
+  addMaterialUnit,
   assignEquipmentToLine,
+  changeMaterialUnit,
+  retireMaterialUnit,
   changeEquipmentBlockingRule,
   changeLineStatus,
   changeLocationStatus,
@@ -119,6 +122,17 @@ export const saveMaterialAction: A = async (_p, fd) =>
 /** ADR-088: the 3-question form; a usual supplier is proposed for the approved list in the same transaction. */
 export const createMaterialAction: A = async (_p, fd) =>
   act((ctx) => createMaterialWithUsualSupplier(ctx, formInput(fd)), { revalidate: ["/masterdata/materials", "/procurement/suppliers"], redirectTo: (m) => `/masterdata/materials/${m.id}?created=1` });
+/* ADR-137: packs and mL of a material (versioned; a change adds a new version, the old stays on record) */
+export const addMaterialUnitFormAction: A = async (_p, fd) =>
+  act((ctx) => addMaterialUnit(ctx, { materialId: id(fd), kind: field(fd, "kind"), name: field(fd, "name"), qtyPerUnit: field(fd, "qtyPerUnit"), note: field(fd, "note"), idempotencyKey: field(fd, "$key") || null }), {
+    revalidate: ["/masterdata/materials"],
+    message: (u) => `Saved: 1 ${u.name} = ${Number(u.qtyPerUnit).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${u.baseUom}.`,
+  });
+export const changeMaterialUnitFormAction: A = async (_p, fd) =>
+  act((ctx) => changeMaterialUnit(ctx, { unitId: id(fd), qtyPerUnit: field(fd, "qtyPerUnit"), reason: field(fd, "reason") }), { revalidate: ["/masterdata/materials"], message: (u) => `Saved as version ${u.versionNo}. Recipes made before keep the old size.` });
+export const retireMaterialUnitFormAction: A = async (_p, fd) =>
+  act((ctx) => retireMaterialUnit(ctx, { unitId: id(fd), reason: field(fd, "reason") }), { revalidate: ["/masterdata/materials"], message: "Stopped. Recipes that use it keep it." });
+
 export const materialStatusAction: A = async (_p, fd) =>
   act((ctx) => changeMaterialStatus(ctx, { id: id(fd), status: field(fd, "status"), reason: field(fd, "reason") }), { revalidate: ["/masterdata/materials"], message: (m) => `Material is now ${m.status}.` });
 

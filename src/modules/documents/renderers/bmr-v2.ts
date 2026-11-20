@@ -187,10 +187,10 @@ function part2(def: TemplateDefinition, sec: Section, d: BmrData): SafeHtml {
       const first = i === 0;
       const cls = r?.struck ? "struck" : "";
       return html`<tr data-line="${l.lineNo}">
-        <td>${first ? html`<b>${l.name}</b>${l.inci ? html`<span class="small">${l.inci}</span>` : ""}<span class="small">${l.code} · allowed ${l.toleranceText}</span>` : html`<span class="small">${l.name}, weighing ${i + 1}</span>`}</td>
+        <td>${first ? html`<b>${l.name}</b>${l.inci ? html`<span class="small">${l.inci}</span>` : ""}<span class="small">${l.code} · allowed ${l.toleranceText}</span>${l.howText ? html`<span class="small">How: ${l.howText}</span>` : ""}` : html`<span class="small">${l.name}, weighing ${i + 1}</span>`}</td>
         <td><span class="${cls}">${r?.lotNumber ?? ""}</span>${r?.supplierLot ? html`<span class="small">Supplier lot ${r.supplierLot}</span>` : ""}${r ? html`<span class="small">Expires ${r.expiryText}</span>` : ""}</td>
         <td class="num">${first ? l.theoreticalText : ""}</td>
-        <td class="num"><span class="${cls}">${r?.actualText ?? ""}</span>${r?.struck && r.struckReason ? html`<span class="reason">${r.struckReason}</span>` : ""}</td>
+        <td class="num"><span class="${cls}">${r?.actualText ?? ""}</span>${r?.howText ? html`<span class="small">${r.howText}</span>` : ""}${r?.struck && r.struckReason ? html`<span class="reason">${r.struckReason}</span>` : ""}</td>
         <td>${r ? (r.withinTolerance ? html`<span class="ok">✓ Yes</span>` : html`<span class="flag">✗ No</span>${r.exceptionReason ? html`<span class="reason">${r.exceptionReason}</span>` : ""}`) : ""}${r?.scale ? html`<span class="small">Scale ${r.scale}</span>` : ""}</td>
         <td>${r ? sig(r.operator, r.operatorRole, r.at, false) : ""}</td>
         <td>${r ? sig(r.checker, r.checkerRole, r.checkedAt, d.controlledRecord === "paper") : ""}</td>

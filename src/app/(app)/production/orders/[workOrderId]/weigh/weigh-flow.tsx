@@ -21,6 +21,7 @@ import {
   takeAlternativeAction,
   withdrawAskAction,
   checkWeighingAction,
+  noneNeededAction,
   stepDoneAction,
   weighAction,
   type FlowActionState,
@@ -34,6 +35,22 @@ const factorOf = (card: Card) => (card.baseUom === "g" && card.unit === "kg" ? 1
 const inUnit = (card: Card, base: Decimal.Value) => new Decimal(base || 0).div(factorOf(card));
 const show = (card: Card, base: Decimal.Value) => `${plainNumber(inUnit(card, base).toDecimalPlaces(3))} ${card.unit}`;
 const firstName = (name: string | null | undefined) => (name ?? "the operator").split(/\s+/)[0];
+
+/* ADR-137: lines that are counted, measured, added whole or added until a reading is right. */
+const unitsMode = (card: Card) => card.method.entersUnits && card.method.addMethod !== "whole_container";
+const unitsText = (n: Decimal.Value, unit: string | null) => {
+  const u = unit ?? "";
+  const one = new Decimal(n).eq(1);
+  const word = !u || one || u === "mL" || /[^A-Za-z ]/.test(u) ? u : /(s|x|ch|sh)$/i.test(u) ? `${u}es` : `${u}s`;
+  return `${plainNumber(new Decimal(n).toDecimalPlaces(3))} ${word}`.trim();
+};
+/** What was added on a done line: "5 sachets (125 g)", "the whole pail (480 g)", or the weight. */
+const doneText = (card: Card) =>
+  card.method.addMethod === "whole_container"
+    ? `the whole ${card.method.unit ?? "container"} (${show(card, card.weighed)})`
+    : unitsMode(card)
+      ? `${unitsText(card.method.unitsDone, card.method.unit)} (${show(card, card.weighed)})`
+      : show(card, card.weighed);
 
 /**
  * Weigh screen (S4, round 5). Portrait: ingredient chips, the current card, the keypad under the field, Save under
@@ -120,7 +137,7 @@ export function WeighFlow(p: {
               )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium text-fg">{c.materialName}</span>
-                <span className="block text-[13px] tabular text-muted">{c.done ? show(c, c.weighed) : q ? "waiting for signal" : `weigh ${show(c, c.target)}`}</span>
+                <span className="block text-[13px] tabular text-muted">{c.method.noneNeeded ? "none was needed" : c.done ? doneText(c) : q ? "waiting for signal" : c.method.addMethod === "weigh" ? `weigh ${show(c, c.target)}` : c.method.sentence.toLowerCase()}</span>
               </span>
             </button>
           );
@@ -209,21 +226,45 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
   const lot = pickable[lotIdx];
   const offPlan = !!lot?.offPlan;
   const reasonOk = !offPlan || (!!reason && (reason !== "other" || reasonNote.trim().length >= 3));
+  // ADR-137: how this line is added decides what is typed (a weight, a count, mL, nothing for a whole container).
+  const M = card.method;
+  const inUnits = unitsMode(card);
+  const whole = M.addMethod === "whole_container";
+  const asNeeded = M.addMethod === "as_needed";
+  const [reading, setReading] = useState("");
+  // Which box the big keypad types into (the amount, or the reading of an as-needed line).
+  const [field, setField] = useState<"qty" | "reading">("qty");
   // Typed in the weighing unit (kg or g), at most gram resolution; compared in the base unit like the server.
-  const entered = /^\d+(\.\d{1,3})?$/.test(qty) ? new Decimal(qty) : null;
-  const enteredBase = entered ? entered.mul(factorOf(card)) : null;
+  const entered = whole ? new Decimal(1) : (inUnits && M.wholeUnits ? /^\d{1,6}$/ : /^\d+(\.\d{1,3})?$/).test(qty) ? new Decimal(qty) : null;
+  const enteredBase = !entered || whole ? null : inUnits ? entered.mul(M.perUnit ?? 0) : entered.mul(factorOf(card));
   const total = enteredBase ? enteredBase.plus(card.weighed) : null;
-  const tol = !total
+  const unitsTotal = entered && (inUnits || whole) ? entered.plus(M.unitsDone) : null;
+  const tol = whole
     ? null
-    : total.lt(card.min)
-      ? { kind: "low" as const, by: new Decimal(card.min).minus(total) }
-      : total.gt(card.max)
-        ? { kind: "high" as const, by: total.minus(card.max) }
-        : { kind: "ok" as const, by: new Decimal(0) };
+    : M.window && unitsTotal
+      ? unitsTotal.lt(M.window.min)
+        ? { kind: "low" as const, by: new Decimal(M.window.min).minus(unitsTotal) }
+        : unitsTotal.gt(M.window.max)
+          ? { kind: "high" as const, by: unitsTotal.minus(M.window.max) }
+          : { kind: "ok" as const, by: new Decimal(0) }
+      : asNeeded && total && M.maxG
+        ? total.gt(M.maxG)
+          ? { kind: "high" as const, by: total.minus(M.maxG) }
+          : { kind: "ok" as const, by: new Decimal(0) }
+        : !total
+          ? null
+          : total.lt(card.min)
+            ? { kind: "low" as const, by: new Decimal(card.min).minus(total) }
+            : total.gt(card.max)
+              ? { kind: "high" as const, by: total.minus(card.max) }
+              : { kind: "ok" as const, by: new Decimal(0) };
+  const byText = (by: Decimal) => (M.window ? unitsText(by, M.window.unit) : show(card, by));
+  const readingOk = !asNeeded || /^-?\d+(\.\d{1,6})?$/.test(reading.trim());
   // While the first digits are typed the amount is always "too little": say so only once it could be a weight.
-  const typingStill = tol?.kind === "low" && entered !== null && qty.length < String(inUnit(card, card.min).toFixed(0)).length;
+  const typingStill = tol?.kind === "low" && entered !== null && !M.window && qty.length < String(inUnit(card, card.min).toFixed(0)).length;
   const lotOk = p.lotConfirm === "none" || lotCode.startsWith("BC:LOT:");
-  const canSave = p.canWeigh && !!lot && !!entered && lotOk && tol?.kind === "ok" && reasonOk && (!p.requiresScale || !!scale);
+  const needsScale = p.requiresScale && M.needsScale;
+  const canSave = p.canWeigh && !!lot && !!entered && lotOk && (whole || tol?.kind === "ok") && reasonOk && readingOk && (!needsScale || !!scale);
   const whyNot = !p.canWeigh
     ? (p.block?.sentence ?? "You cannot weigh now.")
     : !lot
@@ -233,17 +274,21 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
         : !reasonOk
           ? "Tap why you use another lot first."
           : !entered
-            ? "Type the weight first."
-            : p.requiresScale && !scale
+            ? inUnits
+              ? `Type how many ${unitsText(2, M.unit).replace(/^2 /, "")} first.`
+              : "Type the weight first."
+            : !readingOk
+              ? `Type the ${M.reading?.name ?? "reading"} you measured.`
+            : needsScale && !scale
               ? "No scale can be used now. See why above."
               : null;
   // B6: no signal → queue on this phone (when it may work offline), never a full-page error; typed values stay.
   const offlineAware: FormAction<FlowActionState> = async (prev, fd) => {
     const queue = async (): Promise<FlowActionState> => {
-      if (offPlan) return { ok: false, message: "No signal. What you typed is kept here. Tap Save again when you have signal." };
+      if (offPlan || whole || asNeeded) return { ok: false, message: "No signal. What you typed is kept here. Tap Save again when you have signal, or write it on the paper batch record." };
       try {
         await syncAgent().enqueue(
-          queuedWeighCommand({ siteId: p.siteId, batchId: p.batchId, batchMaterialId: card.batchMaterialId, materialName: card.materialName, qty, unit: card.unit, lotCode, lotNumber: lot?.lotNumber ?? null, lotVia, locationId: lot?.locationId ?? null, requiresScale: !!p.requiresScale, scale }),
+          queuedWeighCommand({ siteId: p.siteId, batchId: p.batchId, batchMaterialId: card.batchMaterialId, materialName: card.materialName, qty, unit: inUnits ? (M.unit ?? card.unit) : card.unit, lotCode, lotNumber: lot?.lotNumber ?? null, lotVia, locationId: lot?.locationId ?? null, requiresScale: !!p.requiresScale, scale }),
         );
         const msg = `${card.materialName}: saved on this phone. It will send when you have signal.`;
         p.onQueued(msg);
@@ -255,7 +300,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
     if (typeof navigator !== "undefined" && !navigator.onLine) return queue();
     try {
       const r = await weighAction(prev, fd);
-      if (r?.ok) p.onSaved(`Saved: ${card.materialName} ${qty} ${card.unit}.${card.needsCheck ? " It waits for the second check." : ""}`);
+      if (r?.ok) p.onSaved(`Saved: ${card.materialName} ${whole ? `the whole ${M.unit ?? "container"}` : inUnits ? unitsText(qty, M.unit) : `${qty} ${card.unit}`}.${card.needsCheck ? " It waits for the second check." : ""}`);
       return r;
     } catch (e) {
       if (noSignal(e)) return queue();
@@ -271,13 +316,43 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
         <h2 className="text-title text-fg">{card.materialName}</h2>
         {card.needsCheck && <Chip tone="warn">Second check</Chip>}
       </div>
-      <p className="mt-1 font-display text-readout leading-none tabular text-fg" data-testid="weigh-target">
-        {show(card, card.target)}
-      </p>
-      <p className="mt-1 text-[16px] text-muted">
-        OK from {show(card, card.minShown)} to {show(card, card.maxShown)}
-        {new Decimal(card.weighed).gt(0) ? ` · already ${show(card, card.weighed)}` : ""}
-      </p>
+      {M.addMethod === "weigh" ? (
+        <>
+          <p className="mt-1 font-display text-readout leading-none tabular text-fg" data-testid="weigh-target">
+            {show(card, card.target)}
+          </p>
+          <p className="mt-1 text-[16px] text-muted">
+            OK from {show(card, card.minShown)} to {show(card, card.maxShown)}
+            {new Decimal(card.weighed).gt(0) ? ` · already ${show(card, card.weighed)}` : ""}
+          </p>
+        </>
+      ) : (
+        // ADR-137: count, measure, whole container, until a reading is right, or the recipe writer's own way.
+        <div data-testid="method-card" data-method={M.addMethod}>
+          <p className="mt-1 text-[15px] font-semibold uppercase tracking-wide text-primary-text">{M.addMethod === "custom" ? (M.customName ?? "Add") : M.addMethod === "count" ? "Count" : M.addMethod === "volume" ? "Measure" : M.addMethod === "whole_container" ? "Whole container" : "Add until it is right"}</p>
+          <p className="mt-1 font-display text-readout leading-none tabular text-fg" data-testid="weigh-target">
+            {whole ? `the whole ${M.unit ?? "container"}` : asNeeded ? (M.readingText || "until it is right") : inUnits && M.targetUnits ? unitsText(M.targetUnits, M.unit) : show(card, card.target)}
+          </p>
+          <p className="mt-1 text-[16px] text-muted" data-testid="method-window">
+            {asNeeded
+              ? `About ${M.recordBy && M.recordBy !== "weigh" && M.perUnit ? unitsText(new Decimal(card.target).div(M.perUnit).toDecimalPlaces(3), M.unit) : show(card, card.target)} · at most ${M.recordBy && M.recordBy !== "weigh" && M.perUnit && M.maxG ? unitsText(new Decimal(M.maxG).div(M.perUnit).toDecimalPlaces(3), M.unit) : show(card, M.maxG ?? card.max)}`
+              : whole
+                ? `${M.targetUnits && new Decimal(M.targetUnits).gt(1) ? `${unitsText(M.targetUnits, M.unit)}. Scan each one. ` : ""}Everything in it goes in. Nothing to weigh.`
+                : M.window
+                  ? M.window.min === M.window.max
+                    ? `Exactly ${unitsText(M.window.min, M.window.unit)}`
+                    : `OK from ${plainNumber(new Decimal(M.window.min))} to ${unitsText(M.window.max, M.window.unit)}`
+                  : `OK from ${show(card, card.minShown)} to ${show(card, card.maxShown)} (write what you used)`}
+            {new Decimal(card.weighed).gt(0) ? ` · already ${doneText(card)}` : ""}
+          </p>
+          {M.rounded && <p className="mt-1 text-[14px] text-fg-2" data-testid="method-rounded">{M.rounded}</p>}
+        </div>
+      )}
+      {M.note && (
+        <p className="mt-2 rounded-[8px] bg-[var(--info-bg,#eef4ff)] p-2 text-[15px]" data-testid="method-note">
+          Tip: {M.note}
+        </p>
+      )}
       {card.insteadOf && (
         <p className="mt-2 rounded-[8px] bg-[var(--info-bg,#eef4ff)] p-2 text-[14px]" data-testid="instead-of">Instead of {card.insteadOf.materialName} (for this batch only).</p>
       )}
@@ -323,7 +398,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
           ))}
         </ul>
       )}
-      {p.requiresScale && !scale && (
+      {p.requiresScale && M.needsScale && !scale && (
         <div className="mt-3">
           <EquipmentWhy items={p.scales} title="No scale can be used now" />
         </div>
@@ -335,10 +410,12 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
         {offPlan && <input type="hidden" name="offPlanReasonCode" value={reason} />}
         {offPlan && reason === "other" && <input type="hidden" name="offPlanNote" value={reasonNote} />}
         <input type="hidden" name="locationId" value={lot?.locationId ?? ""} />
-        <input type="hidden" name="qty" value={qty} />
-        <input type="hidden" name="uom" value={card.unit} />
+        {inUnits ? <input type="hidden" name="units" value={qty} /> : !whole && <input type="hidden" name="qty" value={qty} />}
+        {!inUnits && !whole && <input type="hidden" name="uom" value={card.unit} />}
+        {whole && <input type="hidden" name="wholeContainer" value="1" />}
+        {asNeeded && <input type="hidden" name="reading" value={reading} />}
         <input type="hidden" name="needsCheck" value={card.needsCheck ? "1" : "0"} />
-        {p.requiresScale && <input type="hidden" name="equipmentRef" value={scale} />}
+        {needsScale && <input type="hidden" name="equipmentRef" value={scale} />}
         {p.lotConfirm !== "none" && <input type="hidden" name="lotConfirm" value={lotCode} />}
         {p.lotConfirm !== "none" && lotVia && <input type="hidden" name="lotConfirmVia" value={lotVia} />}
         <div className="grid gap-2" data-testid="lot-scan">
@@ -382,15 +459,16 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
           {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
           {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}
         </div>
+        {!whole && (
         <KeypadField
           id={`qty-${card.batchMaterialId}`}
-          label={`Weight on the scale (${card.unit})`}
-          unit={card.unit}
+          label={inUnits ? `How many ${unitsText(2, M.unit).replace(/^2 /, "")}${M.addMethod === "volume" || M.recordBy === "volume" ? " (in the jug)" : ""}` : asNeeded ? `How much you used (${card.unit})` : M.addMethod === "custom" ? `How much you used (${card.unit})` : `Weight on the scale (${card.unit})`}
+          unit={inUnits ? (M.unit ?? "") : card.unit}
           large
           value={qty}
           // ADR-135: a keyboard, USB scale or scanner types here too; Enter = Save (only when Save could be pressed).
           onChange={setQty}
-          decimal
+          decimal={!(inUnits && M.wholeUnits)}
           maxLength={10}
           readOnly={!p.canWeigh}
           // The cursor goes to the weight once the lot is confirmed, so a scale's numbers land here (before that, a
@@ -399,9 +477,9 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
           onEnter={(el) => {
             if (canSave) el.form?.requestSubmit();
           }}
-          active
-          onFocus={() => undefined}
-          error={fe.qty ?? null}
+          active={field === "qty"}
+          onFocus={() => setField("qty")}
+          error={fe.qty ?? fe.units ?? null}
           hint={
             tol && !typingStill ? (
               tol.kind === "ok" ? (
@@ -410,18 +488,35 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 font-semibold text-[var(--bad-fg)]">
-                  <AlertTriangle size={16} aria-hidden /> Too {tol.kind === "low" ? "little" : "much"} by {show(card, tol.by)}
+                  <AlertTriangle size={16} aria-hidden /> {M.window ? (tol.kind === "low" ? "Too few" : "Too many") : `Too ${tol.kind === "low" ? "little" : "much"}`} by {byText(tol.by)}
                 </span>
               )
             ) : undefined
           }
         />
+        )}
         {/* Round 5 problem 4: the keypad right under the field, Save under the keypad (no Save in mid-entry). */}
-        <Keypad value={qty} onChange={setQty} decimal maxLength={10} />
+        {!whole && <Keypad value={field === "reading" ? reading : qty} onChange={field === "reading" ? setReading : setQty} decimal={field === "reading" || !(inUnits && M.wholeUnits)} maxLength={10} />}
+        {asNeeded && (
+          // ADR-137: the reading reached is part of the record (pH 5.3); outside the range needs QA, like too much.
+          <KeypadField
+            id={`reading-${card.batchMaterialId}`}
+            label={`${M.reading?.name ?? "Reading"} you measured${M.readingText ? ` (want ${M.readingText.replace(/^\S+\s/, "")})` : ""}`}
+            unit={M.reading?.unit ?? ""}
+            value={reading}
+            onChange={setReading}
+            decimal
+            maxLength={10}
+            readOnly={!p.canWeigh}
+            active={field === "reading"}
+            onFocus={() => setField("reading")}
+            error={fe.reading ?? null}
+          />
+        )}
         {tol && tol.kind !== "ok" && !typingStill ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="cta" size="lg" onClick={() => setQty("")}>
-              Weigh again
+              {M.addMethod === "count" ? "Count again" : M.addMethod === "volume" ? "Measure again" : "Weigh again"}
             </Button>
             <a href={`${p.moreHref}&line=${card.batchMaterialId}`} className="inline-flex min-h-[52px] items-center rounded-[6px] border border-line px-5 text-[15px] text-fg">
               Ask for approval
@@ -450,11 +545,12 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onSaved: (
           </div>
         )}
         <FormMessage state={state} />
+        {asNeeded && new Decimal(card.weighed).eq(0) && <NoneNeeded {...p} card={card} />}
         {/* Round 5 problem 4: the partial-container case is a visible link, not hidden under More details. */}
         <Link href={`${p.moreHref}&line=${card.batchMaterialId}`} className="inline-flex min-h-[44px] items-center text-[15px] text-primary-text underline" data-testid="two-lots">
           Container almost empty? Use two lots
         </Link>
-        {p.requiresScale && (
+        {needsScale && (
           <details className="text-[14px]">
             <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">Change the scale</summary>
             <div className="grid gap-2 pt-1">
@@ -498,7 +594,7 @@ function DoneCard(p: Parameters<typeof WeighFlow>[0] & { card: Card; onNext: (()
     <section className={cx("grid gap-3 rounded-[8px] border bg-surface p-5", w ? "border-2 border-[var(--warn-bd)]" : "border-line")} data-testid={w ? "second-check" : "weigh-done"}>
       <p className="text-[18px] font-semibold text-fg">
         <CheckCircle2 size={22} className="mr-2 inline text-[var(--ok-fg)]" aria-hidden />
-        {card.materialName}: {show(card, card.weighed)} weighed{w ? ` by ${firstName(w.operator)}` : ""}.
+        {card.method.noneNeeded ? `${card.materialName}: none was needed (${card.method.reading?.name ?? "reading"} ${card.method.noneNeeded.reading ?? ""}).` : `${card.materialName}: ${doneText(card)} ${card.method.addMethod === "weigh" ? "weighed" : "added"}${w ? ` by ${firstName(w.operator)}` : ""}.`}
       </p>
       {w && iAmChecker && (
         <div className="grid gap-2" data-testid="own-weigh-check">
@@ -568,6 +664,57 @@ function CheckHere({ batchId, weighing, materialName, amount, checkers }: { batc
           Yes, correct
         </SubmitButton>
         <Button type="button" variant="secondary" size="lg" onClick={() => { setOpen(false); setWho(null); }}>
+          Cancel
+        </Button>
+      </div>
+      <FormMessage state={state} />
+    </form>
+  );
+}
+
+/** ADR-137 "None was needed": the reading was already right; a second person signs here with their own password when needed. */
+function NoneNeeded(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
+  const { card } = p;
+  const [open, setOpen] = useState(false);
+  const [reading, setReading] = useState("");
+  const [who, setWho] = useState("");
+  const [state, action] = useInPlaceAction<FlowActionState>(noneNeededAction);
+  const key = useClientKey();
+  if (!p.canWeigh) return null;
+  if (!open)
+    return (
+      <button type="button" className="min-h-[44px] text-left text-[15px] text-primary-text underline" onClick={() => setOpen(true)} data-testid="none-needed">
+        {card.method.reading?.name ?? "The reading"} is already right? None was needed
+      </button>
+    );
+  const checkers = p.checkers.filter((c) => c.id !== p.viewer.userId);
+  return (
+    <form action={action} className="grid gap-2 rounded-[8px] bg-surface-2 p-3" data-testid="none-needed-form">
+      <input type="hidden" name="batchId" value={p.batchId} />
+      <input type="hidden" name="batchMaterialId" value={card.batchMaterialId} />
+      <input type="hidden" name="reading" value={reading} />
+      {key && <input type="hidden" name="idempotencyKey" value={`${key}-none`} />}
+      <KeypadField id={`none-${card.batchMaterialId}`} label={`${card.method.reading?.name ?? "Reading"} you measured`} unit={card.method.reading?.unit ?? ""} value={reading} onChange={setReading} decimal maxLength={10} active onFocus={() => undefined} error={state?.fieldErrors?.reading ?? null} />
+      <Keypad value={reading} onChange={setReading} decimal maxLength={10} />
+      {card.needsCheck && (
+        <>
+          <p className="text-[15px]">A second person looks at the meter and signs here with their own password.</p>
+          <Select name="checkerId" value={who} onChange={(e) => setWho(e.target.value)} className="min-h-[52px]">
+            <option value="">Who checks?</option>
+            {checkers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.displayName}
+              </option>
+            ))}
+          </Select>
+          {who && <Input type="password" name="checkerPassword" autoComplete="off" placeholder="Their own password" className="min-h-[52px]" />}
+        </>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <SubmitButton variant="cta" size="lg" pendingText="Saving…" disabled={!reading.trim() || (card.needsCheck && !who)}>
+          Save: none was needed
+        </SubmitButton>
+        <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(false)}>
           Cancel
         </Button>
       </div>

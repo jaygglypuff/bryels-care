@@ -53,6 +53,7 @@ import { auditSentence, batchStateWord, plainReason } from "./record-words";
 import { cap, madeVsBoxedWords, num, outputKindWord, packagingToleranceWords, pct, pct2, placeNamesInText, qty, rangeWords, signedQty, stepKindWord, toleranceWords } from "./bmr-words";
 import { plainRole } from "@/lib/role-words";
 import { type FormulaSnapshot, idempotent } from "./shared";
+import { methodSentence, readSpec, roundedText, unitsText } from "@/modules/masterdata/add-methods";
 import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 import { ownerAloneApprovedSentence } from "@/lib/owner-alone-words";
 
@@ -100,6 +101,28 @@ export function bmrWatermark(status: string, reopenCount = 0): string {
 }
 
 const g1 = (v: Decimal.Value | null | undefined) => fmtQty(v, "", 1);
+
+type BmLine = typeof batchMaterials.$inferSelect;
+/** ADR-137: "Count 8 sachets · Rounded up from 7.5 to 8 sachets (recipe rule)", "Add until pH 5.0–5.5 … · None was needed: pH 5.2". */
+function bmrHow(bm: BmLine, rounding: string | null): string {
+  const facts = { addMethod: bm.addMethod, methodUnit: bm.methodUnit, methodUnitQty: bm.methodUnitQty, methodSpec: bm.methodSpec, methodTargetQty: bm.methodTargetQty, theoreticalQtyG: bm.theoreticalQtyG, maxQtyG: bm.maxQtyG };
+  const parts = [methodSentence(facts, "g")];
+  const r = roundedText(bm.methodRoundedFrom, bm.methodTargetQty, bm.methodUnit, rounding);
+  if (r) parts.push(r);
+  if (bm.methodUnitQty && bm.addMethod !== "as_needed") parts.push(`1 ${bm.addMethod === "volume" ? "mL" : (bm.methodUnit ?? "unit")} = ${new Decimal(bm.methodUnitQty).toString()} g`);
+  if (bm.noneNeeded) parts.push(`None was needed: ${readSpec(bm.methodSpec).reading?.name ?? "reading"} ${bm.noneNeededReading ?? ""}`.trim());
+  if (bm.operatorNote) parts.push(`Note: ${bm.operatorNote}`);
+  return parts.join(" · ");
+}
+/** ADR-137: what one record says about how it was taken. */
+function bmrRecordHow(r: typeof dispenseRecords.$inferSelect, bm: BmLine): string {
+  const spec = readSpec(bm.methodSpec);
+  const parts: string[] = [];
+  if (r.wholeContainer) parts.push(`the whole ${bm.methodUnit ?? "container"}`);
+  else if (r.methodUnitQty && r.enteredQty && r.enteredUom) parts.push(`${unitsText(r.enteredQty, r.enteredUom)} ${bm.addMethod === "volume" || spec.recordBy === "volume" ? "measured" : "counted"}`);
+  if (r.readingValue) parts.push(`${spec.reading?.name ?? "reading"} ${r.readingValue}${r.readingWithin === false ? " (outside the range)" : ""}`);
+  return parts.join(" · ");
+}
 const at = (v: Date | string | null | undefined) => (v ? fmtDateTime(v) : null);
 const maxDate = (dates: (Date | string | null | undefined)[]) =>
   dates.reduce<Date>((m, v) => {
@@ -314,8 +337,10 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         code: s?.materialCode ?? "",
         toleranceText: toleranceWords(min, max, bm.toleranceAbsG ? null : bm.tolerancePct, bm.toleranceAbsG ?? null),
         theoreticalText: g1(bm.theoreticalQtyG),
-        actualText: recs.length ? g1(bm.dispensedQtyG) : "",
+        actualText: recs.length ? g1(bm.dispensedQtyG) : bm.noneNeeded ? "0" : "",
         status: bm.status,
+        // ADR-137: how it is added, with a rounding or "none was needed" said in words (absent for weighed lines).
+        ...(bm.addMethod !== "weigh" || bm.noneNeeded ? { howText: bmrHow(bm, s?.method?.rounding ?? null) } : {}),
         records: recs.map((d) => ({
           lotNumber: d.lotNumber,
           supplierLot: d.supplierLot ?? null,
@@ -333,6 +358,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
           // A voided weighing stays on the record, struck through with its reason (W2B voidDispense).
           struck: !!d.r.voidedAt,
           struckReason: d.r.voidedAt ? `Voided: ${d.r.voidReason ?? "reason not given"}` : null,
+          ...(d.r.addMethod !== "weigh" ? { howText: bmrRecordHow(d.r, bm) } : {}),
         })),
       },
       theo: new Decimal(bm.theoreticalQtyG),

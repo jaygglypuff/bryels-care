@@ -145,6 +145,7 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
           product={{ unitNetMassG: r.product.unitNetMassG, family: r.product.family, pieceG: r.product.pieceG }}
           draft={r.draft}
           materialName={(id) => r.materialNames[id] ?? "Unknown ingredient"}
+          units={r.units}
           ingredientsLabel={word(fShown)}
           stepsLabel={ro ? word(rShown) : "none yet"}
         />

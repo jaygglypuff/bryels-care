@@ -16,6 +16,7 @@ import { assertLotUsable, lockLots } from "@/modules/inventory";
 import { heldLocations } from "@/modules/inventory/holds";
 import { currentPicks, pickProgress, type PickProgress } from "./flow-facts";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
+import { methodSentence } from "@/modules/masterdata/add-methods";
 import { type PickPlan, pickPlan } from "./pick-plan";
 import { expectedLots, stageInTx } from "./staging";
 import { transitionBatch } from "./state";
@@ -62,6 +63,8 @@ export type MaterialsListLot = {
 };
 
 export type MaterialsListLine = {
+  /** ADR-137: how the line is added when it is not weighed ("Count 5 sachets", "Add the whole pail"); null = weighed. */
+  how: string | null;
   batchMaterialId: string;
   lineNo: number;
   materialId: string;
@@ -192,6 +195,7 @@ export async function getMaterialsList(ctx: AuthContext, batchId: string) {
     const state = !c || c.action === "untaken" ? "open" : (c.action as BatchMaterialPickAction);
     const lineLots = await lotsFor(db, b, wo?.id ?? null, l.material.id, held);
     out.push({
+      how: l.bm.addMethod === "weigh" ? null : methodSentence({ addMethod: l.bm.addMethod, methodUnit: l.bm.methodUnit, methodUnitQty: l.bm.methodUnitQty, methodSpec: l.bm.methodSpec, methodTargetQty: l.bm.methodTargetQty, theoreticalQtyG: l.bm.theoreticalQtyG, maxQtyG: l.bm.maxQtyG }, l.material.baseUom),
       batchMaterialId: l.bm.id,
       lineNo: l.bm.lineNo,
       materialId: l.material.id,

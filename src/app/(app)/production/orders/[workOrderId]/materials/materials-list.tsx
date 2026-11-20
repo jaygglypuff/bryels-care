@@ -13,6 +13,8 @@ import { pickAction } from "../flow-actions";
 type Line = {
   id: string;
   name: string;
+  /** ADR-137: "Count 5 sachets" when not weighed. */
+  how?: string | null;
   qty: string;
   uom: string;
   state: "open" | "taken" | "not_needed" | "untaken";
@@ -156,6 +158,7 @@ function PickRow({
             <span className="tabular">{amount(line.qty, line.uom)}</span>
           </p>
           {line.packaging ? <p className="text-[14px] text-muted">For packing (not weighed)</p> : null}
+          {line.how ? <p className="text-[15px] font-medium text-fg-2" data-testid="pick-how">{line.how}</p> : null}
           {line.plan && line.plan.steps.length > 0 ? (
             <ul className="mt-1 grid gap-1.5 text-[16px] text-fg" data-testid="pick-plan">
               {line.plan.steps.map((st, i) => (

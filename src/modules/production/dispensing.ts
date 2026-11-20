@@ -444,7 +444,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
                 ? `${spec.reading?.name ?? "The reading"} ${reading.value} is outside ${readingRangeText(spec)}. Add a little more and measure again, or ask QA to approve on this device.`
                 : bm.addMethod === "as_needed"
                   ? `${shownTotal} is more than the most you may add (${range}). QA must approve on this device.`
-                  : `${shownTotal} is outside the tolerance ${range} (target ${judge.target}). ${judge.redo} Or request an exception: QA must approve on this device.`,
+                  : `${shownTotal} is outside the tolerance ${range} (target ${judge.target}). ${judge.redo.replace(/\.$/, "")}, or request an exception: QA must approve on this device.`,
               { rule: "V-TOL", min: min.toString(), max: max.toString(), actual: total.toString(), ...(reading ? { reading: reading.value, readingWithin: reading.within } : {}) },
             );
           }

@@ -2,7 +2,8 @@ import { screenPreferences } from "@/modules/governance";
 import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { MATERIAL_KIND_DEFAULTS, MATERIAL_TRANSITIONS, getMaterial, lookupLabels, materialFormOptions, type MaterialStatus } from "@/modules/masterdata";
+import { MATERIAL_KIND_DEFAULTS, MATERIAL_TRANSITIONS, getMaterial, listMaterialUnits, lookupLabels, materialFormOptions, type MaterialStatus } from "@/modules/masterdata";
+import { UnitsPanel } from "./units-panel";
 import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { EditDetails } from "@/ui/form-section";
@@ -83,6 +84,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
           <ReadOnlyNote what="this material" />
         </Card>
       )}
+      {m.materialKind !== "packaging" && <UnitsPanel materialId={m.id} baseUom={m.baseUom} units={await listMaterialUnits(ctx, m.id, { includeRetired: true })} canEdit={canEdit} />}
       {moves.length > 0 && (
         <MoreDetails title="Stop using it, or use it again">
           <p className="text-[13px] text-muted">Stopping needs a reason. &quot;No longer used&quot; is final; materials that were used are never deleted.</p>

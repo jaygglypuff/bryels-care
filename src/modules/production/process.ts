@@ -292,8 +292,9 @@ export async function recordReadingInTx(
   }
 }
 
-export function limitsLabel(p: { minValue: string | null; maxValue: string | null; uom: string | null; valueKind: string }) {
+export function limitsLabel(p: { minValue: string | null; maxValue: string | null; uom: string | null; valueKind: string; options?: string[] | null }) {
   if (p.valueKind === "boolean") return "the required answer (yes)";
+  if (p.valueKind === "choice") return `one of: ${(p.options ?? []).join(" / ")}`;
   if (p.minValue === null && p.maxValue === null) return "no limits";
   const u = p.uom ? ` ${p.uom}` : "";
   if (p.minValue !== null && p.maxValue !== null) return `${new Decimal(p.minValue).toString()}–${new Decimal(p.maxValue).toString()}${u}`;

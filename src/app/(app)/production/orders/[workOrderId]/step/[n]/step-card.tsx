@@ -226,7 +226,11 @@ export function StepCard(p: Props) {
             Go to Finish
           </Link>
         ) : step.isCheck ? (
-          <CheckList {...p} />
+          <>
+            <CheckList {...p} />
+            {/* ADR-137: a custom step can have ticks, photos AND fields or a timer: the rest follows once the ticks are saved. */}
+            {step.checklist.every((c) => c.answer) && step.isWait ? <WaitCard {...p} /> : step.checklist.every((c) => c.answer) && step.fields.length > 0 ? <FieldsCard {...p} /> : null}
+          </>
         ) : step.isWait ? (
           <WaitCard {...p} />
         ) : (
@@ -299,11 +303,11 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
  * Who checks this step (ADR-130). Default: a second person checks it on their own phone after you save (it lands on
  * their list). Only when the company allows it, a checker standing here may sign now with their OWN password.
  */
-function CheckerPick({ checkers, sameDevice }: { checkers: Person[]; sameDevice: boolean }) {
+function CheckerPick({ checkers, sameDevice, qa }: { checkers: Person[]; sameDevice: boolean; qa?: boolean }) {
   const [who, setWho] = useState("");
   return (
     <div className="grid gap-2 rounded-[8px] bg-surface-2 p-3" data-testid="checker-pick">
-      <p className="text-[15px] text-fg">A second person checks this step on their own phone after you save.</p>
+      <p className="text-[15px] text-fg">{qa ? "QA checks and signs this step on their own phone after you save." : "A second person checks this step on their own phone after you save."}</p>
       {sameDevice && checkers.length > 0 && (
         <>
           <label className="flex flex-col gap-1 text-[15px] font-medium">
@@ -399,6 +403,13 @@ function CheckList(p: Props) {
                 ))}
               </div>
             </div>
+            {"requiresPhoto" in c && c.requiresPhoto && (
+              // ADR-137 "Take a photo": the phone's camera opens; the photo is saved with the answer.
+              <label className="mt-2 flex flex-col gap-1 text-[15px] font-medium" data-testid="step-photo">
+                {c.photoAttachmentId ? "Photo saved ✓ — take another to replace it" : "Take a photo"}
+                <input type="file" name={`photo-${c.id}`} accept="image/*" capture="environment" disabled={!p.canPerform} className="min-h-[52px] text-[15px]" />
+              </label>
+            )}
             {answers[c.id] === "no" && (
               <label className="mt-2 flex flex-col gap-1 text-[14px] font-medium">
                 What did you find, and what did you do?
@@ -416,6 +427,7 @@ function CheckList(p: Props) {
         <CheckerPick
           checkers={p.checkers}
           sameDevice={p.sameDevice}
+          qa={p.step.qaSigns}
         />
       )}
       {p.canPerform && (
@@ -689,6 +701,27 @@ function FieldsCard(p: Props) {
                     ))}
                   </div>
                 </fieldset>
+              ) : f.valueKind === "choice" ? (
+                // ADR-137 "Choose from a list": one big button per answer.
+                <fieldset className="grid gap-1" data-testid="choice-field">
+                  <legend className="text-[15px] font-medium text-fg">{f.name}</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {(("options" in f ? (f.options as string[] | undefined) : undefined) ?? []).map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        aria-pressed={values[f.id] === a}
+                        onClick={() => set(f.id, a)}
+                        className={cx(
+                          "inline-flex min-h-[56px] min-w-[120px] flex-1 items-center justify-center rounded-[6px] border px-3 text-[17px] font-semibold",
+                          values[f.id] === a ? "border-transparent bg-primary text-white" : "border-line-strong bg-surface text-fg",
+                        )}
+                      >
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
               ) : (
                 <label className="flex flex-col gap-1 text-[15px] font-medium">
                   {f.name}
@@ -730,6 +763,7 @@ function FieldsCard(p: Props) {
           <CheckerPick
             checkers={p.checkers}
             sameDevice={p.sameDevice}
+            qa={p.step.qaSigns}
           />
         )}
         <details className="text-[14px]">

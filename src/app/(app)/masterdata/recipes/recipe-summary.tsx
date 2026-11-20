@@ -7,7 +7,9 @@ import {
   gramsTotalText,
   isPiecesText,
   kgToGrams,
+  inTotal,
   lineGrams,
+  lineHowText,
   packagingQty,
   packagingText,
   pieceWord,
@@ -62,7 +64,10 @@ export function RecipeSummary({
   materialName,
   ingredientsLabel,
   stepsLabel,
+  units,
 }: {
+  /** ADR-137: the packs and mL the lines use (id → name and size), for amounts typed in units. */
+  units?: Record<string, { name: string; qtyPerUnit: string }>;
   productName: string;
   product: { unitNetMassG: string | null; family: string | null; pieceG?: string | null } | null;
   draft: RecipeDraft;
@@ -71,7 +76,9 @@ export function RecipeSummary({
   stepsLabel: string;
 }) {
   const batchG = draft.batchKg ? kgToGrams(draft.batchKg) : "0";
-  const t = recipeTotals(batchG, draft.lines);
+  const sizes = Object.fromEntries(Object.entries(units ?? {}).map(([k, v]) => [k, v.qtyPerUnit]));
+  const names = Object.fromEntries(Object.entries(units ?? {}).map(([k, v]) => [k, v.name]));
+  const t = recipeTotals(batchG, draft.lines, sizes);
   const pieceG = product?.pieceG ?? (product?.unitNetMassG && Number(product.unitNetMassG) > 0 ? product.unitNetMassG : null);
   const byPieces = draft.batchBy === "pcs" ? batchPiecesSentence(draft.pieces ?? "", pieceG, draft.batchKg, product?.family) : null;
   const pieces = byPieces ? null : piecesPerBatch(draft.batchKg, draft.expectedPct, pieceG, product?.family);
@@ -124,7 +131,8 @@ export function RecipeSummary({
         ) : (
           <ol className="mt-1 flex flex-col divide-y divide-line rounded-[8px] border border-line">
             {draft.lines.map((l, i) => {
-              const g = lineGrams(batchG, l);
+              const g = lineGrams(batchG, l, sizes);
+              const how = lineHowText(l, names);
               return (
                 <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-[14px]">
                   <span className="min-w-0">
@@ -133,10 +141,18 @@ export function RecipeSummary({
                     {l.needsCheck && <span className="ml-2 rounded-[4px] bg-[var(--appr-bg)] px-2 text-[var(--appr-fg)] py-0.5 text-[11px] font-semibold">second person checks</span>}
                   </span>
                   <span className="tabular">
-                    <span className="font-semibold">{num(g, 6)} g</span>
-                    <span className="text-muted"> · {num(percentFromGrams(batchG, g))}%</span>
-                    <span className="text-muted"> · allowed ±{num(l.diff, 6)}{l.diffKind === "pct" ? "%" : " g"}</span>
+                    <span className="font-semibold">{inTotal(l) ? `${num(g, 6)} g` : `about ${num(g, 6)} g`}</span>
+                    {inTotal(l) && <span className="text-muted"> · {num(percentFromGrams(batchG, g))}%</span>}
+                    {l.method !== "as_needed" && l.method !== "whole_container" && (
+                      <span className="text-muted"> · allowed ±{num(l.diff, 6)}{l.diffKind === "pct" ? "%" : l.diffKind === "units" ? (l.diff.trim() === "0" ? " (exactly)" : ` ${l.method === "volume" ? "mL" : "units"}`) : " g"}</span>
+                    )}
                   </span>
+                  {how && (
+                    <span className="w-full text-[13px] text-fg-2" data-testid="summary-how">
+                      {how}
+                    </span>
+                  )}
+                  {l.note && <span className="w-full text-[12px] text-muted">Tip: {l.note}</span>}
                 </li>
               );
             })}
