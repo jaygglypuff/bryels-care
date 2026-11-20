@@ -25,6 +25,7 @@ import {
   stockAllocations,
   users,
   workOrders,
+  bomLines,
 } from "@/db/schema";
 import { DEMO_SEED_VERSION, SANDBOX_ORG_NAME } from "@/lib/demo";
 import { emptyTestDatabase } from "../../support/db";
@@ -93,9 +94,15 @@ describe("lite profile on an empty database", () => {
       return (await db.select().from(routingSteps).where(eq(routingSteps.routingRevisionId, r.id)).orderBy(asc(routingSteps.stepNo))).map((s) => s.name);
     };
     expect(await stepsOf("Acapulco Soap 135 g")).toEqual(["Check the area is clean", "Weigh the ingredients", "Heat and mix", "Pour into moulds", "Cure", "Cut", "Wrap and pack", "Move to the hold area"]);
-    expect(await stepsOf("Aloe Hand Lotion 250 mL")).toEqual(["Check the area is clean", "Weigh", "Heat and mix", "Cool", "Fill bottles", "Label and pack", "Move to the hold area"]);
+    expect(await stepsOf("Aloe Hand Lotion 250 mL")).toEqual(["Check the area is clean", "Weigh", "Heat and mix", "Cool", "Check colour and smell", "Fill bottles", "Label and pack", "Move to the hold area"]);
+    // ADR-137: the lotion shows the other ways of adding (counted sachets, mL, until the pH is right) and a QA-signed custom step.
+    const lotionRev = rs.find((x) => x.productId === ps.find((p) => p.name === "Aloe Hand Lotion 250 mL")!.id)!;
+    const custom = (await db.select().from(routingSteps).where(eq(routingSteps.routingRevisionId, lotionRev.id))).find((x) => x.name === "Check colour and smell")!;
+    expect([custom.isCustom, custom.qaSigns]).toEqual([true, true]);
+    const lotionLines = await db.select({ m: bomLines.addMethod }).from(bomLines).innerJoin(formulaRevisions, eq(formulaRevisions.id, bomLines.formulaRevisionId)).innerJoin(formulas, eq(formulas.id, formulaRevisions.formulaId)).where(eq(formulas.productId, ps.find((p) => p.name === "Aloe Hand Lotion 250 mL")!.id));
+    expect(lotionLines.map((x) => x.m).filter((m) => m !== "weigh").sort()).toEqual(["as_needed", "count", "volume"]);
     const ms = await db.select().from(materials).where(eq(materials.organizationId, O));
-    expect(ms).toHaveLength(13);
+    expect(ms).toHaveLength(15);
     expect(ms.filter((m) => m.materialKind === "packaging").map((m) => m.name).sort()).toEqual(["Lotion Bottle 250 mL", "Pump Cap", "Shipping Box (holds 24)", "Soap Wrapper 135 g"]);
     for (const m of [...ms, ...ps]) expect(m.name).not.toMatch(/PLACEHOLDER|^[A-Z]{2,4}-\d+$/);
   });
