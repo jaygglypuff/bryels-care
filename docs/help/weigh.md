@@ -1,8 +1,8 @@
 ---
 key: production.weigh
 title: Weigh the ingredients (Weigh screen)
-version: 7
-updated_at: 2026-11-13
+version: 8
+updated_at: 2026-11-20
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -16,6 +16,18 @@ The Weigh screen shows one card per ingredient, in formula order. The card shows
 4. Type the weight on the keypad under the field. The card shows **OK**, or "Too much by …" / "Too little by …".
 5. Tap **Save** under the keypad. A green line says **Saved: Purified Water 17.919 kg**.
 6. The next ingredient opens by itself.
+
+## Count, measure, a whole container, or until it is right
+
+Some ingredients are not weighed. The card says what to do in big letters.
+
+1. **Count**: the card says **4 sachets**. Scan the lot, type **4** and tap **Save**. "Exactly 4 sachets" means 3 or 5 is not OK.
+2. **Measure**: the card says **1,200 mL**. Pour it in the jug, type the mL and tap **Save**.
+3. **Whole container**: the card says **the whole pail**. Scan the pail and tap **Save**. Nothing to type: what is in it goes in.
+4. **Add until it is right**: the card says **Add until pH 5.0–5.5**, about 20 g, at most 40 g. Add a little, mix, measure. When the pH is right, type **how much you used** and the **pH you measured**, then **Save**. More than the most, or a pH outside the range, needs QA on this phone.
+5. **None was needed**: the pH was already right? Tap **None was needed**, type the pH, and the second person signs here.
+6. **Own way**: the card says the recipe's way (**Scoop with spoon #3: 3 scoops**). Type how many, or what you used when it says "write what you used".
+7. A **Tip** under the amount comes from the recipe (for example "Squeeze the sachet empty"). A line "Rounded up from 7.5 to 8 sachets" says why the number is whole.
 
 ## Type with a keyboard or a scale
 

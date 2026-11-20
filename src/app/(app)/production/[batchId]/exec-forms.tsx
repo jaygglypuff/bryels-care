@@ -89,6 +89,7 @@ export function WeighForm({
   replaces,
   lots = [],
   needsChecker = true,
+  method = null,
 }: {
   batchId: string;
   ing: IngredientExec;
@@ -99,8 +100,13 @@ export function WeighForm({
   approvers: Person[];
   idem: string;
   replaces?: { id: string } | null;
+  /** ADR-137: a line that is counted, measured, added whole or added until a reading is right (null = weighed). */
+  method?: { addMethod: string; entersUnits: boolean; unit: string | null; perUnit: string | null; window: { min: string; max: string; unit: string } | null; maxG: string | null; readingName: string | null; readingText: string; sentence: string; unitsDone: string } | null;
 }) {
   const [state, action] = useAct(dispenseAction);
+  const M = method && method.addMethod !== "weigh" ? method : null;
+  const whole = M?.addMethod === "whole_container";
+  const inUnits = !!M && M.entersUnits && !whole;
   const [qty, setQty] = useState("");
   const [uom, setUom] = useState("g");
   const [lot, setLot] = useState(lots[0]?.lotNumber ?? "");
@@ -119,13 +125,23 @@ export function WeighForm({
   const [scale, setScale] = useState(firstUsable);
   const fe = state?.fieldErrors ?? {};
   const valid = /^\d+(\.\d+)?$/.test(qty.trim());
-  const g = valid ? D(qty.trim()).mul(uom === "kg" ? 1000 : 1) : null;
+  const g = !valid ? null : inUnits ? D(qty.trim()).mul(M!.perUnit ?? 0) : D(qty.trim()).mul(uom === "kg" ? 1000 : 1);
   const total = g ? g.plus(ing.dispensedQtyG) : null;
-  const tol: "empty" | "within" | "below" | "above" = !total ? "empty" : total.lt(ing.minG) ? "below" : total.gt(ing.maxG) ? "above" : "within";
+  // ADR-137: units judged in units (exact counts, ± mL); as needed by its maximum; a whole container by the server.
+  const unitsTotal = inUnits && valid ? D(qty.trim()).plus(M!.unitsDone) : null;
+  const tol: "empty" | "within" | "below" | "above" = whole
+    ? "within"
+    : M?.window && unitsTotal
+      ? unitsTotal.lt(M.window.min) ? "below" : unitsTotal.gt(M.window.max) ? "above" : "within"
+      : M?.addMethod === "as_needed"
+        ? !total ? "empty" : M.maxG && total.gt(M.maxG) ? "above" : "within"
+        : !total ? "empty" : total.lt(ing.minG) ? "below" : total.gt(ing.maxG) ? "above" : "within";
   const outside = !partial && (tol === "below" || tol === "above");
   return (
     <form action={action} className="mt-1 flex flex-col gap-4 rounded-[8px] border border-line-strong p-3.5" data-testid="weigh-form">
       <Hidden v={{ batchId, batchMaterialId: ing.id, idempotencyKey: idem, uom }} />
+      {M && <p className="text-[15px] font-semibold text-fg" data-testid="more-method">{M.sentence}</p>}
+      {whole && <input type="hidden" name="wholeContainer" value="1" />}
       {replaces && <input type="hidden" name="supersedesId" value={replaces.id} />}
       {/* ADR-098 ScanOrPick: the usable lots (oldest expiry first) to tap or scan; then the shelf when several. */}
       <ScanOrPick
@@ -189,6 +205,13 @@ export function WeighForm({
           }))}
         />
       )}
+      {whole ? (
+        <p className="text-[14px] text-fg-2">3. The whole container goes in: what is left of this lot on that shelf is used. Nothing to weigh.</p>
+      ) : inUnits ? (
+        <Field label={`3. How many ${M!.unit ?? ""}${M!.window ? ` (OK ${M!.window.min === M!.window.max ? `exactly ${M!.window.min}` : `${M!.window.min}–${M!.window.max}`})` : ""}`} htmlFor={`units-${ing.id}`} error={fe.units}>
+          <Input id={`units-${ing.id}`} name="units" inputMode="decimal" autoComplete="off" value={qty} onChange={(e) => setQty(e.target.value)} className="min-h-[56px] text-[22px] tabular" required />
+        </Field>
+      ) : (
       <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
         <Field label={`3. Net weight (target ${fmtQty(ing.theoreticalQtyG, "g", 1)})`} htmlFor={`qty-${ing.id}`} error={fe.qty}>
           <Input id={`qty-${ing.id}`} name="qty" inputMode="decimal" autoComplete="off" value={qty} onChange={(e) => setQty(e.target.value)} className="min-h-[56px] text-[22px] tabular" required />
@@ -200,6 +223,13 @@ export function WeighForm({
           </Select>
         </Field>
       </div>
+      )}
+      {M?.addMethod === "as_needed" && (
+        <Field label={`${M.readingName ?? "Reading"} you measured (want ${M.readingText})`} htmlFor={`reading-${ing.id}`} error={fe.reading}>
+          <Input id={`reading-${ing.id}`} name="reading" inputMode="decimal" autoComplete="off" className="min-h-[56px] text-[22px] tabular" />
+        </Field>
+      )}
+      {!M && (
       <details className="text-[13px]">
         <summary className="cursor-pointer text-primary-text">Gross and tare (optional)</summary>
         <div className="mt-2 grid grid-cols-2 gap-3">
@@ -211,6 +241,7 @@ export function WeighForm({
           </Field>
         </div>
       </details>
+      )}
       <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
         <input type="checkbox" name="partial" checked={partial} onChange={(e) => setPartial(e.target.checked)} className="size-5" />
         Another lot follows for this ingredient (split weighing)

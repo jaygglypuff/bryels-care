@@ -385,12 +385,29 @@ async function weighAll(op, chk) {
     // Round 5: the lot is shown once ("Take lot …0010 · shelf", full number under it); the amount is in the scale's
     // unit (kg for 1 kg or more), typed in that unit.
     const lot = (await card.getByTestId('weigh-lot').innerText()).match(/L-\d{4}-\d{5}/)[0];
-    const target = (await card.getByTestId('weigh-target').innerText()).replace(/,/g, '').match(/([\d.]+)\s*(kg|g)\b/);
+    // ADR-137: a counted, measured or as-needed line shows its own card ("4 sachets", "1,200 mL", "Add until pH …").
+    const method = (await card.getByTestId('method-card').count()) ? await card.getByTestId('method-card').getAttribute('data-method') : 'weigh';
+    const targetText = (await card.getByTestId('weigh-target').innerText()).replace(/,/g, '');
+    const target =
+      method === 'as_needed'
+        ? (await card.getByTestId('method-window').innerText()).replace(/,/g, '').match(/About ([\d.]+)\s*(\S+)/)
+        : method === 'weigh' || method === 'custom'
+          ? targetText.match(/([\d.]+)\s*(kg|g)\b/)
+          : targetText.match(/([\d.]+)\s*(\S+)/);
     await scanBurst(op, `BC:LOT:${lot}`);
     await card.getByTestId('lot-confirmed').waitFor();
-    const weightButton = card.getByRole('button', { name: /Weight/ });
+    const weightButton = card.getByRole('button', { name: /Weight|How many|How much/ });
     if (await weightButton.count()) await weightButton.first().click(); // keypad mode only (ADR-135)
     await keypad(card, target[1]);
+    if (method === 'as_needed') {
+      // The reading reached (pH 5.0–5.5 in the demo recipe): its own box; the big keypad types into the box tapped.
+      const reading = card.locator('input[id^="reading-"]');
+      await reading.click();
+      if (await card.getByRole('button', { name: 'Key 1', exact: true }).first().isVisible().catch(() => false)) {
+        for (const k of '5.2') await card.getByRole('button', { name: `Key ${k}`, exact: true }).first().click();
+      } else await reading.pressSequentially('5.2');
+      facts.asNeeded = `${name}: ${target[1]} ${target[2]}, pH 5.2`;
+    }
     await card.getByText('OK', { exact: true }).first().waitFor();
     if (guard === 0) await shot(op, 'weigh-card-scanned-phone');
     await card.getByRole('button', { name: 'Save', exact: true }).click();
@@ -413,9 +430,15 @@ async function weighAll(op, chk) {
 }
 
 /** One making step: equipment if asked, readings in the middle of their limits, Step done, the second check. */
-async function doStep(op, chk) {
+async function doStep(op, chk, qa) {
   const url = op.url().replace(BASE, '');
   const title = (await op.locator('h1').first().innerText()).trim();
+  // ADR-137 custom step: "choose from a list" (the first answer) and yes/no (Yes) are buttons.
+  for (const choice of await op.getByTestId('choice-field').all()) await choice.getByRole('button').first().click();
+  if (!(await op.getByRole('button', { name: 'All OK', exact: true }).count())) {
+    for (const yes of await op.locator('fieldset').getByRole('button', { name: 'Yes', exact: true }).all()) if ((await yes.getAttribute('aria-pressed')) === 'false') await yes.click();
+  }
+  const qaSigns = (await op.getByText(/QA checks and signs this step/).count()) > 0;
   // Clean-area / before-packing checks: Yes on every row, then All OK.
   const allOk = op.getByRole('button', { name: 'All OK', exact: true });
   if (await allOk.count()) {
@@ -445,8 +468,10 @@ async function doStep(op, chk) {
   }
   await op.waitForLoadState('networkidle').catch(() => {});
   await op.waitForTimeout(500);
-  await secondCheck(op, chk, url, title);
-  log('  step done:', title);
+  // ADR-137: a step QA must sign is on QA's list, not Jun's.
+  await secondCheck(op, qaSigns && qa ? qa : chk, url, title);
+  if (qaSigns) facts.qaSignedStep = title;
+  log('  step done:', title, qaSigns ? '(QA signed)' : '');
 }
 
 /** After "Yes, they printed": the saved note, or (the page re-read on the server) "Printed by …" on the label page. */
@@ -503,6 +528,7 @@ async function boxLabels(op) {
 section('f. weigh by scanning lot labels (Jun checks on his own session), the steps, box and bottle labels', async () => {
   const op = await asUser(who('operator.nfd'), PHONE);
   const chk = await asUser(who('checker.nfd'), PHONE);
+  const qa = await asUser(who('qa.nfd'), PHONE);
   await findLotionBatch(op.page);
   let atFinish = false;
   for (let guard = 0; guard < 20; guard++) {
@@ -514,13 +540,15 @@ section('f. weigh by scanning lot labels (Jun checks on his own session), the st
       break;
     }
     if (/\/weigh(\?|$)/.test(u)) await weighAll(op.page, chk.page);
-    else if (/\/step\/\d+/.test(u)) await doStep(op.page, chk.page);
+    else if (/\/step\/\d+/.test(u)) await doStep(op.page, chk.page, qa.page);
     else throw new Error('unexpected screen on Continue: ' + u);
   }
   assert(atFinish, 'every step done: Continue opens Finish (the last step), got ' + op.page.url());
   if (!process.env.ONLY) assert((facts.weighed ?? []).length >= 4, 'every ingredient weighed: ' + JSON.stringify(facts.weighed));
+  if (!process.env.ONLY) assert(facts.asNeeded && facts.qaSignedStep, 'ADR-137: the as-needed line and the QA-signed custom step were done: ' + JSON.stringify([facts.asNeeded, facts.qaSignedStep]));
   await op.close();
   await chk.close();
+  await qa.close();
 });
 
 // ---------------------------------------------------------------- i. Finish

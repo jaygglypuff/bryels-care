@@ -137,7 +137,7 @@ export function WeighFlow(p: {
               )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium text-fg">{c.materialName}</span>
-                <span className="block text-[13px] tabular text-muted">{c.method.noneNeeded ? "none was needed" : c.done ? doneText(c) : q ? "waiting for signal" : c.method.addMethod === "weigh" ? `weigh ${show(c, c.target)}` : c.method.sentence.toLowerCase()}</span>
+                <span className="block text-[13px] tabular text-muted">{c.method.noneNeeded ? "none was needed" : c.done ? doneText(c) : q ? "waiting for signal" : c.method.addMethod === "weigh" ? `weigh ${show(c, c.target)}` : c.method.sentence.charAt(0).toLowerCase() + c.method.sentence.slice(1)}</span>
               </span>
             </button>
           );

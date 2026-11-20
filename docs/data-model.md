@@ -3251,6 +3251,26 @@ who typed it) and `outage_reason` (why a never-paper-only step was done on paper
 its page, time and typist. Partial indexes `*_paper_idx` on `paper_record_id`. The existing same-person triggers still
 apply (operator ≠ checker, conductor ≠ checker). No custom SQL. `pnpm -s drizzle-kit generate` reports no changes. The
 next generated file must be renamed to `0044_<description>` (snapshot `0044_snapshot.json`).
+Done that way for the ways of adding an ingredient (ADR-137): `0044_adr137_add_methods` (idx 43, snapshot
+`0044_snapshot.json`; `0043_snapshot.json` restored after drizzle-kit overwrote it). It adds:
+
+| Table / column | Meaning |
+|---|---|
+| `material_units` (new) | Named units of one material: `kind` `pack` (sachet, bottle, drum…) or `volume` (name "mL", the density), `qty_per_unit` in the material's stock unit (`base_uom` frozen), `unit_key` + `version_no` (unique), `status` active \| retired (with who, when, why), `supersedes_id`. Partial unique index: one active unit per name per material. CHECKs `material_units_*_ck`. Trigger `tg_material_units_immutable` (custom SQL `src/db/sql/adr137.sql`, appended verbatim to the migration): no row is deleted and no number is changed; only active → retired |
+| `recipe_templates` (new) | A custom step or own way of adding kept by a site: `site_id`, `kind` step \| add_method, `name` (unique per site and kind while active), `body` jsonb (Zod-checked), active \| retired with reason |
+| `bom_lines.add_method` | weigh (default; every existing line) \| count \| volume \| whole_container \| as_needed \| custom |
+| `bom_lines.method_qty`, `material_unit_id`, `method_unit`, `method_unit_qty` | Units per reference batch, the unit version used, its word and its size frozen on the line (null size = own way "not measured") |
+| `bom_lines.tolerance_units`, `max_qty_g`, `rounding`, `method_spec`, `operator_note` | ± in units (the stock-unit equivalent is also kept in `tolerance_abs_g`, so the existing "exactly one of % or g" CHECK stands), the as-needed maximum, up \| down \| nearest for `scaling = proportional_round`, the method details (custom name, as-needed reading and how it is recorded), the operator's tip |
+| `batch_materials.add_method … operator_note` | The method frozen on the batch line (`method_target_qty` scaled and rounded, `method_rounded_from` the exact number, `max_qty_g` scaled) and `none_needed`, `none_needed_by/at/reading` |
+| `dispense_records.add_method`, `method_unit_qty`, `reading_value`, `reading_within`, `whole_container` | How the amount was taken (`entered_qty`/`entered_uom` hold the units typed, `actual_qty_g` the stock amount = units × size), the reading reached on the row that completes an as-needed line |
+| `routing_steps.qa_signs`, `is_custom`; `routing_step_parameters.options`; `value_kind` / `step_readings_kind_ck` allow `choice` | QA must sign the step's check (CHECK: only with `requires_checker`), a step built in the step builder, the answers of a "choose from a list" field (CHECK: options exactly when `choice`) |
+
+`bom_lines_scaling_ck` now allows `proportional_round`; new CHECKs `bom_lines_add_method_ck`, `bom_lines_rounding_ck`,
+`bom_lines_method_numbers_ck`, `bom_lines_whole_units_ck` (count and whole container never scale "in parts"),
+`bom_lines_round_units_ck`, `bom_lines_as_needed_ck` (a maximum exactly on as-needed lines, never below the guess).
+Existing rows keep their meaning (`add_method` default `weigh`, every new column null or false). `pnpm -s drizzle-kit
+generate` reports no changes. The next generated file must be renamed to `0045_<description>` (snapshot
+`0045_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

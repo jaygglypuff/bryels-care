@@ -121,6 +121,9 @@ export async function seedLiteDemo(): Promise<string[]> {
     aloe: await ing("Aloe Vera Juice", "Aloe Barbadensis Leaf Juice"),
     glycerin: await ing("Glycerin", "Glycerin"),
     cetearyl: await ing("Cetearyl Alcohol", "Cetearyl Alcohol"),
+    // ADR-137: a scent bought in sachets (counted) and a pH adjuster added until the pH is right (as needed).
+    fragrance: await ing("Aloe Fragrance (25 g sachet)", "Parfum"),
+    citric: await ing("Citric Acid Solution 10%", "Citric Acid (aqueous)"),
     wrapper: await pkg("Soap Wrapper 135 g"),
     bottle: await pkg("Lotion Bottle 250 mL"),
     cap: await pkg("Pump Cap"),
@@ -172,6 +175,17 @@ export async function seedLiteDemo(): Promise<string[]> {
     step("weigh", { name: "Weigh", instruction: "Weigh each ingredient. One person weighs, a second person checks." }),
     step("heat", { name: "Heat and mix", instruction: "Heat the water and the oil part, then mix them until smooth.", readings: temp("Mix temperature", "65", "75") }),
     step("cool", { name: "Cool", instruction: "Let it cool, then stir in the aloe.", readings: temp("Temperature after cooling", "25", "40") }),
+    // ADR-137: a custom step built field by field (choose from a list, yes/no), signed by QA.
+    step("custom", {
+      name: "Check colour and smell",
+      instruction: "Take a spoonful. Compare the colour with the colour card and smell it.",
+      needsCheck: true,
+      qaSigns: true,
+      readings: [
+        { name: "Colour", kind: "choice", options: ["White", "Off-white", "Yellowish"], unit: "", min: "", max: "", target: "", code: "", required: true },
+        { name: "Smells right?", kind: "yesno", unit: "", min: "", max: "", target: "", code: "", required: true },
+      ],
+    }),
     // A plain making step, not the "Fill bottles" block: the bottles, caps and boxes are recorded once, on
     // "Label and pack" (a routing with both a filling and a packaging step blocks the second one when every
     // taken item was recorded on the first; reported in the hand-off as a product gap).
@@ -179,7 +193,7 @@ export async function seedLiteDemo(): Promise<string[]> {
     step("wrap", { name: "Label and pack", instruction: "Stick a label on each bottle and pack 24 bottles in a box." }),
     step("move", { name: "Move to the hold area", instruction: "Put the boxes in the QA waiting area until QA says OK." }),
   ];
-  const recipe = async (productId: string, pieces: string, expectedPct: string, lines: ReturnType<typeof line>[], packaging: unknown[], steps: unknown[]) => {
+  const recipe = async (productId: string, pieces: string, expectedPct: string, lines: unknown[], packaging: unknown[], steps: unknown[], view: "pct" | "g" = "pct") => {
     const r = await md.saveRecipe(c.planner, {
       productId,
       formulaId: null,
@@ -190,7 +204,7 @@ export async function seedLiteDemo(): Promise<string[]> {
       packaging,
       batchKg: "",
       expectedPct,
-      view: "pct",
+      view,
       lines,
       steps,
       changeSummary: "",
@@ -208,8 +222,31 @@ export async function seedLiteDemo(): Promise<string[]> {
     return r;
   };
   await recipe(soap.id, "120", "95", [line(M.coconut, "21.2"), line(M.palm, "49.4"), line(M.lye, "28.2"), line(M.extract, "1.0"), line(M.green, "0.2")], [perPiece(M.wrapper), boxes(M.box, "5", "120")], soapSteps);
-  await recipe(lotion.id, "96", "97", [line(M.water, "71.0"), line(M.aloe, "15.0"), line(M.glycerin, "6.0"), line(M.cetearyl, "8.0")], [perPiece(M.bottle), perPiece(M.cap), boxes(M.box, "4", "96")], lotionSteps);
-  notes.push("2 products, 2 recipes, 2 routings approved through the recipe wizard");
+  // ADR-137: the lotion shows the other ways of adding (typed in grams, so the counted and measured lines need not be a
+  // round percent). Pack size and density are fictional demo values for QA to replace (A-ADDM-02).
+  const sachet = await md.addMaterialUnit(c.planner, { materialId: M.fragrance, kind: "pack", name: "sachet", qtyPerUnit: "25", note: "Demo value: one sachet holds 25 g (supplier label)" });
+  const glyMl = await md.addMaterialUnit(c.planner, { materialId: M.glycerin, kind: "volume", qtyPerUnit: "1.26", note: "Demo value: grams in 1 mL (supplier data sheet; QA to confirm)" });
+  const g = (materialId: string, grams: string, extra: Record<string, unknown> = {}) => ({ materialId, amount: grams, src: "g" as const, diffKind: "pct" as const, diff: "1", needsCheck: true, phaseCode: null, scaling: "proportional" as const, isCritical: true, ...extra });
+  await recipe(
+    lotion.id,
+    "96",
+    "97",
+    [
+      g(M.water, "17821.26"),
+      g(M.aloe, "3785.7"),
+      // 1,200 mL of glycerin at 1.26 g/mL = 1,512 g, measured in a jug.
+      g(M.glycerin, "", { method: "volume", methodQty: "1200", unitId: glyMl.unitId, diffKind: "units", diff: "10" }),
+      g(M.cetearyl, "2019.04"),
+      // 4 sachets of scent, counted; a bigger batch rounds up to whole sachets.
+      g(M.fragrance, "", { method: "count", methodQty: "4", unitId: sachet.unitId, diffKind: "units", diff: "0", scaling: "proportional_round", rounding: "up", note: "Cut the sachet open fully and squeeze it empty." }),
+      // pH adjuster: about 20 g, at most 40 g, until the pH is 5.0–5.5 (demo range; QA sets the real one).
+      g(M.citric, "20", { method: "as_needed", recordBy: "weigh", readingName: "pH", readingUnit: "", readingMin: "5.0", readingMax: "5.5", maxAmount: "40", diffKind: "pct", diff: "" }),
+    ],
+    [perPiece(M.bottle), perPiece(M.cap), boxes(M.box, "4", "96")],
+    lotionSteps,
+    "g",
+  );
+  notes.push("2 products, 2 recipes, 2 routings approved through the recipe wizard (the lotion counts sachets, measures mL, adds acid until the pH is right and has a QA-signed custom step)");
 
   /* ---------------------------------------------------------------- suppliers' approved list */
   await approvedSupplierList(A, M);
@@ -252,6 +289,8 @@ export async function seedLiteDemo(): Promise<string[]> {
     { m: M.green, qty: "0.5", uom: "kg", sLot: "LB-GRN-311", exp: 360, shelf: "RM-02" },
     { m: M.aloe, qty: "20", uom: "kg", sLot: "LB-ALO-2210", exp: 200, shelf: "RM-02" },
     { m: M.water, qty: "100", uom: "kg", sLot: "LB-PW-1015", exp: 90, shelf: "RM-02" },
+    { m: M.fragrance, qty: "2", uom: "kg", sLot: "LB-FR-0412", exp: 365, shelf: "RM-02" },
+    { m: M.citric, qty: "1", uom: "kg", sLot: "LB-CIT-0077", exp: 365, shelf: "RM-02" },
   ]);
   await opening("Manila Print & Pack", "MPP-DR-3001", [
     { m: M.wrapper, qty: "1000", uom: "pcs", sLot: "MPP-889", exp: 1800, shelf: "PKG-01" },
@@ -289,10 +328,12 @@ export async function seedLiteDemo(): Promise<string[]> {
   };
   const snapshot = async (batchId: string) => {
     const [b] = await db.select().from(s.batches).where(eq(s.batches.id, batchId));
-    return [...(b.formulaSnapshot as { steps: { stepNo: number; stepKind: string; name: string; checklistItems?: { id: string }[]; parameters?: { id: string; isRequired: boolean; minValue?: string | null; maxValue?: string | null }[] }[] }).steps].sort((x, y) => x.stepNo - y.stepNo);
+    return [...(b.formulaSnapshot as { steps: { stepNo: number; stepKind: string; name: string; qaSigns?: boolean; checklistItems?: { id: string }[]; parameters?: { id: string; isRequired: boolean; valueKind?: string; options?: string[]; minValue?: string | null; maxValue?: string | null }[] }[] }).steps].sort((x, y) => x.stepNo - y.stepNo);
   };
   const readingsFor = (st: Awaited<ReturnType<typeof snapshot>>[number]) =>
-    (st.parameters ?? []).filter((p) => p.isRequired).map((p) => ({ parameterId: p.id, value: p.minValue && p.maxValue ? new Decimal(p.minValue).plus(p.maxValue).div(2).toString() : (p.minValue ?? "1") }));
+    (st.parameters ?? [])
+      .filter((p) => p.isRequired)
+      .map((p) => ({ parameterId: p.id, value: p.valueKind === "boolean" ? "yes" : p.valueKind === "choice" ? (p.options?.[0] ?? "") : p.valueKind === "text" ? "OK" : p.minValue && p.maxValue ? new Decimal(p.minValue).plus(p.maxValue).div(2).toString() : (p.minValue ?? "1") }));
 
   /** The cleaning record of each piece of equipment since its last use (the W13 rule), as the operator does on the Equipment screen. */
   const cleanAll = async () => {
@@ -313,7 +354,14 @@ export async function seedLiteDemo(): Promise<string[]> {
         for (const card of v.cards) {
           if (card.done) continue;
           const lot = card.lots[0];
-          await prod.recordDispense(c.operator, { batchId, batchMaterialId: card.batchMaterialId, lotRef: lot.lotId, locationRef: lot.locationId, lotPreselected: true, lotConfirm: lot.last4, qty: card.target, equipmentRef: "SC-01" }, { checker: c.checker });
+          // ADR-137: count / measure in units, a whole container, or as needed with the reading reached.
+          const how = card.method;
+          const amount = how.addMethod === "whole_container" ? { wholeContainer: true } : how.entersUnits && how.targetUnits ? { units: how.targetUnits } : { qty: card.target };
+          await prod.recordDispense(
+            c.operator,
+            { batchId, batchMaterialId: card.batchMaterialId, lotRef: lot.lotId, locationRef: lot.locationId, lotPreselected: true, lotConfirm: lot.last4, ...amount, ...(how.addMethod === "as_needed" ? { reading: "5.2" } : {}), equipmentRef: how.needsScale ? "SC-01" : null },
+            { checker: c.checker },
+          );
         }
         await prod.completeStep(c.operator, { batchId, stepNo: st.stepNo }, { checker: c.checker });
       } else if (st.stepKind === "transfer") {
@@ -335,7 +383,8 @@ export async function seedLiteDemo(): Promise<string[]> {
           const { markLabelJobPrinted } = await import("../../modules/documents");
           for (const j of jobs) await markLabelJobPrinted(c.operator, j.id);
         }
-        const r = await prod.stepDone(c.operator, { batchId, stepNo: st.stepNo, readings: readingsFor(st), idempotencyKey: key() }, { checker: c.checker });
+        // ADR-137: a step QA must sign is checked by QA.
+        const r = await prod.stepDone(c.operator, { batchId, stepNo: st.stepNo, readings: readingsFor(st), idempotencyKey: key() }, { checker: st.qaSigns ? c.qa : c.checker });
         if (r.blocked) throw new Error(`${st.name}: ${r.blockers.map((b) => b.message).join(" ")}`);
       }
     }
@@ -579,7 +628,7 @@ async function approvedSupplierList(A: Setup, M: Record<string, string>) {
   const proc = await import("../../modules/procurement");
   const pairs: [string, string[]][] = [
     ["Laguna Oleo Supply", [M.coconut, M.palm, M.lye, M.glycerin, M.cetearyl]],
-    ["Laguna Botanicals", [M.extract, M.green, M.aloe, M.water]],
+    ["Laguna Botanicals", [M.extract, M.green, M.aloe, M.water, M.fragrance, M.citric]],
     ["Manila Print & Pack", [M.wrapper, M.bottle, M.cap, M.box]],
   ];
   for (const [supplier, mats] of pairs) {

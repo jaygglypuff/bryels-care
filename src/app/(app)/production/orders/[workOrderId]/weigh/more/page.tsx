@@ -8,7 +8,7 @@ import { uuidv7 } from "uuidv7";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtQty } from "@/lib/qty";
-import { equipmentOptions, getBatchExecution, getBatchRecord, isWeighingStep, signerOptions, usableLotsForBatch } from "@/modules/production";
+import { equipmentOptions, getBatchExecution, getBatchRecord, isWeighingStep, methodCard, signerOptions, usableLotsForBatch } from "@/modules/production";
 import { PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../../forbidden";
@@ -25,6 +25,15 @@ export const dynamic = "force-dynamic";
  * (CX-TOL, a problem report is opened), undo (void) a weighing with a reason, and the second-person
  * check. Same services (recordDispense, voidDispense, checkDispense) and the same rules.
  */
+/** ADR-137: what the "Other ways" form asks for a line that is not weighed. */
+function moreMethod(ing: Awaited<ReturnType<typeof getBatchExecution>>["ingredients"][number]) {
+  const m = ing.method;
+  if (m.addMethod === "weigh") return null;
+  const live = ing.weighings.filter((w) => !w.voided);
+  const card = methodCard(ing, live, null);
+  return { addMethod: m.addMethod, entersUnits: card.entersUnits, unit: card.unit, perUnit: card.perUnit, window: card.window, maxG: card.maxG, readingName: card.reading?.name ?? null, readingText: card.readingText, sentence: card.sentence, unitsDone: card.unitsDone };
+}
+
 export default async function WeighMorePage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ batch?: string; line?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.batch.view")) return <Forbidden what="weighing" permission="production.batch.view" />;
@@ -111,6 +120,7 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
             approvers={approvers}
             idem={key()}
             replaces={lastVoided && ing.status === "pending" ? { id: lastVoided.id } : null}
+            method={moreMethod(ing)}
             needsChecker={needsChecker}
             lots={lots.map((l) => ({ lotNumber: l.lotNumber, locationCode: l.locationCode, locationName: l.locationName, qty: l.qty, expiresOn: l.expiresOn }))}
           />

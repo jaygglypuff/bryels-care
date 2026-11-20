@@ -76,9 +76,11 @@ describe("percent ↔ grams", () => {
       { materialId: "m1", amount: "21.1545", src: "pct", diffKind: "pct", diff: "2", needsCheck: true, phaseCode: null, scaling: "proportional", isCritical: true },
       { materialId: "m2", amount: "34.4", src: "g", diffKind: "g", diff: "1.5", needsCheck: false, phaseCode: "B", scaling: "fixed", isCritical: false },
     ]);
+    // ADR-137: a weighed line also says so (addMethod weigh, no method fields).
+    const none = { addMethod: "weigh", methodQty: null, materialUnitId: null, methodUnit: null, methodUnitQty: null, maxQtyG: null, rounding: null, methodSpec: null, operatorNote: null, toleranceUnits: null };
     expect(lines).toEqual([
-      { materialId: "m1", quantityG: "3723.192", tolerancePct: "2", toleranceAbsG: null, phaseCode: null, scaling: "proportional", isCritical: true, requiresChecker: true },
-      { materialId: "m2", quantityG: "34.4", tolerancePct: null, toleranceAbsG: "1.5", phaseCode: "B", scaling: "fixed", isCritical: false, requiresChecker: false },
+      { materialId: "m1", quantityG: "3723.192", tolerancePct: "2", toleranceAbsG: null, phaseCode: null, scaling: "proportional", isCritical: true, requiresChecker: true, ...none },
+      { materialId: "m2", quantityG: "34.4", tolerancePct: null, toleranceAbsG: "1.5", phaseCode: "B", scaling: "fixed", isCritical: false, requiresChecker: false, ...none },
     ]);
     const back = fromBomLines([{ ...lines[1], quantityG: "34.400000", toleranceAbsG: "1.500000" }]);
     expect(back[0]).toMatchObject({ amount: "34.4", src: "g", diffKind: "g", diff: "1.5", phaseCode: "B", scaling: "fixed", needsCheck: false });
@@ -102,6 +104,17 @@ describe("step blocks", () => {
       fill: "filling",
       qc: "in_process_qc",
       move: "transfer",
+      // ADR-137
+      keep_warm: "hold",
+      homogenise: "process",
+      look: "in_process_qc",
+      sample: "in_process_qc",
+      clean_tools: "process",
+      seal: "process",
+      label: "checklist",
+      photo: "checklist",
+      checklist: "checklist",
+      custom: "process",
       other: "process",
     });
   });

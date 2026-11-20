@@ -61,7 +61,9 @@ export function outOfRangeSentence(p: Limits, value: string | number | null): st
 }
 
 /** An empty required field (round 5 B4): "Type the Mix temperature (°C). Nothing was saved." */
-export function missingReadingSentence(p: { name: string; uom: string | null }): string {
+export function missingReadingSentence(p: { name: string; uom: string | null; valueKind?: string }): string {
+  // ADR-137: a choice or yes/no is tapped, not typed.
+  if (p.valueKind === "choice" || p.valueKind === "boolean") return `Answer "${p.name.replace(/\?$/, "")}" first.`;
   return `Type the ${p.name}${p.uom ? ` (${p.uom})` : ""} first.`;
 }
 

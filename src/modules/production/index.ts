@@ -158,7 +158,7 @@ export {
 } from "./planning";
 // ADR-080 stage G2: Materials list, Weigh cards, Step cards, curing (production flow v2, slices V2-3..V2-5).
 export { getMaterialsList, confirmPicked, canTickMaterials, type MaterialsListView, type MaterialsListLine, type PickInput, type PickResult } from "./materials-list";
-export { getWeighView, type WeighView } from "./weigh-cards";
+export { getWeighView, methodCard, type WeighView } from "./weigh-cards";
 export { getStepCard, stepDone, STEP_CARD_MAX_FIELDS, type StepCardView, type StepDoneInput, type StepDoneResult } from "./step-cards";
 export {
   batchFlowFacts,

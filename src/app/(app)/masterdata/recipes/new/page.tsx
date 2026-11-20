@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { type RecipeDraft, recipeWizardOptions } from "@/modules/masterdata";
 import { PageHeader } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../../forbidden";
 import { RecipeWizard } from "../wizard";
 
@@ -43,7 +44,7 @@ export default async function NewRecipePage({ searchParams }: { searchParams: Pr
         </Link>
       </div>
       <div className="mx-auto w-full max-w-3xl xl:max-w-[1200px]">
-        <PageHeader title="New recipe" />
+        <PageHeader title="New recipe" actions={<Help screen="masterdata.recipe" />} />
       </div>
       {/* Round 4 leftover: the progress bar first, then this intro in small type (inside the wizard). */}
       <RecipeWizard

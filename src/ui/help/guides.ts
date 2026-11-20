@@ -59,6 +59,8 @@ export const GUIDE_FILES: Record<string, string> = {
   "analytics.reports": "run-a-report.md",
   // ADR-076: Master data › Choice lists
   "masterdata.lists": "lists.md",
+  // ADR-137: writing a recipe: ways of adding an ingredient, packs and mL, custom steps, templates
+  "masterdata.recipe": "recipe.md",
 };
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

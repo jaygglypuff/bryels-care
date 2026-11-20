@@ -224,6 +224,38 @@ export function toBomLineInputs(batchG: Num, lines: RecipeLineDraft[], units: Un
 }
 
 /**
+ * ADR-137: what is missing on one ingredient line, by field (keys as the services name them, without "lines.N."). The
+ * same rules in the wizard (before moving on) and in `prepareRecipe` (before anything is written).
+ */
+export function lineFieldErrors(l: RecipeLineDraft): Record<string, string> {
+  const fe: Record<string, string> = {};
+  const method = methodOf(l);
+  if (method !== "weigh" && lineInUnits(l)) {
+    const q = (l.methodQty ?? "").trim();
+    const whole = method === "count" || method === "whole_container" || (method === "as_needed" && l.recordBy === "count");
+    if (!(whole ? /^\d{1,9}$/.test(q) : isDecimalText(q, 3)) || new Dx(q || "0").lte(0)) fe.methodQty = whole ? "Type how many, as a whole number, like 5." : "Type how much, like 250.";
+    if (method !== "custom" && !l.unitId) fe.materialUnitId = method === "volume" || l.recordBy === "volume" ? "Choose the mL of this ingredient (grams in 1 mL)." : "Choose what you count, like a sachet.";
+  } else {
+    const a = l.amount.trim();
+    const dp = l.src === "pct" ? PERCENT_DECIMALS : GRAM_DECIMALS;
+    if (!isDecimalText(a, dp) || new Dx(a).lte(0)) fe.quantityG = l.src === "pct" ? `Type the percent, like 21.5 (at most ${dp} decimals).` : "Type the grams, like 3723.2.";
+  }
+  if (method === "custom" && !(l.customName ?? "").trim()) fe["methodSpec.customName"] = 'Give your way a name, like "Scoop with spoon #3".';
+  if (method === "custom" && !(l.customUnit ?? "").trim()) fe.methodUnit = "Name the unit, like scoop.";
+  if (method === "as_needed") {
+    const mx = (l.maxAmount ?? "").trim();
+    if (!isDecimalText(mx, 6) || new Dx(mx || "0").lte(0)) fe.maxQtyG = "Type the most you may add.";
+    if (!(l.readingName ?? "").trim()) fe["methodSpec.reading"] = "Name the reading, for example pH.";
+    for (const k of ["readingMin", "readingMax"] as const) if ((l[k] ?? "").trim() && !/^-?\d{1,9}(\.\d{1,6})?$/.test((l[k] ?? "").trim())) fe["methodSpec.reading"] = "Type the reading range as numbers, like 5.0 and 5.5.";
+    return fe;
+  }
+  if (method === "whole_container") return fe;
+  if (!isDecimalText(l.diff, 6)) fe.tolerancePct = l.diffKind === "pct" ? "Type the allowed difference in percent, like 2." : l.diffKind === "units" ? "Type the allowed difference, 0 means exactly." : "Type the allowed difference in grams, like 5.";
+  if (l.scaling === "proportional_round" && !l.rounding) fe.rounding = "Say how to round: up, down or to the nearest.";
+  return fe;
+}
+
+/**
  * ADR-137: one plain sentence for a wizard line that is not weighed ("Count 5 sachets", "Measure 250 mL", "Add the whole
  * pail", "Add until pH 5.0–5.5, at most 40 g", "Scoop with spoon #3: 3 scoops"); null for a weighed line.
  */

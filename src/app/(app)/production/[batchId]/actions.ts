@@ -72,6 +72,10 @@ export async function dispenseAction(_: ActionState, fd: FormData): Promise<Acti
         gross: opt(fd, "gross"),
         equipmentRef: opt(fd, "equipmentRef"),
         partial: str(fd, "partial") === "on",
+        // ADR-137: units counted or measured, a whole container, the reading reached.
+        units: opt(fd, "units"),
+        wholeContainer: str(fd, "wholeContainer") === "1",
+        reading: opt(fd, "reading"),
         supersedesId: opt(fd, "supersedesId"),
         correctionReason: opt(fd, "correctionReason"),
         exceptionReason: opt(fd, "exceptionReason"),

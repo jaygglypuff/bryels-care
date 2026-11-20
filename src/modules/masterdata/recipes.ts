@@ -44,7 +44,7 @@ import {
   toStepInputs,
   waitToMinutes,
   type UnitSizes,
-  lineInUnits,
+  lineFieldErrors,
 } from "./recipe-blocks";
 import { createRouting, createRoutingRevision, decideRoutingRevisionIn, deleteRoutingDraft, loadRoutingSteps, policyFor, saveRoutingRevisionDraft, submitRoutingRevision, withdrawRoutingRevision } from "./routings";
 import { AREAS, STEP_KINDS, SaveFormulaDraftInput, SaveRoutingDraftInput, parseInput } from "./schemas";
@@ -220,32 +220,9 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { piece
     }
   });
   if (v.packaging.length && pieces === "0" && !fe.pieceG && !fe.pieces && !fe.batchKg) fe.packaging = "One batch makes less than one piece, so the packaging can't be worked out. Check the batch size.";
+  // ADR-137: the same line rules as the wizard (lineFieldErrors): amount or units, unit, reading, maximum, rounding.
   v.lines.forEach((l, i) => {
-    const method = l.method ?? "weigh";
-    // ADR-137: a line counted or measured in units is typed in units; the rest is typed in grams or percent.
-    if (method !== "weigh" && lineInUnits(l)) {
-      const q = (l.methodQty ?? "").trim();
-      const whole = method === "count" || method === "whole_container";
-      if (!(whole ? /^\d{1,9}$/.test(q) : isDecimalText(q, 3)) || new Decimal(q).lte(0)) fe[`lines.${i}.methodQty`] = whole ? "Type how many, as a whole number, like 5." : "Type how much, like 250.";
-      if (method !== "custom" && !l.unitId) fe[`lines.${i}.materialUnitId`] = method === "volume" || l.recordBy === "volume" ? "Choose the mL of this ingredient (grams in 1 mL)." : "Choose what you count, like a sachet.";
-    } else {
-      const a = l.amount.trim();
-      const dp = l.src === "pct" ? PERCENT_DECIMALS : GRAM_DECIMALS;
-      if (!isDecimalText(a, dp) || new Decimal(a).lte(0)) fe[`lines.${i}.quantityG`] = l.src === "pct" ? `Type the percent, like 21.5 (at most ${dp} decimals).` : "Type the grams, like 3723.2.";
-    }
-    if (method === "as_needed") {
-      const mx = (l.maxAmount ?? "").trim();
-      if (!isDecimalText(mx, 6) || new Decimal(mx).lte(0)) fe[`lines.${i}.maxQtyG`] = "Type the most you may add.";
-      if (!(l.readingName ?? "").trim()) fe[`lines.${i}.methodSpec.reading`] = "Name the reading, for example pH.";
-      for (const k of ["readingMin", "readingMax"] as const) if ((l[k] ?? "").trim() && !/^-?\d{1,9}(\.\d{1,6})?$/.test((l[k] ?? "").trim())) fe[`lines.${i}.methodSpec.reading`] = "Type the reading range as numbers, like 5.0 and 5.5.";
-      return;
-    }
-    if (method === "whole_container") return;
-    const d = l.diff.trim();
-    if (!isDecimalText(d, 6)) fe[`lines.${i}.tolerancePct`] = l.diffKind === "pct" ? "Type the allowed difference in percent, like 2." : l.diffKind === "units" ? "Type the allowed difference, 0 means exactly." : "Type the allowed difference in grams, like 5.";
-    if (method === "custom" && !(l.customName ?? "").trim()) fe[`lines.${i}.methodSpec.customName`] = "Give your way a name, like \"Scoop with spoon #3\".";
-    if (method === "custom" && !(l.customUnit ?? "").trim()) fe[`lines.${i}.methodUnit`] = "Name the unit, like scoop.";
-    if (l.scaling === "proportional_round" && !l.rounding) fe[`lines.${i}.rounding`] = "Say how to round: up, down or to the nearest.";
+    for (const [k, msg] of Object.entries(lineFieldErrors(l))) fe[`lines.${i}.${k}`] = msg;
   });
   if (!draft && fe.batchKg === undefined && fe.pieces === undefined && fe.pieceG === undefined && isDecimalText(batchKg, BATCH_KG_DECIMALS) && v.view === "pct" && v.lines.length) {
     const t = recipeTotals(kgToGrams(batchKg), v.lines, units);

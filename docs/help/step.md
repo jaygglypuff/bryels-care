@@ -1,8 +1,8 @@
 ---
 key: production.step
 title: Do a step (Start check, Mix, Curing, Cut, Wrap)
-version: 7
-updated_at: 2026-11-13
+version: 8
+updated_at: 2026-11-20
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -30,6 +30,12 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 8. A step that needs equipment (mixer, mould) shows **Equipment for this step**: tap the one you use, then **Use this equipment**.
 9. A step that needs a second person's check waits after **Step done**: "Saved. Waiting for the second check." The checker checks it on their own phone.
 10. A yellow **Not yet** box means an earlier step is still open: tap its button.
+
+## Choose from a list, take a photo, QA signs
+
+1. Some steps ask you to **choose** an answer: tap one big button (for example **Off-white**).
+2. A line with **Take a photo** opens the camera. Take the photo, then save the answers.
+3. A step that says **QA checks and signs** waits for a QA person. Only QA can sign it.
 
 ## Curing, resting, in the mould
 

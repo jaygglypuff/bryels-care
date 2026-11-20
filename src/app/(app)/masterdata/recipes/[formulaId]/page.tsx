@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { getRecipe, productReadiness, recipeWizardOptions, type RecipeView } from "@/modules/masterdata";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
@@ -53,7 +54,7 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
           </Link>
         </div>
         <div className="mx-auto w-full max-w-3xl xl:max-w-[1200px]">
-          <PageHeader title={r.product.name} subtitle={wantsNew ? "New version of the recipe" : "Change the recipe"} />
+          <PageHeader title={r.product.name} subtitle={wantsNew ? "New version of the recipe" : "Change the recipe"} actions={<Help screen="masterdata.recipe" />} />
         </div>
         <RecipeWizard
           options={options}

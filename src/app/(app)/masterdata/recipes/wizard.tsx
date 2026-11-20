@@ -13,6 +13,7 @@ import {
   type RecipeStepDraft,
   type UnitSizes,
   inTotal,
+  lineFieldErrors,
   PER_PIECE_DECIMALS,
   RECIPE_BLOCKS,
   WAIT_UNITS,
@@ -213,8 +214,8 @@ export function RecipeWizard({ options, initial, start, intro }: { options: Reci
     if (n === 3 && !start.locks.ingredients) {
       d.lines.forEach((l, i) => {
         if (!l.materialId) e[`lines.${i}.materialId`] = "Choose the ingredient.";
-        if (!isDecimalText(l.amount, l.src === "pct" ? 4 : 6) || Number(l.amount) <= 0) e[`lines.${i}.quantityG`] = "Type the amount.";
-        if (!isDecimalText(l.diff, 6)) e[`lines.${i}.tolerancePct`] = "Type the allowed difference.";
+        // ADR-137: the rules of each way of adding (the server checks the same with lineFieldErrors).
+        for (const [k, msg] of Object.entries(lineFieldErrors(l))) e[`lines.${i}.${k}`] = msg;
       });
       // ADR-116: a draft may be saved before the amounts add up; sending (and moving on with Next) needs 100 %.
       if (!draft && d.view === "pct" && d.lines.length && !totals.exact) e.lines = `${percentTotalText(totals)}. The amounts must add up to 100%.`;
@@ -1702,7 +1703,7 @@ function StepFields({ s, i, setStep, errors, canSaveTemplate }: { s: RecipeStepD
           <p className="text-[12px] text-muted">For example the temperature. If you give a lowest and highest number, the screen warns the worker when the number is outside.</p>
           {s.readings.map((r, k) => (
             <div key={k} className="flex flex-col gap-2 rounded-[8px] border border-line p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
+              <div className="grid gap-2 sm:grid-cols-[1fr_13rem_auto]">
                 <Input aria-label={`What to write down ${k + 1}`} placeholder="Temperature" value={r.name} onChange={(e) => setReading(k, { name: e.target.value })} />
                 <Select aria-label="Kind of answer" value={r.kind} onChange={(e) => setReading(k, { kind: e.target.value as RecipeReadingDraft["kind"], ...(e.target.value === "choice" && !r.options?.length ? { options: ["", ""] } : {}) })}>
                   <option value="number">a number</option>

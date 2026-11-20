@@ -1,8 +1,8 @@
 ---
 key: production.paper_record
 title: No internet? Use the paper batch record
-version: 1
-updated_at: 2026-11-13
+version: 2
+updated_at: 2026-11-20
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -28,6 +28,13 @@ When the internet stops, the work does not stop. You print the batch record, wri
 3. A weight outside the range, or a reading outside the limits, is saved as written. QA gets a problem report and decides.
 4. A lot that was on hold or waiting for QA is not saved. QA is told. Keep the page and type that line after QA answers.
 5. Give the written pages to your supervisor or QA. They scan them and attach them. Another person, who typed none of it, checks the typing against the scan. The batch cannot pass QA before that.
+
+## Counted, measured or "until it is right" on paper
+
+1. The weighing page says how each ingredient is added (**Count 4 sachets**, **Measure 1,200 mL**, **Add the whole pail**).
+2. Write the number in the amount box with its unit (**sachets**, **mL**). For a whole container, write ✓.
+3. For **Add until it is right**, also write the reading reached (**pH ______**).
+4. When you type it in, the form asks the same: how many, ✓ for a whole container, or the reading.
 
 ## If the paper was not used
 
