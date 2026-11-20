@@ -383,8 +383,8 @@ export async function seedLiteDemo(): Promise<string[]> {
           const { markLabelJobPrinted } = await import("../../modules/documents");
           for (const j of jobs) await markLabelJobPrinted(c.operator, j.id);
         }
-        // ADR-137: a step QA must sign is checked by QA.
-        const r = await prod.stepDone(c.operator, { batchId, stepNo: st.stepNo, readings: readingsFor(st), idempotencyKey: key() }, { checker: st.qaSigns ? c.qa : c.checker });
+        // ADR-137: a step QA must sign is checked by QA (Teresa: Nina decides the batch later and never checks what she decides).
+        const r = await prod.stepDone(c.operator, { batchId, stepNo: st.stepNo, readings: readingsFor(st), idempotencyKey: key() }, { checker: st.qaSigns ? c.qaLead : c.checker });
         if (r.blocked) throw new Error(`${st.name}: ${r.blockers.map((b) => b.message).join(" ")}`);
       }
     }

@@ -528,7 +528,8 @@ async function boxLabels(op) {
 section('f. weigh by scanning lot labels (Jun checks on his own session), the steps, box and bottle labels', async () => {
   const op = await asUser(who('operator.nfd'), PHONE);
   const chk = await asUser(who('checker.nfd'), PHONE);
-  const qa = await asUser(who('qa.nfd'), PHONE);
+  // ADR-137: the QA-signed custom step is signed by Teresa (Nina decides the batch and never checks what she decides).
+  const qa = await asUser(who('qa.lead'), PHONE);
   await findLotionBatch(op.page);
   let atFinish = false;
   for (let guard = 0; guard < 20; guard++) {
