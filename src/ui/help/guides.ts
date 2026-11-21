@@ -29,6 +29,8 @@ export const GUIDE_FILES: Record<string, string> = {
   "inventory.receive": "receive.md",
   "inventory.move": "move.md",
   "inventory.count": "count.md",
+  // ADR-138: take a few out (online shop orders, samples…), count what's left, the Taken out list
+  "inventory.takeout": "take-out.md",
   // Wave 4 W4F (US-9-08): one quick guide per major flow
   "inventory.putaway": "putaway.md",
   // ADR-099: labels printed where the work happens, which label goes where, scanning

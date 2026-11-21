@@ -1,4 +1,5 @@
 import "server-only";
+import { MADE_FOR } from "./made-for";
 import { and, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { z } from "zod";
@@ -64,8 +65,13 @@ export const workOrderInputSchema = z
       .or(z.literal("").transform(() => null)),
     notes: optText(1000),
     salesOrderId: optUuid,
+    /** ADR-138: what an order with no customer order is made for (stock | online_shop | samples | other). */
+    madeFor: z.enum(MADE_FOR, { message: "Choose what it is made for." }).nullish().or(z.literal("").transform(() => null)),
+    madeForNote: optText(200),
   })
   .strict()
+  .refine((v) => !(v.salesOrderId && v.madeFor && v.madeFor !== "stock"), { path: ["madeFor"], message: "An order made for a customer order is for that customer." })
+  .refine((v) => v.madeFor !== "other" || (v.madeForNote ?? "").length >= 3, { path: ["madeForNote"], message: "Say what it is made for." })
   .refine((v) => v.plannedEnd >= v.plannedStart, { path: ["plannedEnd"], message: "The planned end cannot be before the planned start." });
 export type WorkOrderInput = z.input<typeof workOrderInputSchema>;
 
@@ -168,6 +174,8 @@ export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, li
       productionLineId: input.productionLineId ?? null,
       productionPlanLineId: links.productionPlanLineId ?? null,
       salesOrderId: input.salesOrderId ?? null,
+      madeFor: input.salesOrderId ? null : (input.madeFor ?? null),
+      madeForNote: !input.salesOrderId && input.madeFor === "other" ? input.madeForNote : null,
       qtyPlannedBase: totalG.toString(),
       baseUom: "g",
       batchCount: input.batchCount,
@@ -204,6 +212,8 @@ export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, li
       plannedEnd: input.plannedEnd,
       neededBy: input.neededBy ?? null,
       salesOrderId: input.salesOrderId ?? null,
+      madeFor: input.salesOrderId ? null : (input.madeFor ?? null),
+      madeForNote: !input.salesOrderId && input.madeFor === "other" ? input.madeForNote : null,
       targetUnits: input.targetUnits ?? null,
       productionPlanLineId: links.productionPlanLineId ?? null,
     },
@@ -255,6 +265,8 @@ export async function editWorkOrder(ctx: AuthContext, workOrderId: string, raw: 
       formulaId: formula.id,
       productionLineId: input.productionLineId ?? null,
       salesOrderId: input.salesOrderId ?? null,
+      madeFor: input.salesOrderId ? null : input.madeFor === undefined ? wo.madeFor : input.madeFor,
+      madeForNote: input.salesOrderId ? null : input.madeFor === undefined ? wo.madeForNote : input.madeFor === "other" ? input.madeForNote : null,
       qtyPlannedBase: keepPlan ? wo.qtyPlannedBase : sizeG.mul(input.batchCount).toString(),
       batchCount: input.batchCount,
       batchSizeBase: sizeG.toString(),

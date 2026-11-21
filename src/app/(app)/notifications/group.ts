@@ -30,6 +30,9 @@ family(["production.order.to_approve", "handoff.production_order"], { id: "po_ma
 family(["purchase_order_submitted", "handoff.purchase_order"], { id: "po_buy", list: "/approvals", many: (n) => `${plural(n, "purchase order waits", "purchase orders wait")} for your approval` });
 family(["purchase_order_approved", "handoff.purchase_order_send"], { id: "po_send", list: "/procurement/orders", many: (n) => `${plural(n, "purchase order is", "purchase orders are")} ready to send to the supplier` });
 family(["handoff.delivery_coming"], { id: "coming", list: "/inventory/receive", many: (n) => `${plural(n, "supplier delivery is", "supplier deliveries are")} coming` });
+// ADR-138: open boxes nobody counted or took from for some days.
+family(["inventory.takeout.count_open_box"], { id: "count_open_box", list: "/inventory/take-out/count", many: (n) => `${plural(n, "open box waits", "open boxes wait")} to be counted` });
+family(["handoff.stock_takeout"], { id: "takeout_ok", list: "/approvals", many: (n) => `${plural(n, "take-out waits", "take-outs wait")} for your OK` });
 family(["approval_requested"], { id: "approval", list: "/approvals", many: (n) => `${plural(n, "thing waits", "things wait")} for your approval` });
 
 const UUID_SEG = /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\/|$)/gi;

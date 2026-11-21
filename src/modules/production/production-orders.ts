@@ -1,4 +1,5 @@
 import "server-only";
+import { madeForText } from "./made-for";
 import { and, asc, desc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
@@ -30,7 +31,7 @@ import {
   type ProductionOrderStatusView,
 } from "./production-order-status";
 import { idempotent, manilaToday } from "./shared";
-import { createWorkOrder, lockWorkOrder, planLockedWorkOrder, releaseLockedWorkOrder, remainingBatchSizesG } from "./work-orders";
+import { createWorkOrder, lockWorkOrder, planLockedWorkOrder, releaseLockedWorkOrder, remainingBatchSizesG, type WorkOrderInput } from "./work-orders";
 import { batchPlanText, checkBatchSizes, gramsForPieces, proposeBatches } from "./batch-plan";
 import { largestBatchFor } from "./batch-plan-facts";
 import type { BatchPlanStored } from "@/db/schema";
@@ -76,6 +77,9 @@ export type ProductionOrderInput = {
    */
   batchMode?: "split" | "one" | "custom" | string | null;
   batchSizes?: (string | number)[] | null;
+  /** ADR-138: what an order with no customer order is made for (stock | online_shop | samples | other) and the note for "other". */
+  madeFor?: string | null;
+  madeForNote?: string | null;
 };
 
 /** Finished pieces from a bulk mass: mass × expected yield % ÷ unit mass, rounded down. */
@@ -164,6 +168,8 @@ export async function createProductionOrder(ctx: AuthContext, input: ProductionO
     targetUnits: units,
     productionLineId: input.productionLineId || null,
     notes: input.notes || null,
+    madeFor: (salesOrderId ? null : input.madeFor?.trim() || null) as WorkOrderInput["madeFor"],
+    madeForNote: input.madeForNote?.trim() || null,
     idempotencyKey: input.idempotencyKey ?? null,
   }, { batchPlan });
 }
@@ -527,6 +533,7 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
         neededBy: r.wo.neededBy,
         late: isLate(r.wo.neededBy, view.status, today),
         salesOrderNumber: r.salesOrderNumber,
+        madeFor: madeForText({ madeFor: r.wo.madeFor, madeForNote: r.wo.madeForNote, salesOrderNumber: r.salesOrderNumber }),
         assigneeName: r.assigneeName,
         assignedToMe: r.wo.assignedOperatorId === ctx.userId,
         workOrderStatus: r.wo.status,

@@ -22,7 +22,7 @@ export type NumberShape =
 
 /** Prefix → shape of the built-in numbering defaults (kept in step with NUMBERING_DEFAULTS by a unit test). */
 export const NUMBER_SHAPES: Readonly<Record<string, NumberShape>> = {
-  GR: "YY", L: "YYMM", B: "YY", SO: "YY", DR: "YY", MOV: "YY", QH: "YY", BX: "SEQ", TR: "YY", CNT: "YY", ADJ: "YY", RSV: "YY",
+  GR: "YY", L: "YYMM", B: "YY", SO: "YY", DR: "YY", MOV: "YY", QH: "YY", BX: "SEQ", TR: "YY", CNT: "YY", ADJ: "YY", TKO: "YY", RSV: "YY",
   DOC: "YY", INS: "YY", DEV: "YY", WO: "YY", PP: "YYMM", QT: "YY", PA: "YY", PK: "YY", SH: "YY", CMP: "YY", RT: "YY",
   IMP: "YYMM", LDOC: "SEQ", PR: "YY", PO: "YY", SRT: "YY", INV: "YYYY", BILL: "YY", PAY: "YY", CN: "YYYY", EXP: "YY",
   CAPA: "YY", CC: "YY", RC: "YYYY", PM: "SEQ", MWO: "YY", MAT: "SEQ", PRD: "SEQ", SUP: "SEQ", CUS: "SEQ", LOC: "SEQ",

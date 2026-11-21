@@ -25,8 +25,9 @@ const pages = all.filter((p) => p.endsWith("page.tsx"));
 const isRedirect = (src: string) => /redirect\(/.test(src) && !/<(PageHeader|RecordHeader)/.test(src);
 
 describe("grade-5 inventory and warehouse screens", () => {
-  it("covers the 38 screens listed in PAGE_REVIEW.md", () => {
-    expect(pages.length).toBe(38);
+  it("covers the 42 screens listed in PAGE_REVIEW.md", () => {
+    // ADR-138: + Take a few out, Count what's left, Taken out and one take-out.
+    expect(pages.length).toBe(42);
   });
 
   it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro, shown in the Help panel as About this screen, ADR-136)", (rel) => {

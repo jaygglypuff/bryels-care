@@ -170,6 +170,31 @@ export const commands = {
     idempotent: true,
     offline: "online_only",
   },
+  // ADR-138: take a few finished pieces out (online shop orders, samples, giveaways, display, staff use)
+  createTakeout: {
+    kind: "command",
+    name: "inventory.takeout.create",
+    method: "POST",
+    path: "/api/v1/inventory/takeouts",
+    summary: "Take a few finished pieces out of stock with a reason; posts at once within the limits, else waits for an OK (approval rules stock_takeout). Released, in-date, free stock only.",
+    permission: "inventory.takeout.create",
+    payload: z
+      .object({
+        purpose: z.enum(["sold_online", "customer_sample", "giveaway", "display", "staff_use", "other"]),
+        channel: z.string().trim().max(40).nullish(),
+        platformOrderRef: z.string().trim().max(60).nullish(),
+        customerId: z.uuid().nullish(),
+        recipientName: z.string().trim().max(120).nullish(),
+        note: z.string().trim().max(500).nullish(),
+        lines: z
+          .array(z.object({ containerId: z.uuid().nullish(), lotId: z.uuid().nullish(), locationId: z.uuid().nullish(), productId: z.uuid().nullish(), pieces: z.string().trim().regex(/^\d{1,7}$/, "Whole pieces only.") }).strict())
+          .min(1)
+          .max(30),
+      })
+      .strict(),
+    idempotent: true,
+    offline: "online_only",
+  },
 } as const satisfies Record<string, CommandContract>;
 
 export const queries = {
@@ -198,6 +223,28 @@ export const queries = {
         asOf: DATE.optional(),
         locationId: z.uuid().optional(),
         itemKind: z.enum(["material", "product"]).optional(),
+        q: z.string().max(100).optional(),
+        format: z.enum(["csv", "xlsx"]).default("csv"),
+      })
+      .strict(),
+    response: "file",
+  },
+  takeoutsExport: {
+    kind: "query",
+    name: "inventory.takeouts.export",
+    method: "GET",
+    path: "/api/v1/inventory/takeouts/export",
+    summary: "CSV/XLSX of the Taken out lines of the current site (ADR-138; same filters and scope as the screen; audited). Pieces only, no money.",
+    permission: "inventory.takeout.export",
+    query: z
+      .object({
+        from: DATE.optional(),
+        to: DATE.optional(),
+        purpose: z.string().max(40).optional(),
+        channel: z.string().max(40).optional(),
+        personId: z.uuid().optional(),
+        productId: z.uuid().optional(),
+        status: z.enum(["awaiting_approval", "posted", "rejected", "cancelled", "reversed"]).optional(),
         q: z.string().max(100).optional(),
         format: z.enum(["csv", "xlsx"]).default("csv"),
       })

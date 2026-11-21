@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { batchQaNext, productionOrderNext } from "@/modules/production";
+import { batchQaNext, madeForText, productionOrderNext } from "@/modules/production";
 import { NextApprover } from "@/ui/next-approver";
 import type { NextActors } from "@/lib/next-actors-words";
 import { assigneeChoices, auditSentence, batchPlanWords, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, orderStateWord, plainReason, workOrderFormOptions, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
@@ -233,7 +233,10 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
               )}{" "}
               ({d.salesOrder.customerName})
             </span>
-          ) : null,
+          ) : (
+            // ADR-138: what an order with no customer order is made for.
+            <span key="made-for" data-testid="made-for">{madeForText({ madeFor: wo.madeFor, madeForNote: wo.madeForNote })}</span>
+          ),
         ]}
         actions={<Help screen="production.production_order" />}
         steps={v.status === "cancelled" || v.status === "failed" || !v.progress.steps ? [] : v.progress.steps.map((x) => ({ label: x.label, state: x.state === "todo" ? "upcoming" : (x.state as "done" | "current") }))}

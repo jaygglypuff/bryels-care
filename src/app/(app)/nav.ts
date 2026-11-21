@@ -191,6 +191,10 @@ export const NAV: NavGroup[] = [
       ...inSection("Stock", [
         { label: "Scan or search", href: "/inventory/scan", permission: "inventory.lot.view" },
         { label: "Move stock", href: "/inventory/move", permission: "inventory.movement.post" },
+        // ADR-138: a few finished pieces out (online shop orders, samples…), the quick count and the list.
+        { label: "Take a few out", href: "/inventory/take-out", permission: "inventory.takeout.create" },
+        { label: "Count what's left", href: "/inventory/take-out/count", permission: "inventory.takeout.create" },
+        { label: "Taken out", href: "/inventory/take-outs", permission: "inventory.takeout.view" },
         { label: "Warehouse sections", href: "/warehouse", permission: "inventory.lot.view" },
         { label: "Shelves", href: "/inventory/locations", permission: "masterdata.location.view" },
         { label: "Boxes and sacks", href: "/inventory/containers", permission: "inventory.container.view" },
@@ -386,7 +390,7 @@ const OWNER_AREAS: readonly AreaSpec[] = [
     label: "Buy & stock",
     icon: "boxes",
     tabs: ["/inventory", "/procurement/reorder", "/procurement/orders", "/procurement/expected", "/procurement/suppliers"],
-    more: ["/procurement/requests", "/inventory/receive", "/inventory/receipts", "/inventory/receive/put-away", "/inventory/move", "/warehouse", "/inventory/counts", "/inventory/adjustments", "/inventory/lots/expiry", "/inventory/availability", "/inventory/locations"],
+    more: ["/procurement/requests", "/inventory/receive", "/inventory/receipts", "/inventory/receive/put-away", "/inventory/move", "/inventory/take-out", "/inventory/take-outs", "/warehouse", "/inventory/counts", "/inventory/adjustments", "/inventory/lots/expiry", "/inventory/availability", "/inventory/locations"],
   },
   { label: "Money", icon: "money", tabs: ["/finance", "/finance/invoices", "/finance/bills", "/finance/payments", "/analytics"], more: ["/finance/statements", "/finance/credit-notes", "/finance/expenses", "/analytics/overview", "/reports"] },
 ];
@@ -394,7 +398,7 @@ const OWNER_AREAS: readonly AreaSpec[] = [
 /** Sales (C report): orders, customers, price offers, invoices to look at. */
 const SALES_AREAS: readonly AreaSpec[] = [
   HOME_AREA,
-  { label: "Orders", icon: "truck", tabs: ["/sales", "/sales/board", "/sales/shipments"] },
+  { label: "Orders", icon: "truck", tabs: ["/sales", "/sales/board", "/sales/shipments", "/inventory/take-out", "/inventory/take-outs"] },
   { label: "Customers", icon: "customer", tabs: ["/sales/customers", "/sales/price-lists", "/sales/returns"] },
   { label: "Price offers", icon: "order", tabs: ["/sales/quotations"] },
   { label: "Invoices", icon: "money", tabs: ["/finance/invoices"] },
@@ -436,7 +440,7 @@ const WAREHOUSE_AREAS: readonly AreaSpec[] = [
   HOME_AREA,
   { label: "Receiving", icon: "receive", tabs: ["/inventory/receive", "/inventory/receive/put-away", "/inventory/receipts", "/procurement/expected"] },
   { label: "Packing and sending", icon: "truck", tabs: ["/sales/picking", "/sales/dispatch", "/sales/shipments", "/warehouse/packs"], more: ["/warehouse/repack", "/quality/label-verification"] },
-  { label: "Stock", icon: "boxes", tabs: ["/inventory", "/inventory/move", "/inventory/counts", "/inventory/adjustments", "/inventory/scan"], more: ["/warehouse", "/inventory/locations", "/inventory/containers", "/inventory/lots/expiry", "/inventory/lots/reservations", "/inventory/movements", "/inventory/availability"] },
+  { label: "Stock", icon: "boxes", tabs: ["/inventory", "/inventory/move", "/inventory/counts", "/inventory/adjustments", "/inventory/scan"], more: ["/inventory/take-out", "/inventory/take-out/count", "/inventory/take-outs", "/warehouse", "/inventory/locations", "/inventory/containers", "/inventory/lots/expiry", "/inventory/lots/reservations", "/inventory/movements", "/inventory/availability"] },
 ];
 const DISPLAY_AREAS: readonly AreaSpec[] = [{ label: "Make", icon: "factory", tabs: ["/floor"] }];
 

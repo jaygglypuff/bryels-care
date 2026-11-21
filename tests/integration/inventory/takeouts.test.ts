@@ -16,6 +16,8 @@ import { approveTakeout, cancelTakeout, createTakeout, rejectTakeout, takeoutApp
 import { getTakeout, listTakeouts, lotTakeouts, customerSamples, takeoutSourcesFor, takeoutSourcesForLabel, watchList } from "@/modules/inventory/takeout-queries";
 import { countWhatIsLeft } from "@/modules/inventory/shelf-checks";
 import { createOrder } from "@/modules/sales";
+import { runTakeoutReminders } from "@/modules/inventory/takeout-reminders";
+import { resolveDoneNotifications } from "@/modules/platform/notification-done";
 import { resetTestDatabase } from "../../support/db";
 import { auditCount, expectDomain, key, loadWorld, loc, makeLot, onHand, type World } from "./w1c-fixtures";
 
@@ -113,7 +115,7 @@ describe("take a few out (ADR-138)", () => {
     // A box set aside for an open customer order.
     const set = await boxedLot({ sku: "GBS-135", qty: "24", boxes: ["24"] });
     const [cus] = await db.select().from(customers).where(eq(customers.code, "CUS-001"));
-    const so = await createOrder(w.sales, { customerId: cus.id, lines: [{ productId: set.lot.productId!, qtyUnits: "24", unitPrice: "70.00" }], idempotencyKey: key() });
+    const so = await createOrder(w.sales, { customerId: cus.id, requestedDeliveryOn: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), lines: [{ productId: set.lot.productId!, qtyUnits: "24", unitPrice: "70.00" }], idempotencyKey: key() });
     await db.update(salesOrders).set({ status: "allocated" }).where(eq(salesOrders.id, so.id));
     const [line] = await db.execute<{ id: string }>(`select id from sales_order_lines where sales_order_id = '${so.id}'` as never);
     await db.insert(stockAllocations).values({ salesOrderLineId: String(line.id), lotId: set.lot.id, locationId: set.place.id, containerId: set.boxes[0], qtyUnits: "24", status: "open" });
@@ -261,5 +263,30 @@ describe("count what's left (ADR-138 §3)", () => {
     await countWhatIsLeft(w.wh, { containerId: boxes[0], counted: "12", idempotencyKey: key() });
     expect((await watchList(db, w.orgId, [w.nfd.id])).find((r) => r.containerId === boxes[0])!.stale).toBe(false);
     expect(await db.select().from(stockTakeoutLines).where(eq(stockTakeoutLines.containerId, boxes[0]))).toHaveLength(0);
+  });
+
+  it("reminders: a quiet open box messages the warehouse once; counting it clears the message; the weekly nudge goes out on its day", async () => {
+    const { boxes } = await boxedLot({ sku: "GBS-135", qty: "6", boxes: ["6"] });
+    await db.update(containers).set({ updatedAt: new Date(Date.now() - 4 * 86_400_000) }).where(eq(containers.id, boxes[0]));
+    const first = await runTakeoutReminders({ organizationId: w.orgId });
+    expect(first.stale).toBeGreaterThan(0);
+    const mine = () => db.select().from(notifications).where(and(eq(notifications.kind, "inventory.takeout.count_open_box"), eq(notifications.entityId, boxes[0])));
+    const msgs = await mine();
+    expect(msgs.map((m) => m.recipientUserId)).toContain(w.wh.userId);
+    expect(msgs.map((m) => m.recipientUserId)).not.toContain(w.whRvs.userId);
+    await runTakeoutReminders({ organizationId: w.orgId });
+    expect(await mine()).toHaveLength(msgs.length);
+    await resolveDoneNotifications(db, { organizationId: w.orgId });
+    expect((await mine()).every((m) => m.resolvedAt === null)).toBe(true);
+    await countWhatIsLeft(w.wh, { containerId: boxes[0], counted: "6", idempotencyKey: key() });
+    await resolveDoneNotifications(db, { organizationId: w.orgId });
+    expect((await mine()).every((m) => m.resolvedAt !== null)).toBe(true);
+    // Weekly nudge on Monday 2026-11-23 (default day 1), once per site and day.
+    const monday = new Date("2026-11-23T01:00:00Z");
+    const a = await runTakeoutReminders({ organizationId: w.orgId, now: monday });
+    const b = await runTakeoutReminders({ organizationId: w.orgId, now: monday });
+    expect(a.weekly).toBeGreaterThan(0);
+    expect(b.weekly).toBe(0);
+    expect((await runTakeoutReminders({ organizationId: w.orgId, now: new Date("2026-11-24T01:00:00Z") })).weekly).toBe(0);
   });
 });
