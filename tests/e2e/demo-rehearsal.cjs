@@ -24,6 +24,7 @@
  *   o. Finance sends the invoice for approval.  p. The owner approves it on To approve.  q. Finance saves it to the books.
  *   r. Scene 6: the Luntian soap taken off the shelf by scanning its two box labels.
  *   s. Scene 7: trace back (soap lot → supplier lots) and forward (lotion lot → Isla Spa).  t. Scene 8: owner Home.
+ *   u. ADR-138: Mara takes a soap bar out for a Lazada order on her phone; Lito counts the open box nobody counted.
  * Fails loudly on assertion errors, error pages, page errors and failed requests (HTTP >= 400).
  */
 const fs = require('fs');
@@ -920,6 +921,38 @@ section('t. the owner sees what happened (scene 8)', async () => {
   await close();
 });
 
+
+// ---------------------------------------------------------------- u. ADR-138: a few pieces for an online order, then the quiet box is counted
+section('u. take a few out: Mara records a Lazada order on her phone; Lito counts the open box nobody counted (ADR-138)', async () => {
+  const { page, close } = await asUser(who('sales'), PHONE);
+  await go(page, '/inventory/take-out');
+  await page.getByTestId('takeout-product').filter({ hasText: 'Acapulco Soap' }).first().click();
+  await page.getByTestId('takeout-line').first().waitFor();
+  await page.getByTestId('purpose-sold_online').click();
+  await page.getByRole('button', { name: 'Lazada', exact: true }).click();
+  await page.fill('#orderRef', '2611LZD0007');
+  await page.getByTestId('takeout-save').click();
+  await page.getByTestId('takeout-saved').waitFor();
+  await expectText(page, 'Taken out · TKO-');
+  await expectText(page, 'Sold online · Lazada · order 2611LZD0007');
+  await shot(page, 'takeout-saved-phone');
+  await close();
+  const w = await asUser(who('warehouse.nfd'), PHONE);
+  await w.page.getByTestId('home-shop-shelf').waitFor();
+  await go(w.page, '/inventory/take-out/count');
+  const row = w.page.getByTestId('count-left-list').locator('li').filter({ hasText: 'Not counted for' }).first();
+  const head = row.locator('button').first();
+  const pieces = ((await head.innerText()).match(/(\d+)\s*$/) || [])[1];
+  assert(pieces, 'the quiet box shows the pieces the app expects');
+  await head.click();
+  await w.page.locator('input[id^="count-"]').fill(pieces);
+  await w.page.getByTestId('count-save').click();
+  await w.page.getByTestId('count-result').waitFor();
+  await expectText(w.page, 'Counted. It matches.');
+  await shot(w.page, 'count-left-matches-phone');
+  log('take-out saved; quiet box counted (', pieces, 'pieces )');
+  await w.close();
+});
 
 // ---------------------------------------------------------------- runner
 // UNTIL=<letter> stops after that section (for working on the script); the full run needs a fresh lite demo.
