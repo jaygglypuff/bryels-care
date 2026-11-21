@@ -148,6 +148,12 @@ export const workOrders = pgTable(
     productionLineId: uuid("production_line_id").references(() => productionLines.id),
     productionPlanLineId: uuid("production_plan_line_id").references(() => productionPlanLines.id),
     salesOrderId: uuid("sales_order_id").references(() => salesOrders.id),
+    /**
+     * ADR-138: what an order with no customer order is made for: stock | online_shop | samples | other (with a note).
+     * Null = for stock. Information only: the cover rule still treats it as for stock (order-cover-rule.ts).
+     */
+    madeFor: text("made_for"),
+    madeForNote: text("made_for_note"),
     /** Total bulk quantity = batch_count × batch_size_base (base unit of the formula, g). */
     qtyPlannedBase: numeric("qty_planned_base", QTY).notNull(),
     baseUom: text("base_uom").notNull().default("g"),
@@ -199,6 +205,9 @@ export const workOrders = pgTable(
     check("ck_work_orders_revisions", sql`${t.status} in ('draft','cancelled') or (${t.formulaRevisionId} is not null and ${t.routingRevisionId} is not null)`),
     check("ck_work_orders_release", sql`${t.status} not in ('released','in_progress','completed','closed') or (${t.approvedBy} is not null and ${t.approvedAt} is not null)`),
     check("ck_work_orders_cancel", sql`${t.status} <> 'cancelled' or ${t.cancelReason} is not null`),
+    // ADR-138: "Made for" only on orders with no customer order; "other" says what for.
+    check("ck_work_orders_made_for", sql`${t.madeFor} is null or (${t.madeFor} in ('stock','online_shop','samples','other') and ${t.salesOrderId} is null)`),
+    check("ck_work_orders_made_for_note", sql`coalesce(${t.madeFor}, '') <> 'other' or coalesce(length(trim(${t.madeForNote})), 0) >= 3`),
   ],
 );
 

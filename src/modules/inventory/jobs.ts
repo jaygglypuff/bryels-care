@@ -4,6 +4,7 @@ import { type RebuildPayload, type ReconcilePayload, rebuildBalances, rebuildKey
 import { expireDueReservations } from "./reservations";
 
 export { inventoryExpiryCheckJob } from "./jobs/expiry-check";
+export { inventoryTakeoutRemindersJob } from "./jobs/takeout-reminders";
 
 const manilaDate = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 

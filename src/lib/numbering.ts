@@ -36,6 +36,7 @@ export const NUMBERING_DEFAULTS = {
   TR: yearly("TR", 6),
   CNT: yearly("CNT", 4),
   ADJ: yearly("ADJ", 5),
+  TKO: yearly("TKO", 6), // ADR-138: take a few out
   RSV: yearly("RSV", 6),
   DOC: yearly("DOC", 7), // W1E: generated documents, organization scope (A-RPT-03)
   // Wave 2 W2C: inspections and deviations (data-model §9.2)

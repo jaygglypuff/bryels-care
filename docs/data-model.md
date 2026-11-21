@@ -1003,6 +1003,7 @@ Business owners: boxes, counts, adjustments and reservations now work as describ
 | `stock_reservations` | `reservation_number` (rule `RSV`), `demand_reference`; demand types add `batch` and `manual` | Sales allocation ignores reservations of the order being allocated and converts them. |
 | `allocation_rules` | New: FEFO/FIFO per default, material kind, material, product or customer, optional minimum shelf life | Precedence customer > product/material > material kind > default > built-in FEFO. |
 | Inventory settings | Keys live in the platform `settings` table and the registry `src/lib/settings.ts` (ADR-028); the interim `inventory_settings` table was dropped before any deployment | Same keys and defaults; `src/modules/inventory/policy.ts` keeps the inventory helpers (`getInventorySetting`, `effectiveInventorySettings`). |
+| Take a few out (ADR-138, migration 0045) | `stock_takeouts` (number `TKO-{YY}-{SEQ}`, `status` awaiting_approval → posted \| rejected \| cancelled; posted → reversed, state machine `stock_takeout`; `purpose` sold_online \| customer_sample \| giveaway \| display \| staff_use \| other; `channel` and `platform_order_ref` only for sold_online; `customer_id` or `recipient_name` only for samples; `total_pieces`; `approval_reason`; who/when per state; idempotency key unique per organization), `stock_takeout_lines` (product, lot, location, optional box, `qty_base`, `opened_box`, `stock_movement_id`, `reversal_movement_id`), `shelf_checks` (append-only quick counts: box or loose lot at a place, expected, counted, reason and the `stock_adjustment_id` of a difference; CHECK: a difference has both), `locations.takeout_shelf` (storage only) | Each posted line is one `issue` movement (source `stock_takeout`, `meta.containerId`); undo posts `reversal` rows; generic reversal refuses them. Lock order: idempotency key → boxes → lots → numbering → balances. A difference found by a count is a normal `stock_adjustments` document. |
 | V-FREEZE | Enforced inside `postMovement` for every movement type and caller (`src/modules/inventory/freeze.ts`), so production, dispatch, receiving and reversals are covered; scan-move, put-away, undo, adjustments and inter-site check it first for a clearer message | Only the freezing count's own posting is exempt (`freezeExemptCountId`). Location holds are enforced by put-away, scan-move, the lot move page and inter-site transfer (`assertHoldAllowsMove`). |
 
 ### 3.4 Procurement
@@ -3271,6 +3272,21 @@ Done that way for the ways of adding an ingredient (ADR-137): `0044_adr137_add_m
 Existing rows keep their meaning (`add_method` default `weigh`, every new column null or false). `pnpm -s drizzle-kit
 generate` reports no changes. The next generated file must be renamed to `0045_<description>` (snapshot
 `0045_snapshot.json`).
+Done that way for "Take a few out" (ADR-138): `0045_adr138_takeouts` (idx 44, snapshot `0045_snapshot.json`;
+`0044_snapshot.json` restored after drizzle-kit overwrote it). It adds:
+
+| Table / column | Meaning |
+|---|---|
+| `stock_takeouts` (new) | One take-out: site, `takeout_number`, `status` (CHECK list), `purpose` (CHECK list), `channel` (CHECK: exactly when sold_online), `platform_order_ref` (sold_online only), `customer_id` / `recipient_name` (samples only), `note` (CHECK: ≥ 3 letters for other), `total_pieces` (> 0), `approval_reason` (CHECK: set while awaiting approval), `idempotency_key` (unique per organization), `correlation_id`, created / posted / approved / rejected (with reason) / cancelled (with reason) / reversed (with reason) by and at (CHECKs per state). Indexes: site + created, customer, creator + day |
+| `stock_takeout_lines` (new) | Line number (unique per take-out), product, lot, location, optional container, `qty_base` > 0, `base_uom`, `opened_box`, `stock_movement_id`, `reversal_movement_id`. Indexes: lot, container |
+| `shelf_checks` (new) | "Count what's left": location, optional container, lot, `expected_qty`, `counted_qty` (≥ 0), `reason_code`, `note`, `stock_adjustment_id`, `counted_by`, `counted_at`, `idempotency_key` (unique per organization). CHECK `ck_shelf_checks_difference`: a difference has a reason and a stock adjustment |
+| `locations.takeout_shelf` | The online shop shelf (default false; CHECK `locations_takeout_shelf_ck`: storage only) |
+| `work_orders.made_for`, `made_for_note` | What an order with no customer order is made for (stock \| online_shop \| samples \| other; CHECKs `ck_work_orders_made_for`: only without `sales_order_id`; `ck_work_orders_made_for_note`: a note for other) |
+| `approval_rules.document_type` | CHECK list gains `stock_takeout` |
+
+Existing rows keep their meaning (every new column defaults to false or null). No custom SQL. `pnpm -s drizzle-kit
+generate` reports no changes. The next generated file must be renamed to `0046_<description>` (snapshot
+`0046_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

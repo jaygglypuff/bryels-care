@@ -31,6 +31,7 @@ import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./comm
 import { assertLocationsNotFrozen } from "./counts";
 import { looseQty } from "./moves";
 import { getInventorySetting } from "./policy";
+import { type InTx, runInTx } from "@/lib/tx";
 import { type ApprovalEvaluation, type ApprovalVerdict, type NextActors, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, nextActors, notifyNextActors, rolesAllowedNow, stepVerdict } from "@/modules/governance";
 
 /** Value basis of the `stock_adjustment` approval rules; an unknown value counts as above every bound when configured. */
@@ -87,7 +88,8 @@ async function lockAdjustment(tx: Tx, ctx: AuthContext, id: string) {
 }
 
 /** Drafts an adjustment (found / lost / damaged …) at the current site. Nothing posts until approved. */
-export async function createAdjustment(ctx: AuthContext, input: CreateAdjustmentInput) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. "Count what's left" (ADR-138, shelf-checks.ts). */
+export async function createAdjustment(ctx: AuthContext, input: CreateAdjustmentInput, opts?: InTx) {
   ctx.require("inventory.adjustment.create");
   ctx.requireSite(ctx.currentSiteId);
   // Shared reason codes, category `adjustment` (US-1-24): active code; codes that need a note (Other) get one.
@@ -100,7 +102,7 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
   if (input.lines.length > 100) throw new DomainError("validation", "An adjustment can have at most 100 lines.");
   const key = `adjustment_create:${input.idempotencyKey}`;
   const body = { ...input, idempotencyKey: undefined };
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const claimed = await claimIdempotencyKey<{ id: string; adjustmentNumber: string }>(tx, ctx.organizationId, key, "inventory.adjustment.create", body);
     if (claimed) return { ...claimed.replay, replayed: true };
     const siteId = ctx.currentSiteId;
@@ -188,9 +190,9 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
 }
 
 /** Submits a draft for approval; computes the value basis of the approval rule. */
-export async function submitAdjustment(ctx: AuthContext, id: string) {
+export async function submitAdjustment(ctx: AuthContext, id: string, opts?: InTx) {
   ctx.require("inventory.adjustment.submit");
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const a = await lockAdjustment(tx, ctx, id);
     adjustmentMachine.assert(a.status, "submitted", `Adjustment ${a.adjustmentNumber}`);
     const lines = await tx.select().from(stockAdjustmentLines).where(eq(stockAdjustmentLines.stockAdjustmentId, a.id));

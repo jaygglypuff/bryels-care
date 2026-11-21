@@ -7,6 +7,7 @@ import {
   auditEvents,
   batches,
   containers,
+  stockTakeouts,
   equipment,
   formulaRevisions,
   formulas,
@@ -119,15 +120,27 @@ describe("lite profile on an empty database", () => {
     ]);
     expect(bs.map((b) => b.status)).toEqual(["closed", "awaiting_qc", "in_process", "planned"]);
 
-    // The released soap: on the finished goods bay, in 5 boxes (4 × 24 + 22), the boxes where the stock is.
+    // The released soap: made in 5 boxes (4 × 24 + 22). ADR-138: the part box and one full box went to the online shop
+    // shelf; 4 bars were taken out (Shopee 2, TikTok Shop 1, a sample for Isla Spa 1) from the part box, which is open now.
     const fg = (await db.select().from(locations).where(eq(locations.code, "FG-01")))[0];
+    const shop = (await db.select().from(locations).where(eq(locations.code, "SHOP-01")))[0];
+    expect(shop.takeoutShelf).toBe(true);
     const [soapLot] = await db.select().from(inventoryLots).where(eq(inventoryLots.id, bs[0].outputLotId!));
     expect(soapLot.qualityStatus).toBe("released");
     const bal = await db.select().from(inventoryBalances).where(and(eq(inventoryBalances.lotId, soapLot.id), eq(inventoryBalances.locationId, fg.id)));
-    expect(new Decimal(bal[0].qtyBase).toNumber()).toBe(118);
+    expect(new Decimal(bal[0].qtyBase).toNumber()).toBe(72);
+    const onShelf = await db.select().from(inventoryBalances).where(and(eq(inventoryBalances.lotId, soapLot.id), eq(inventoryBalances.locationId, shop.id)));
+    expect(new Decimal(onShelf[0].qtyBase).toNumber()).toBe(42);
     const boxes = await db.select().from(containers).where(eq(containers.organizationId, O));
     expect(boxes).toHaveLength(5);
-    for (const b of boxes) expect(b.currentLocationId).toBe(fg.id);
+    expect(boxes.filter((b) => b.currentLocationId === fg.id)).toHaveLength(3);
+    expect(boxes.filter((b) => b.currentLocationId === shop.id).map((b) => b.status).sort()).toEqual(["open", "sealed"]);
+    const tko = await db.select().from(stockTakeouts).where(eq(stockTakeouts.organizationId, O)).orderBy(asc(stockTakeouts.takeoutNumber));
+    expect(tko.map((t) => [t.purpose, t.channel, Number(t.totalPieces), t.status])).toEqual([
+      ["sold_online", "shopee", 2, "posted"],
+      ["customer_sample", null, 1, "posted"],
+      ["sold_online", "tiktok_shop", 1, "posted"],
+    ]);
     // The lotion waits for QA in the QA waiting area.
     const [lotionLot] = await db.select().from(inventoryLots).where(eq(inventoryLots.id, bs[1].outputLotId!));
     expect(lotionLot.qualityStatus).toBe("quarantine");

@@ -14,6 +14,7 @@ export const RECORD_ROUTES: Record<string, (id: string) => string> = {
   goods_receipt: (id) => `/inventory/receive/${id}`,
   stock_adjustment: (id) => `/inventory/adjustments/${id}`,
   stock_count: (id) => `/inventory/counts/${id}`,
+  stock_takeout: (id) => `/inventory/take-outs/${id}`,
   stock_reservation: () => "/inventory/lots/reservations",
   container: (id) => `/inventory/containers/${id}`,
   location: (id) => `/masterdata/locations/${id}`,

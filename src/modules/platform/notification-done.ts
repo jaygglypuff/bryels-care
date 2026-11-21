@@ -153,6 +153,61 @@ export const DONE_RULES: readonly DoneRule[] = [
   { kinds: ["handoff.stock_adjustment"], waiting: byStatus("stock_adjustments", ["submitted"]) },
   { kinds: ["handoff.stock_adjustment_post"], waiting: byStatus("stock_adjustments", ["approved"]) },
   { kinds: ["handoff.count_variance"], waiting: byStatus("stock_counts", ["pending_approval"]) },
+  // ADR-138: a take-out above the limits waits for an OK.
+  { kinds: ["handoff.stock_takeout"], waiting: byStatus("stock_takeouts", ["awaiting_approval"]) },
+  // ADR-138 §3: "Count box …: nothing written down for N days" (dedupe takeout.stale:<box|loose>:<id>:<last activity>) waits
+  // until something happened to that box or shelf stock after the quiet spell (a take-out, a count, a move), or the box
+  // is no longer open with pieces in it.
+  {
+    kinds: ["inventory.takeout.count_open_box"],
+    recordId: (r) => r.dedupeKey,
+    waiting: async (q, org, keys) => {
+      const still = new Set<string>();
+      for (const k of keys) {
+        const m = /^takeout\.stale:(box|loose):([^:]+):(.+)$/.exec(k);
+        if (!m) continue;
+        const since = m[3];
+        if (m[1] === "box") {
+          if (!uuidRe.test(m[2])) continue;
+          const hit = await ids(q, sql`select c.id::text as id from containers c where c.id = ${m[2]}::uuid and c.organization_id = ${org}::uuid and c.status = 'open'
+            and exists (select 1 from container_contents cc where cc.container_id = c.id and cc.qty_base > 0)
+            and c.updated_at <= ${since}::timestamptz
+            and not exists (select 1 from shelf_checks sc where sc.container_id = c.id and sc.counted_at > ${since}::timestamptz)`);
+          if (hit.size) still.add(k);
+        } else {
+          const [loc, lot] = m[2].split("|");
+          if (!uuidRe.test(loc ?? "") || !uuidRe.test(lot ?? "")) continue;
+          const hit = await ids(q, sql`select b.id::text as id from inventory_balances b join inventory_lots l on l.id = b.lot_id and l.organization_id = ${org}::uuid
+            where b.location_id = ${loc}::uuid and b.lot_id = ${lot}::uuid and b.qty_base > 0 and b.updated_at <= ${since}::timestamptz
+            and not exists (select 1 from shelf_checks sc where sc.location_id = b.location_id and sc.lot_id = b.lot_id and sc.container_id is null and sc.counted_at > ${since}::timestamptz)`);
+          if (hit.size) still.add(k);
+        }
+      }
+      return still;
+    },
+  },
+  // ADR-138 §3: the weekly "count the open boxes" (dedupe takeout.weekly:<site>:<day>) waits while an open box of the
+  // site has not been counted since that day.
+  {
+    kinds: ["inventory.takeout.weekly_count"],
+    recordId: (r) => r.dedupeKey,
+    waiting: async (q, org, keys) => {
+      const still = new Set<string>();
+      for (const k of keys) {
+        const m = /^takeout\.weekly:([^:]+):(\d{4}-\d{2}-\d{2})$/.exec(k);
+        if (!m || !uuidRe.test(m[1])) continue;
+        const hit = await ids(q, sql`select c.id::text as id from containers c
+          join container_contents cc on cc.container_id = c.id and cc.qty_base > 0
+          join inventory_lots l on l.id = cc.lot_id and l.item_kind = 'product' and l.quality_status = 'released'
+          join locations loc on loc.id = c.current_location_id and loc.kind = 'storage'
+          where c.site_id = ${m[1]}::uuid and c.organization_id = ${org}::uuid and c.status = 'open'
+            and not exists (select 1 from shelf_checks sc where sc.container_id = c.id and sc.counted_at >= (${m[2]}::date::timestamp at time zone 'Asia/Manila'))
+          limit 1`);
+        if (hit.size) still.add(k);
+      }
+      return still;
+    },
+  },
   { kinds: ["handoff.setting_change"], waiting: byStatus("setting_change_requests", ["submitted"]) },
   // Floor checks: the weighing (dedupe handoff.weighing_check:<batch>:<record>) and the step (handoff.step_check:<record>:<time>).
   {

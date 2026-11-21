@@ -37,6 +37,8 @@ export async function createProductionOrderAction(_: ActionState, fd: FormData):
       idempotencyKey: str(fd, "idempotencyKey") || null,
       batchMode: str(fd, "batchMode") || null,
       batchSizes: fd.getAll("batchSizes").map(String),
+      madeFor: str(fd, "madeFor") || null,
+      madeForNote: str(fd, "madeForNote") || null,
     }));
   } catch (e) {
     return toActionState(e);

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShopShelfCard } from "./shop-shelf-card";
 import Decimal from "decimal.js";
 import { AlertTriangle, ArrowRight, Bell, CheckCircle2, ClipboardCheck, ListChecks, PhilippinePeso, Plus, Truck, Users } from "lucide-react";
 import type { ReactNode } from "react";
@@ -199,6 +200,8 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
           {s && <MoneyCard title="Sales today" icon={<PhilippinePeso size={16} />} href={s.href} value={s.masked ? plural(s.orders, "order", "orders") : peso(s.value)}>{plural(s.orders, "order", "orders")} confirmed today</MoneyCard>}
           {m && <MoneyCard title="Sales this month" icon={<PhilippinePeso size={16} />} href={m.href} value={m.masked ? plural(m.orders, "order", "orders") : peso(m.value)} testId="card-sales-month">{plural(m.orders, "order", "orders")} confirmed this month</MoneyCard>}
         </section>
+        {/* ADR-138: online shop shelf and the few pieces taken out today. */}
+        <ShopShelfCard ctx={ctx} />
         {sales.filter((i) => i !== next).length > 0 && <LineList title="Your orders" testId="home-sales-work" icon={<AlertTriangle size={18} />} lines={sales.filter((i) => i !== next).map((item) => ({ item, who: null, mine: true }))} />}
         {home.salesWeek && <SalesWeek week={home.salesWeek} scopeLabel={home.scope.label} generatedAt={home.generatedAt} />}
         {activity && activity.length > 0 && <RecentActivity rows={activity} showSite={all} />}

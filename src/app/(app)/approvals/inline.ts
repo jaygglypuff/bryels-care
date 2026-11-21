@@ -5,6 +5,8 @@
  */
 export const INLINE_DECISIONS: Record<string, { reject: string }> = {
   "approval.stock_adjustment": { reject: "Reject" },
+  // ADR-138: OK posts the pieces out (re-checked now); "Say no" needs a reason.
+  "approval.stock_takeout": { reject: "Say no" },
   "approval.purchase_request": { reject: "Reject" },
   "approval.purchase_order": { reject: "Send back" },
   "approval.supplier_return": { reject: "Send back" },

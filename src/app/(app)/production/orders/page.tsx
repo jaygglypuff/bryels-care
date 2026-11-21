@@ -49,7 +49,7 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <NeededBy date={r.neededBy} late={r.late} />
-        {r.salesOrderNumber && <span className="text-[13px] text-muted">For {r.salesOrderNumber}</span>}
+        <span className="text-[13px] text-muted" data-testid="made-for">{r.madeFor}</span>
         {/* ADR-082: who makes it */}
         <span className={cx("text-[13px]", r.assignedToMe ? "font-medium text-primary-text" : "text-fg-2")}>{whoMakes(r)}</span>
       </div>
@@ -90,7 +90,7 @@ const COLUMNS: Column<ProductionOrderRow>[] = [
   { key: "product", header: "Product", sortable: true, primary: true, cell: (r) => <>{r.productName}<CellMeta>{r.piecesText}{r.piecesWord === "made" ? " made" : ""}{r.batchesNote ? ` · ${r.batchesNote}` : ""}</CellMeta></> },
   { key: "number", header: "Order", sortable: true, cell: (r) => <CellCode>{r.number}</CellCode> },
   { key: "status", header: "Status", cell: (r) => <span className="inline-flex flex-wrap items-center gap-1"><OrderStatusChip status={r.status} label={r.statusLabel} subtitle={r.subtitle} warn={r.warn} /><OrderWarning text={r.warning} /></span> },
-  { key: "needed", header: "Needed by", sortable: true, cell: (r) => <>{r.neededBy ? <NeededBy date={r.neededBy} late={r.late} /> : <span className="text-muted">—</span>}{r.salesOrderNumber && <CellMeta>For {r.salesOrderNumber}</CellMeta>}</> },
+  { key: "needed", header: "Needed by", sortable: true, cell: (r) => <>{r.neededBy ? <NeededBy date={r.neededBy} late={r.late} /> : <span className="text-muted">—</span>}<CellMeta>{r.madeFor}</CellMeta></> },
   { key: "who", header: "Who makes it", hideBelow: "xl", cell: (r) => <span className={cx("text-[13px]", r.assignedToMe ? "font-medium text-primary-text" : "text-fg-2")}>{whoMakes(r)}</span> },
   { key: "next", header: "Next", cell: (r) => <NextCell r={r} /> },
 ];

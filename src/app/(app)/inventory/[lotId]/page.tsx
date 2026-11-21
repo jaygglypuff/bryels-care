@@ -6,6 +6,8 @@ import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime } from "@/lib/qty";
 import { EXPIRY_WARN_DAYS, getLotDetail, isPastExpiry, moveDestinations, type LotDetail } from "@/modules/inventory/lots";
 import { listContainers } from "@/modules/inventory/containers";
+import { lotTakeouts } from "@/modules/inventory/takeout-queries";
+import { TakeoutRows } from "@/ui/inventory/takeout-rows";
 import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -73,6 +75,8 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   const destinations = ctx.can("inventory.movement.post") ? await moveDestinations(ctx, lot) : [];
   const expired = lot.qualityStatus === "expired" || isPastExpiry(lot.expiresOn);
   const boxes = ctx.can("inventory.container.view") && lot.siteId === ctx.currentSiteId ? await listContainers(ctx, { q: lot.lotNumber }) : [];
+  // ADR-138: pieces of this lot taken out a few at a time (online orders, samples…).
+  const takeouts = await lotTakeouts(ctx, lot.id);
   const usable = lot.qualityStatus === "released" && !expired;
   const here = lot.siteId === ctx.currentSiteId;
   // The item page (every lot of this material / product, totals, suppliers, expiry); a lot of another site opens "All my sites".
@@ -215,6 +219,15 @@ export default async function LotPage({ params, searchParams }: { params: Promis
               <PlainRow key={b.id} href={`/inventory/containers/${b.id}`} title={b.locationName ?? b.locationCode ?? "No shelf yet"} code={b.containerNumber} />
             ))}
           </PlainList>
+        </section>
+      )}
+
+      {takeouts.length > 0 && (
+        <section id="takeouts" className="space-y-2">
+          <h2 className="text-[16px] font-semibold">Taken out a few at a time ({takeouts.length})</h2>
+          <div className="rounded-[8px] border border-line bg-surface px-4">
+            <TakeoutRows rows={takeouts} showLot={false} testId="lot-takeouts" />
+          </div>
         </section>
       )}
 

@@ -222,4 +222,5 @@ export { plannedBatchSizesG } from "./work-orders";
 export { batchBoxInfo, batchBoxInfoFor, planBatchBoxes, batchBoxPrintJobs, currentBoxPlan, leftOverWrappers, returnLeftOverWrappers, BOX_LABEL_KIND, type BatchBoxInfo, type PlanBoxesResult, type LeftOverWrapper } from "./batch-boxes";
 export { floorCheckNext, productionOrderNext, batchQaNext } from "./next-approver"; // docs/NEXT_APPROVER.md
 export { siteOrderCover, comingStock, COVER_ORDER_STATUSES, type SiteOrderCover, type CoverOrderMeta } from "./order-cover";
+export { MADE_FOR, MADE_FOR_WORDS, madeForText, isMadeFor, type MadeFor } from "./made-for"; // ADR-138
 export { coverOrders, comingWords, canShipFrom, type CanShipFrom, type ComingSource, type ComingKind, type LineCover, type OrderCoverResult, type OrderCoverState } from "./order-cover-rule";

@@ -44,6 +44,8 @@ export const BASE_APPROVE_PERMISSION: Partial<Record<ApprovalDocumentType, Permi
   // Wave 4 W4C (US-6-18)
   recall_case: "quality.recall_case.approve",
   change_control: "quality.change_control.approve",
+  // ADR-138: a take-out above the piece limits
+  stock_takeout: "inventory.takeout.approve",
 };
 
 /** Record types whose separation of duties is configurable (A-PM-14); every other type is mandatory. */
@@ -132,4 +134,6 @@ export const DEFAULT_APPROVAL_RULES: ApprovalRuleSpec[] = [
   rule({ documentType: "price_list", step: 1, label: "Finance or owner approval", requiredRoleCodes: ["finance", "owner_director"], requiredPermissionCode: "sales.price_list.approve", source: "A-W3D-03" }),
   // Wave 4 W4C (US-6-18): a change control is approved by QA (≠ the submitter); the owner can add steps (A-W4C-05).
   rule({ documentType: "change_control", step: 1, label: "QA approval", requiredRoleCodes: ["qa_qc"], requiredPermissionCode: "quality.change_control.approve", source: "A-W4C-05" }),
+  // ADR-138: a take-out above the piece limits (settings inventory.takeout.max_*) waits for the site manager or the owner.
+  rule({ documentType: "stock_takeout", step: 1, label: "Site manager or owner approval", requiredRoleCodes: ["site_manager", "owner_director"], requiredPermissionCode: "inventory.takeout.approve", source: "A-TAKE-03" }),
 ];

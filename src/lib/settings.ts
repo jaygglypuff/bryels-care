@@ -365,6 +365,65 @@ export const SETTINGS = {
     label: "Near-expiry alert buckets (days)",
   },
 
+  // ADR-138: "Take a few out" (online shop orders, samples, giveaways…). Every default is an assumption for the owner.
+  "inventory.takeout.channels": {
+    scopes: ["organization"],
+    schema: z.array(z.object({ code: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/), label: z.string().trim().min(1).max(40) }).strict()).min(1).max(20),
+    default: [
+      { code: "shopee", label: "Shopee" },
+      { code: "lazada", label: "Lazada" },
+      { code: "tiktok_shop", label: "TikTok Shop" },
+      { code: "own_website", label: "Own website" },
+      { code: "other", label: "Other online shop" },
+    ] as { code: string; label: string }[],
+    assumption: "A-TAKE-02",
+    group: "Inventory",
+    label: "Online shops for “Sold online”",
+    description: "The shops people choose from when they take pieces out for an online order. Removing a shop keeps it on old take-outs.",
+    whoChanges: "The owner or the person who runs the online shops.",
+  },
+  "inventory.takeout.max_pieces_per_line": {
+    scopes: ["organization", "site"],
+    schema: z.number().int().min(1).max(100_000),
+    default: 10,
+    assumption: "A-TAKE-03",
+    group: "Inventory",
+    label: "Take a few out: most pieces of one product without approval",
+    description: "Above this, the take-out waits for a manager's OK before stock changes.",
+    whoChanges: "The owner.",
+    requiresApproval: true,
+  },
+  "inventory.takeout.max_pieces_per_person_day": {
+    scopes: ["organization", "site"],
+    schema: z.number().int().min(1).max(1_000_000),
+    default: 30,
+    assumption: "A-TAKE-03",
+    group: "Inventory",
+    label: "Take a few out: most pieces one person takes in a day without approval",
+    description: "Counts every take-out of the person that day (undone ones do not count). Above this, the take-out waits for a manager's OK. A limit in pesos needs product costs first (A-TAKE-04).",
+    whoChanges: "The owner.",
+    requiresApproval: true,
+  },
+  "inventory.takeout.stale_days": {
+    scopes: ["organization", "site"],
+    schema: z.number().int().min(1).max(60),
+    default: 3,
+    assumption: "A-TAKE-05",
+    group: "Inventory",
+    label: "Remind to count an open box after (days)",
+    description: "An open box, or loose pieces on an online shop shelf, with no take-out and no count for this many days shows on the warehouse's Home and in their messages.",
+    whoChanges: "The warehouse lead or the site manager.",
+  },
+  "inventory.takeout.weekly_count_day": {
+    scopes: ["organization", "site"],
+    schema: z.number().int().min(0).max(7),
+    default: 1,
+    assumption: "A-TAKE-06",
+    group: "Inventory",
+    label: "Weekly “count the open boxes” reminder (1 = Monday … 7 = Sunday, 0 = off)",
+    whoChanges: "The warehouse lead or the site manager.",
+  },
+
   // Wave 2 W2F: governance and operations (US-1-14, US-1-25, US-1-26, US-2-30).
   /**
    * US-2-30 read-only maintenance mode (A-DEP-21, runbook §17a.2): while enabled every command from

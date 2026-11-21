@@ -125,6 +125,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
                         {isSection(l.effectiveSection) ? SECTION_LABELS[l.effectiveSection] : "Other areas"} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} ·{" "}
                         {canSeeLots && l.lotCount > 0 ? <Link className="underline" href={`/inventory?loc=${l.id}`}>{l.lotCount} lot{l.lotCount === 1 ? "" : "s"} in stock</Link> : `${l.lotCount} lots in stock`}
                         {!l.isPickable && " · not pickable"}
+                        {l.takeoutShelf && " · online shop shelf"}
                       </p>
                     </div>
                     <span className="flex flex-wrap items-center gap-2">

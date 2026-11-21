@@ -57,6 +57,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
             ["Lots in stock", String(l.lotsInStock)],
             ["Section", isSection(l.section) ? SECTION_LABELS[l.section] : "Not set (worked out from the class)"],
             ["Stock may be taken from here", l.isPickable ? "Yes" : "No"],
+            ["Online shop shelf", l.takeoutShelf ? "Yes: Take a few out takes from here first" : "No"],
             ["Contains", l.children.length ? l.children.map((c) => c.name).join(", ") : "—"],
           ]}
         />
@@ -75,6 +76,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
                     <SelectField name="section" label="Warehouse section" defaultValue={l.section} emptyLabel="Work it out from the type" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens. Does not change any stock rule." />
                   </Grid>
                   <CheckField name="isPickable" label="Stock here may be taken for orders and batches" defaultChecked={l.isPickable} />
+                  <CheckField name="takeoutShelf" label="Online shop shelf (Take a few out takes from here first)" defaultChecked={l.takeoutShelf} hint="For boxes kept for online shop orders and samples. Storage shelves only." />
                 </>
               }
             >

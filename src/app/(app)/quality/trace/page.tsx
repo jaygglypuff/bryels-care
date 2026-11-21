@@ -5,7 +5,8 @@ import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { traceGenealogy, type TraceNode } from "@/modules/quality/genealogy";
 import { Card, CardTitle, EmptyState, Input, PageHeader, buttonClass } from "@/ui/core";
 import { LotPickerNav } from "../lot-picker-nav";
-import { listLots } from "@/modules/inventory";
+import { listLots, lotTakeouts } from "@/modules/inventory";
+import { TakeoutRows } from "@/ui/inventory/takeout-rows";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { Banner, StatusChip } from "@/ui/status";
@@ -106,6 +107,15 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
   const supplierLot = !lotNumber && !batchNumber ? sp.supplierLot?.trim() || undefined : undefined;
   const searched = !!(lotNumber || batchNumber || supplierLot);
   const [t, lots] = await Promise.all([traceGenealogy(ctx, { lotNumber, batchNumber, supplierLot }), lotChoices(ctx)]);
+  // ADR-138: finished lots of the trace that went out a few pieces at a time (online orders, samples with the customer).
+  const tracedLots = new Set<string>();
+  const walk = (n: TraceNode) => {
+    if (n.kind === "lot") tracedLots.add(n.id);
+    n.children.forEach(walk);
+  };
+  if (t.root) walk(t.root);
+  t.forward.forEach(walk);
+  const takeouts = (await Promise.all([...tracedLots].map((id) => lotTakeouts(ctx, id)))).flat().filter((r) => r.status === "posted");
   const shownCode = t.query.lotNumber ?? t.query.batchNumber ?? "";
   const exportQuery = t.query.lotNumber ? `lotNumber=${encodeURIComponent(t.query.lotNumber)}` : t.query.batchNumber ? `batchNumber=${encodeURIComponent(t.query.batchNumber)}` : `supplierLot=${encodeURIComponent(t.query.supplierLot ?? "")}`;
   const linkCls = "inline-flex min-h-[44px] items-center rounded-[6px] border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
@@ -228,6 +238,14 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
                     </li>
                   ))}
                 </ul>
+              </Card>
+            )}
+
+            {takeouts.length > 0 && (
+              <Card>
+                <CardTitle>Taken out a few at a time</CardTitle>
+                <p className="mb-1 text-[13px] text-fg-2">Online shop orders, free samples, gifts, display and staff use. Samples name the customer when one was chosen.</p>
+                <TakeoutRows rows={takeouts} testId="trace-takeouts" />
               </Card>
             )}
 

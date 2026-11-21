@@ -351,7 +351,7 @@ export async function getProductionPlan(ctx: AuthContext, planId: string) {
     .orderBy(asc(productionPlanLines.lineNo));
   const wos = lines.length
     ? await db
-        .select({ id: workOrders.id, number: workOrders.workOrderNumber, status: workOrders.status, lineId: workOrders.productionPlanLineId })
+        .select({ id: workOrders.id, number: workOrders.workOrderNumber, status: workOrders.status, lineId: workOrders.productionPlanLineId, madeFor: workOrders.madeFor, madeForNote: workOrders.madeForNote })
         .from(workOrders)
         .where(and(inArray(workOrders.productionPlanLineId, lines.map((x) => x.l.id)), isNotNull(workOrders.productionPlanLineId)))
     : [];

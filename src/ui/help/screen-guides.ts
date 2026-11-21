@@ -11,6 +11,8 @@ export const SCREEN_GUIDES: readonly (readonly [RegExp, string])[] = [
   [/^\/inventory\/receive/, "inventory.receive"],
   [/^\/inventory\/receipts/, "inventory.receive"],
   [/^\/inventory\/move/, "inventory.move"],
+  // ADR-138: Take a few out, Count what's left, Taken out
+  [/^\/inventory\/take-outs?(\/|$)/, "inventory.takeout"],
   [/^\/inventory\/counts/, "inventory.count"],
   [/^\/labels/, "inventory.labels"],
   [/^\/production\/orders\/[^/]+\/materials/, "production.materials_list"],

@@ -41,6 +41,8 @@ export const DEFAULT_REASON_CODES: readonly ReasonCodeSeed[] = [
   { code: "unrecorded_receipt", name: "Receipt not recorded", appliesTo: ["count_variance"], sortOrder: 43 },
   { code: "data_entry", name: "Data entry error", appliesTo: ["count_variance"], sortOrder: 44 },
   { code: "loss", name: "Loss", appliesTo: ["count_variance"], sortOrder: 45 },
+  // ADR-138 "Count what's left": pieces gone that nobody wrote down (an online order or a sample not recorded)
+  { code: "unrecorded_takeout", name: "Taken out but not written down", appliesTo: ["adjustment", "count_variance"], sortOrder: 37 },
   // Reprints (W1E, docs/reports-and-templates.md §13.3)
   { code: "lost_copy", name: "Lost copy", appliesTo: ["reprint"], sortOrder: 50 },
   { code: "damaged_label", name: "Damaged or unreadable label", appliesTo: ["reprint"], sortOrder: 51 },

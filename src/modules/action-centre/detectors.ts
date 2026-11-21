@@ -76,6 +76,12 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       kind: "approval.stock_adjustment", siteId: String(r.site_id), entityType: "stock_adjustment", entityId: String(r.id), recordNumber: String(r.adjustment_number),
       title: r.name ? `Stock fix of ${r.name} waits for approval` : "A stock fix waits for approval", detail: `Why: ${String(r.reason_code).replace(/_/g, " ")}`, link: `/inventory/adjustments/${r.id}`, openedAt: d(r.at),
     })),
+  // ADR-138: a take-out above the limits (status awaiting_approval); the row opens the take-out.
+  "approval.stock_takeout": async (org) =>
+    (await run(sql`select t.id, t.site_id, t.takeout_number, t.created_at as at, t.total_pieces::text as pieces, t.approval_reason, u.display_name as who from stock_takeouts t join users u on u.id = t.created_by where t.organization_id = ${org}::uuid and t.status = 'awaiting_approval'`)).map((r) => ({
+      kind: "approval.stock_takeout", siteId: String(r.site_id), entityType: "stock_takeout", entityId: String(r.id), recordNumber: String(r.takeout_number),
+      title: `${r.who} takes out ${Number(r.pieces)} pieces`, detail: null, link: `/inventory/take-outs/${r.id}`, openedAt: d(r.at),
+    })),
   "approval.stock_count": async (org) =>
     (await run(sql`select id, site_id, count_number, created_at as at from stock_counts where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
       kind: "approval.stock_count", siteId: String(r.site_id), entityType: "stock_count", entityId: String(r.id), recordNumber: String(r.count_number),

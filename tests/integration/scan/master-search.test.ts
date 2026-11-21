@@ -73,6 +73,9 @@ beforeAll(async () => {
     values (gen_random_uuid(), ${kit.orgId}::uuid, ${kit.nfd.id}::uuid, 'PP-2611-007', '2026-11-01', '2026-11-30', ${me.id}::uuid, ${me.id}::uuid, ${me.id}::uuid)`);
   await db.execute(sql`insert into delivery_receipts (id, organization_id, site_id, shipment_id, dr_number, status, issued_at, issued_by, created_by)
     select gen_random_uuid(), s.organization_id, s.site_id, s.id, 'DR-26-00077', 'issued', now(), ${me.id}::uuid, ${me.id}::uuid from shipments s where s.site_id = ${kit.nfd.id}::uuid order by s.created_at limit 1`);
+  // ADR-138: a take-out (fictional header row; the search reads the number only).
+  await db.execute(sql`insert into stock_takeouts (id, organization_id, site_id, takeout_number, status, purpose, total_pieces, idempotency_key, created_by, posted_by, posted_at)
+    values (gen_random_uuid(), ${kit.orgId}::uuid, ${kit.nfd.id}::uuid, 'TKO-26-000077', 'posted', 'giveaway', 1, ${"master-search-" + randomUUID()}, ${me.id}::uuid, ${me.id}::uuid, now())`);
 
   for (const t of RECORD_TYPES) {
     const rows = (await db.execute(

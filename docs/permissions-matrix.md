@@ -186,6 +186,9 @@ description, sensitivity and phase are listed on one row.
 | `inventory.adjustment.{view,create,submit,export}` | View, draft, submit and export adjustments (found/lost/damaged), including documents not yet posted | N | P2 |
 | `inventory.adjustment.approve` | Approve an adjustment (thresholds in `approval_rules`) | S | P2 |
 | `inventory.adjustment.post` | Post an approved adjustment to the ledger | S | P2 |
+| `inventory.takeout.{view,create,export}` | ADR-138 "Take a few out": see, record and export small finished-goods outflows (online shop orders, samples, giveaways, display, staff use) and record "Count what's left" checks; the person may undo their own take-out the same day | N | P2 |
+| `inventory.takeout.approve` | Give the OK for a take-out above the piece limits (approval rules `stock_takeout`; never one's own, ADR-088 §2 top roles excepted) | S | P2 |
+| `inventory.takeout.void` | Undo any take-out at the site, any time (reversal with a reason) | S | P2 |
 | `inventory.held_stock_issue.approve` | Controlled exception: issue quarantined/on_hold stock (for example sampling, rework); reason mandatory | R | P2 |
 | `inventory.reservation.{view,create,void}` | StockReservation for work orders and sales orders | N | P2 |
 | `inventory.allocation.{view,create,void}` | StockAllocation of specific lots/containers (FEFO/FIFO) | N | P2 |
@@ -594,6 +597,7 @@ proposer cannot approve the same entry (section 5.1).
 | balance | v x* | v m* | v x m | v x | v | v x | v | v x | v | v x | – | v x* | – |
 | movement | v x* | v* | v p o x | v | v p | v p x | v p | v | v | v x | – | v x* | – |
 | adjustment | v a* | – | v c s a p | – | – | v c s | v c s | – | – | v | – | v x* | – |
+| takeout | v c a o x | v | v c a o x | – | – | v c x | v | – | v c x | – | – | v x | – |
 | held_stock_issue | a* | – | – | – | – | – | a | – | – | – | – | – | – |
 | reservation | v* | v* | v c o | v c o | v | v | v | v | v c o | – | – | v* | – |
 | allocation | v* | v* | v c o | v | v | v c o | v | – | v c o | – | – | v* | – |
@@ -611,7 +615,9 @@ role via `role_movement_types` configuration (A-PM-06; implemented in Phase 2 as
 permission: balances cannot go negative (database constraint, ADR-006 as amended). `a` on `pack`
 means acting as **checker** for another user's Pack; the service rejects verifying one's own
 (`packs.checked_by <> packed_by`). `balance.admin` (projection rebuild, reconciliation
-differences) is held by `system_admin` and `site_manager` (A-PM-19).
+differences) is held by `system_admin` and `site_manager` (A-PM-19). `takeout` (ADR-138): a take-out within the
+limits posts at once; above them `a` gives the OK; `o` undoes any take-out (the recorder undoes their own the same day
+without it); a "Count what's left" difference needs `adjustment.c s` (it becomes a stock adjustment).
 
 ### 3.4 procurement
 
@@ -1108,6 +1114,7 @@ codes below are seeded as `required_role_id`):
 | stock_adjustment | value ≤ 20,000 | site_manager | – | – |
 | stock_adjustment | value > 20,000 | site_manager | owner_director | – |
 | stock_count_variance | variance_pct > 2 or value > 20,000 | site_manager | owner_director | – |
+| stock_takeout | above `inventory.takeout.max_pieces_per_line` or `.max_pieces_per_person_day` (ADR-138) | site_manager or owner_director | – | – |
 | formula_revision | any | qa_qc | site_manager or owner_director | – |
 | routing_revision | any | qa_qc | site_manager or owner_director | – |
 | disposition_conditional_release | any | qa_qc | qa_qc (different user) | owner_director |

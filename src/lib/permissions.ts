@@ -432,6 +432,12 @@ export const PERMISSIONS = [
   // ADR-074 (S2): production order daily log and defects (docs/permissions-matrix.md §3.5)
   "production.daily_log.view",
   "production.daily_log.create",
+  // ADR-138: take a few finished pieces out (online shop, samples, giveaways, display, staff use)
+  "inventory.takeout.view",
+  "inventory.takeout.create",
+  "inventory.takeout.approve",
+  "inventory.takeout.void",
+  "inventory.takeout.export",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1560,6 +1566,21 @@ const S2_GRANTS: Record<string, readonly Permission[]> = {
   qa_qc: ["production.daily_log.view"],
 };
 for (const [role, grants] of Object.entries(S2_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+
+// ADR-138: "Take a few out" (docs/permissions-matrix.md §3.2 takeout row). The warehouse and the sales desk record
+// take-outs (online shop orders, samples); the site manager also approves the ones above the limits and undoes any
+// take-out (void = reversal with a reason); the owner holds every string. `.view` reaches the VIEW_ALL roles
+// (system_admin, site_manager, qa_qc for the trace, auditor). A person undoes their own take-out the same day
+// without `.void` (service rule).
+const TAKEOUT_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: ["inventory.takeout.create", "inventory.takeout.approve", "inventory.takeout.void", "inventory.takeout.export"],
+  warehouse_operator: ["inventory.takeout.view", "inventory.takeout.create", "inventory.takeout.export"],
+  sales_cs: ["inventory.takeout.view", "inventory.takeout.create", "inventory.takeout.export"],
+  auditor: ["inventory.takeout.export"],
+};
+for (const [role, grants] of Object.entries(TAKEOUT_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
 

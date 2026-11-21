@@ -8,7 +8,7 @@ import { analyticsReconcileKpisJob, analyticsSnapshotKpisJob } from "@/modules/a
 import { documentsRenderJob } from "@/modules/documents/jobs/render";
 import { identitySessionPurgeJob } from "@/modules/identity/jobs";
 import { platformAlertsEvaluateJob, platformMetricsSampleJob } from "@/modules/governance/jobs/metrics";
-import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcileJob, inventoryReservationExpiryJob } from "@/modules/inventory/jobs";
+import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcileJob, inventoryReservationExpiryJob, inventoryTakeoutRemindersJob } from "@/modules/inventory/jobs";
 import { salesQuoteExpiryJob } from "@/modules/sales/quotations-expiry-job";
 import { salesDeliveryReceiptReminderJob } from "@/modules/sales/jobs/dr-reminder"; // W3E
 import { importJobProcessJob } from "@/modules/imports/jobs/process";
@@ -46,6 +46,7 @@ export function jobDefinitions(): AnyJobDefinition[] {
     procurementReorderSuggestJob, // W4A (US-6-04)
     platformRetentionSweepJob, // W4F (US-9-05)
     productionCuringReminderJob, // ADR-080 G2 (V2-5)
+    inventoryTakeoutRemindersJob, // ADR-138 §3
   ];
 }
 

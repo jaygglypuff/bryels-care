@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
-import { addDays, getProductionPlan, manilaToday, orderStateWord, type ProductionPlanDetail } from "@/modules/production";
+import { addDays, getProductionPlan, madeForText, manilaToday, orderStateWord, type ProductionPlanDetail } from "@/modules/production";
 import { Card, Field, Input, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { Banner, Chip, StatusChip } from "@/ui/status";
@@ -113,6 +113,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
                       Production order {l.workOrder.number}
                     </Link>
                     <StatusChip status={l.workOrder.status} label={orderStateWord(l.workOrder.status)} />
+                    {!l.salesOrderNumber && <span className="text-fg-2">{madeForText({ madeFor: l.workOrder.madeFor, madeForNote: l.workOrder.madeForNote })}</span>}
                   </p>
                 ) : d.actions.canConvert ? (
                   <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "convert", planLineId: l.id }} label="Create production order" variant="secondary" size="sm">

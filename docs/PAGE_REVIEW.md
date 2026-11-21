@@ -134,6 +134,10 @@ Total screens: 250.
 | `/inventory/lots` | ☑ 2026-10-31 | Redirect to /inventory (kept). |
 | `/inventory/lots/reservations` | ☑ 2026-10-31 | “Which one to use first / set aside”: items by name, FEFO rule hidden (“Use this first”), reasons in words; set-aside rows with “Let it go”; hours folded. |
 | `/inventory/move` | ☑ 2026-10-31 | Intro; scan or type the item name (matches to tap); shelves by name; recent moves as rows. |
+| `/inventory/take-out` | ☑ 2026-11-21 | ADR-138 Take a few out: scan a box or lot, or tap a product (shop shelf / open box first); pieces with + / −; why (shop, sample's customer); one green button; undo right after. |
+| `/inventory/take-out/count` | ☑ 2026-11-21 | ADR-138 Count what's left: open boxes and shop shelf stock, quiet ones first; match = one tap; difference = reason → stock fix. |
+| `/inventory/take-outs` | ☑ 2026-11-21 | ADR-138 Taken out: list toolbar (state tabs, search, period, why, person), table, totals by product / reason / person / day; download in ⋯ More. |
+| `/inventory/take-outs/[id]` | ☑ 2026-11-21 | ADR-138 One take-out: pieces and boxes, who and why; OK / Say no, Cancel, Undo with a reason. |
 | `/inventory/movements/[id]` | ☑ 2026-10-31 | “Moved: <item>”; next step; undo (kept on record) with reason + typed REVERSE kept at the bottom; details folded; undo rows as list. |
 | `/inventory/movements` | ☑ 2026-10-31 | “Stock changes”: PlainList rows (item, type chip with icon, shelves in words, who, when; amount right); plain filter chips. 390 px: everything visible. |
 | `/inventory` | ☑ 2026-10-31 | Intro; “Receive a delivery”; other stock screens in ⋯ More; ADR-090 list kept. |

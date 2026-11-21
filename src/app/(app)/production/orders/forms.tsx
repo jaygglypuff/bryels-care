@@ -49,6 +49,7 @@ export function ProductionOrderForm({ formulas, lines, today, prefill, initialPr
   const [sizeKg, setSizeKg] = useState(ref ? D(ref).div(1000).toString() : "");
   const per = perBatch(current, sizeKg);
   const [pieces, setPieces] = useState(prefill?.missing ?? "");
+  const [madeFor, setMadeFor] = useState("");
   const word = (current?.family ?? "").toLowerCase().includes("soap") ? "bars" : "pieces";
   return (
     <ActionForm action={createProductionOrderAction} hidden={prefill ? { salesOrderId: prefill.salesOrderId } : undefined} submit="Create order" pending="Creating…" variant="cta" size="lg" className="flex flex-col gap-5">
@@ -87,6 +88,21 @@ export function ProductionOrderForm({ formulas, lines, today, prefill, initialPr
             <Field label="Start date" htmlFor="plannedStart" error={fe.plannedStart}>
               <Input id="plannedStart" name="plannedStart" type="date" defaultValue={today} required />
             </Field>
+            {!prefill && (
+              <Field label="Made for" htmlFor="madeFor" error={fe.madeFor} hint="No customer order: what is it for? Optional.">
+                <Select id="madeFor" name="madeFor" value={madeFor} onChange={(e) => setMadeFor(e.target.value)}>
+                  <option value="">For stock</option>
+                  <option value="online_shop">For the online shop</option>
+                  <option value="samples">For samples</option>
+                  <option value="other">Other (say what)</option>
+                </Select>
+              </Field>
+            )}
+            {!prefill && madeFor === "other" && (
+              <Field label="What is it for?" htmlFor="madeForNote" error={fe.madeForNote}>
+                <Input id="madeForNote" name="madeForNote" maxLength={200} placeholder="For example: trade fair in March" required />
+              </Field>
+            )}
           </div>
           <BatchChoice
             key={productId}
