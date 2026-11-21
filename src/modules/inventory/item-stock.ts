@@ -191,6 +191,8 @@ export function movementSentence(m: {
       return `Moved ${q}${m.toName ? ` to ${m.toName}` : ""}`;
     case "issue":
       if (m.docType === "maintenance_work_order") return `Gave out ${q} for maintenance`;
+      // ADR-138: "Take a few out" (the reason names the shop or the sample's customer).
+      if (m.docType === "stock_takeout") return `Took out ${q}${m.reason ? ` (${m.reason.replace(/^Take-out [^:]+:\s*/, "")})` : ""}`;
       return `Sent ${q} out${m.docNumber ? ` (${m.docNumber.trim()})` : ""}`;
     case "shipment":
       return `Shipped ${q} to a customer${m.docNumber ? ` (${m.docNumber.trim()})` : ""}`;

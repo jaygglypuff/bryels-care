@@ -5,7 +5,7 @@ import { refreshCurrentPage } from "@/lib/in-place";
 import { refreshActionItems } from "@/modules/action-centre";
 import { decideExpenseClaim, approveInvoice, returnInvoice } from "@/modules/finance";
 import { approveImport, rejectImport } from "@/modules/imports";
-import { approveAdjustment, rejectAdjustment } from "@/modules/inventory";
+import { approveAdjustment, approveTakeout, rejectAdjustment, rejectTakeout } from "@/modules/inventory";
 import { decidePurchaseOrder, decidePurchaseRequest, decideSupplierReturn } from "@/modules/procurement";
 import { approveProductionOrder, decideMaterialSubstitution, type ApproveResult } from "@/modules/production";
 import { decideChangeControl } from "@/modules/quality";
@@ -22,6 +22,7 @@ type Decide = (ctx: AuthContext, id: string, note: string | null, idempotencyKey
 
 const APPROVE: Record<string, Decide> = {
   "approval.stock_adjustment": (ctx, id, note) => approveAdjustment(ctx, id, note),
+  "approval.stock_takeout": (ctx, id, note) => approveTakeout(ctx, id, note),
   "approval.purchase_request": (ctx, id, note) => decidePurchaseRequest(ctx, { requestId: id, decision: "approve", note }),
   "approval.purchase_order": (ctx, id, note) => decidePurchaseOrder(ctx, { purchaseOrderId: id, decision: "approve", note }),
   "approval.supplier_return": (ctx, id, note) => decideSupplierReturn(ctx, { returnId: id, decision: "approve", note }),
@@ -56,6 +57,7 @@ function approvedMessage(kind: string, result: unknown): string {
 
 const REJECT: Record<string, Decide> = {
   "approval.stock_adjustment": (ctx, id, reason) => rejectAdjustment(ctx, id, reason ?? ""),
+  "approval.stock_takeout": (ctx, id, reason) => rejectTakeout(ctx, id, reason ?? ""),
   "approval.purchase_request": (ctx, id, reason) => decidePurchaseRequest(ctx, { requestId: id, decision: "reject", note: reason }),
   "approval.purchase_order": (ctx, id, reason) => decidePurchaseOrder(ctx, { purchaseOrderId: id, decision: "return", note: reason }),
   "approval.supplier_return": (ctx, id, reason) => decideSupplierReturn(ctx, { returnId: id, decision: "return", note: reason }),

@@ -21,6 +21,8 @@ export type ActionKind = {
 export const ACTION_KINDS: readonly ActionKind[] = [
   // Approvals
   { kind: "approval.stock_adjustment", tab: "approvals", label: "Stock fix to approve", severity: "warning", permission: "inventory.adjustment.approve", actionLabel: "Open the stock fix" },
+  // ADR-138: a take-out above the piece limits waits for the site manager's or the owner's OK.
+  { kind: "approval.stock_takeout", tab: "approvals", label: "Take-out to approve", severity: "info", permission: "inventory.takeout.approve", actionLabel: "Open the take-out" },
   { kind: "approval.stock_count", tab: "approvals", label: "Count difference to approve", severity: "warning", permission: "inventory.stock_count.approve", actionLabel: "Open the count" },
   // Consultant review 2026-10-30: replaces "approval.work_order_release" (planned only, opened the old work-order
   // screen). Draft and planned production orders, decided inline with approveProductionOrder (gate in wiring.ts).

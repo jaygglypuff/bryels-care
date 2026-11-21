@@ -153,6 +153,8 @@ export const DONE_RULES: readonly DoneRule[] = [
   { kinds: ["handoff.stock_adjustment"], waiting: byStatus("stock_adjustments", ["submitted"]) },
   { kinds: ["handoff.stock_adjustment_post"], waiting: byStatus("stock_adjustments", ["approved"]) },
   { kinds: ["handoff.count_variance"], waiting: byStatus("stock_counts", ["pending_approval"]) },
+  // ADR-138: a take-out above the limits waits for an OK.
+  { kinds: ["handoff.stock_takeout"], waiting: byStatus("stock_takeouts", ["awaiting_approval"]) },
   { kinds: ["handoff.setting_change"], waiting: byStatus("setting_change_requests", ["submitted"]) },
   // Floor checks: the weighing (dedupe handoff.weighing_check:<batch>:<record>) and the step (handoff.step_check:<record>:<time>).
   {

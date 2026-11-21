@@ -85,6 +85,10 @@ export async function reverseMovement(ctx: AuthContext, input: ReverseMovementIn
         `A ${original.movementType} is corrected from its source document (${original.sourceDocumentType ?? "document"} ${original.sourceDocumentNumber ?? ""}), not here.`.replace(" )", ")"),
       );
     }
+    // ADR-138: a take-out is undone from the take-out ("Undo"), so the entry, its box and the ledger stay in step.
+    if (original.sourceDocumentType === "stock_takeout") {
+      throw new DomainError("state", `This is a take-out (${original.sourceDocumentNumber ?? ""}). Undo it from the take-out instead.`.replace(" ()", ""), { rule: "takeout_movement" });
+    }
     const [already] = await tx.select({ id: stockMovements.id }).from(stockMovements).where(eq(stockMovements.reversalOfId, original.id)).limit(1);
     if (already) throw new DomainError("conflict", "This movement has already been reversed.");
     // A movement that moved or changed a box (W1C) also changed the box's location or contents; a bare

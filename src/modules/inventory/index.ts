@@ -88,3 +88,8 @@ export { lowStockItems, fmtStock, type LowStockItem } from "./low-stock"; // own
 export { getItemStock, itemStockScope, movementSentence, type ItemStock, type ItemStockInput, type ItemLot, type SupplierRow, type ExpiryBucket, type PlaceRow, type ItemMovement } from "./item-stock"; // owner question 2026-10-30: one page per item
 export { stockByItem, lotState, searchWords, ITEM_STATUS_FILTERS, type StockItem, type StockItemLot, type StockByItemResult, type ItemState, type LotState, type ItemStatusFilter } from "./stock-by-item"; // owner review 2026-10-30: one row per item
 export { freeFinishedStock, type StockCandidate } from "./free-stock";
+// ADR-138: "Take a few out" (online shop orders, samples, giveaways…), "Count what's left" and the reminders
+export { createTakeout, approveTakeout, rejectTakeout, cancelTakeout, undoTakeout, takeoutApprovalVerdicts, takeoutChannels, takeoutMachine, TAKEOUT_HANDOFF, type CreateTakeoutInput, type TakeoutLineInput, type TakeoutResult } from "./takeouts";
+export { takeoutFormData, takeoutSourcesFor, takeoutSourcesForLabel, takeoutLineRows, listTakeouts, getTakeout, lotTakeouts, customerSamples, watchList, shopShelfStatus, shelfChecksOf, takeoutsExport, type TakeoutDetail, type TakeoutFilter, type TakeoutLineRow, type SourceView, type WatchRow } from "./takeout-queries";
+export { countWhatIsLeft, type CountLeftInput, type CountLeftResult } from "./shelf-checks";
+export { PURPOSE_WORDS, STATUS_WORDS, purposeSentence, type TakeoutPurpose, type TakeoutStatus } from "./takeout-rules";

@@ -78,6 +78,8 @@ export function documentHref(m: { sourceDocumentType: string | null; sourceDocum
       return `/inventory/counts/${m.sourceDocumentId}`;
     case "stock_adjustment":
       return `/inventory/adjustments/${m.sourceDocumentId}`;
+    case "stock_takeout":
+      return `/inventory/take-outs/${m.sourceDocumentId}`;
     default:
       return null;
   }

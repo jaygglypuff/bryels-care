@@ -45,9 +45,12 @@ export const locations = pgTable(
     status: text("status").notNull().default("active"),
     isPickable: boolean("is_pickable").notNull().default(true),
     section: text("section"),
+    /** ADR-138: "Online shop shelf": boxes for online sales live here; "Take a few out" offers it first. Storage only. */
+    takeoutShelf: boolean("takeout_shelf").notNull().default(false),
   },
   (t) => [
     uniqueIndex("locations_site_code_uq").on(t.siteId, t.code),
+    check("locations_takeout_shelf_ck", sql`not ${t.takeoutShelf} or ${t.kind} = 'storage'`),
     check("locations_section_ck", sql`${t.section} is null or ${t.section} in (${sql.raw(LOCATION_SECTIONS.map((x) => `'${x}'`).join(", "))})`),
     index("locations_parent_idx").on(t.parentLocationId),
     check("locations_status_ck", sql`${t.status} in ('active', 'blocked', 'inactive')`),

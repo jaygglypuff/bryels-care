@@ -22,7 +22,7 @@ import { registerEquipmentAvailabilityProvider, revisionApprovalCandidates, revi
 import { registerActionItemSource, registerApprovalGate } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
-import { adjustmentApprovalVerdicts, countApprovalVerdicts, registerReceivingPoHooks } from "@/modules/inventory";
+import { adjustmentApprovalVerdicts, countApprovalVerdicts, registerReceivingPoHooks, takeoutApprovalVerdicts } from "@/modules/inventory";
 import {
   aslApprovalCandidates,
   latePoCandidates,
@@ -189,6 +189,8 @@ export function registerAppHooks() {
   // ADR-088 §2: stock adjustments and count variances, so a top role sees (and the badge counts) their own.
   registerApprovalGate("approval.stock_adjustment", adjustmentApprovalVerdicts);
   registerApprovalGate("approval.stock_count", countApprovalVerdicts);
+  // ADR-138: a take-out above the piece limits (same rules as approveTakeout).
+  registerApprovalGate("approval.stock_takeout", takeoutApprovalVerdicts);
   // ADR-104 §1b: another ingredient asked on the floor, decided by a QA person only (never the owner/site manager alone).
   registerActionItemSource({ kind: "approval.material_substitution", detect: (org) => materialSubstitutionCandidates(org) });
   registerApprovalGate("approval.material_substitution", materialSubstitutionApprovalVerdicts);
