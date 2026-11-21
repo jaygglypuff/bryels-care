@@ -476,6 +476,7 @@ export async function getContainer(ctx: AuthContext, containerId: string) {
       lotNumber: inventoryLots.lotNumber,
       qualityStatus: inventoryLots.qualityStatus,
       expiresOn: inventoryLots.expiresOn,
+      productId: inventoryLots.productId,
       itemCode: sql<string>`coalesce(${materials.code}, ${products.skuCode})`,
       itemName: sql<string>`coalesce(${materials.name}, ${products.name})`,
       qtyBase: containerContents.qtyBase,
@@ -523,7 +524,7 @@ export type AllowedAction = { key: string; label: string; href: string; allowed:
  */
 export function boxAllowedActions(
   ctx: AuthContext,
-  box: { id: string; status: string; contents: { qualityStatus: string; expiresOn: string | null }[]; frozenBy: string | null; locationKind: string | null },
+  box: { id: string; status: string; contents: { qualityStatus: string; expiresOn: string | null; productId?: string | null }[]; frozenBy: string | null; locationKind: string | null },
 ): AllowedAction[] {
   const out: AllowedAction[] = [];
   const movable = (MOVABLE_BOX_STATUSES as readonly string[]).includes(box.status);
@@ -543,6 +544,14 @@ export function boxAllowedActions(
     out.push({ key: "repack", label: "Repack", href: `/inventory/containers/${box.id}?op=repack`, allowed: !why, reason: why });
     if (box.status === "open" && !empty) out.push({ key: "seal", label: "Close the box", href: `/inventory/containers/${box.id}?op=seal`, allowed: true });
     if (box.status === "sealed") out.push({ key: "reopen", label: "Open the box again", href: `/inventory/containers/${box.id}?op=reopen`, allowed: true });
+  }
+  // ADR-138: a few finished pieces out of this box, and the quick count of what is left (the services re-check everything).
+  const finished = box.contents.length > 0 && box.contents.every((c) => !!c.productId);
+  if (finished && ctx.can("inventory.takeout.create")) {
+    const usable = box.contents.every((c) => c.qualityStatus === "released" && !isPastExpiry(c.expiresOn));
+    const takeWhy = why ?? (!usable ? "QA has not released it, or it is expired." : box.locationKind !== "storage" ? "It is not on a finished goods shelf." : undefined);
+    out.push({ key: "takeout", label: "Take a few out", href: `/inventory/take-out?box=${box.id}`, allowed: !takeWhy, reason: takeWhy });
+    if (box.status === "open") out.push({ key: "count_left", label: "Count what's left", href: `/inventory/take-out/count?box=${box.id}`, allowed: !why, reason: why });
   }
   if (ctx.can("inventory.label_job.create")) out.push({ key: "label", label: "Print box label", href: `/labels/new?entityType=container&entityId=${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is cancelled." : undefined });
   return out;

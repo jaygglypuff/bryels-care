@@ -33,7 +33,7 @@
  * batch had been made two days ago; nothing else is written around the services.
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { hash } from "@node-rs/argon2";
 import Decimal from "decimal.js";
 import { db } from "../client";
@@ -89,6 +89,8 @@ const PLACES: [string, string, string, string | null, string | null][] = [
   ["PKG-01", "Packaging shelf", "storage", "packaging", null],
   ["PRD-01", "Making room", "production", "production", null],
   ["FG-01", "Finished goods bay", "storage", "finished_goods", null],
+  // ADR-138: boxes kept for online shop orders and samples; "Take a few out" takes from here first.
+  ["SHOP-01", "Online shop shelf", "storage", "finished_goods", null],
   ["SHP", "Sending-out bay", "shipping", null, null],
 ];
 
@@ -476,6 +478,28 @@ export async function seedLiteDemo(): Promise<string[]> {
   await sales.allocateOrder(c.warehouse, soapOrder);
   notes.push("2 customer orders: soap ready to get from the shelf, lotion covered by the lotion batches (waiting for QA, approved)");
 
+  /* ---------------------------------------------------------------- take a few out (ADR-138) */
+  // Lito moves the part box and one full box of soap that are not set aside to the online shop shelf, once. Mara takes
+  // 2 bars out for a Shopee order (the sealed part box opens) and 1 for a TikTok Shop order; Lito gives Isla Spa a free
+  // sample. Another box was opened on the finished goods bay four days ago and nobody counted it since: Home and the
+  // messages remind the warehouse to count it (demo shortcut: its "last change" is set four days back, as the curing
+  // shortcut above; no stock row is touched).
+  const freeBoxes = await db
+    .select({ id: s.containers.id, number: s.containers.containerNumber })
+    .from(s.containers)
+    .where(and(eq(s.containers.organizationId, A.orgId), sql`not exists (select 1 from stock_allocations a where a.container_id = ${s.containers.id} and a.status = 'open')`))
+    .orderBy(desc(s.containers.containerNumber));
+  const [partBox, fullBox, quietBox] = freeBoxes;
+  for (const b of [partBox, fullBox]) await inv.scanMove(c.warehouse, { idempotencyKey: key(), source: { kind: "box", containerId: b.id }, toLocationId: A.places["SHOP-01"] });
+  await inv.createTakeout(c.sales, { purpose: "sold_online", channel: "shopee", platformOrderRef: "2611DEMO0042", lines: [{ containerId: partBox.id, pieces: "2" }], idempotencyKey: key() });
+  await inv.createTakeout(c.warehouse, { purpose: "customer_sample", customerId: A.customers["Isla Spa Supplies"], note: "For their new spa branch (demo)", lines: [{ productId: soap.id, pieces: "1" }], idempotencyKey: key() });
+  await inv.createTakeout(c.sales, { purpose: "sold_online", channel: "tiktok_shop", lines: [{ productId: soap.id, pieces: "1" }], idempotencyKey: key() });
+  await inv.setBoxStatus(c.warehouse, quietBox.id, "open", "Opened to show a buyer (demo)");
+  await db.update(s.containers).set({ updatedAt: new Date(Date.now() - 4 * DAY) }).where(eq(s.containers.id, quietBox.id));
+  const { runTakeoutReminders } = await import("../../modules/inventory/takeout-reminders");
+  await runTakeoutReminders({ organizationId: A.orgId });
+  notes.push(`take a few out: boxes ${partBox.number} and ${fullBox.number} on the online shop shelf, 3 take-outs (Shopee, TikTok Shop, a sample for Isla Spa); box ${quietBox.number} open and not counted for 4 days`);
+
   // Completeness marker read by `pnpm db:demo auto` (src/db/demo.ts): written last, with the profile and version.
   await db.insert(s.auditEvents).values({ organizationId: A.orgId, actorLabel: "system:demo.seed", action: "platform.demo.seeded", entityType: "organization", entityId: A.orgId, entityNumber: LITE_ORG_NAME, after: { fictional: true, profile: "lite", seedVersion: DEMO_SEED_VERSION } });
   return notes;
@@ -490,7 +514,7 @@ async function setup(dbx: Db) {
   const [wh] = await db.insert(s.warehouses).values({ siteId: nfd.id, code: "WH1", name: "Main warehouse", warehouseKind: "general" }).returning();
   const places: Record<string, string> = {};
   for (const [code, name, kind, section, role] of PLACES) {
-    const [l] = await db.insert(s.locations).values({ siteId: nfd.id, warehouseId: wh.id, code, name, kind, section }).returning();
+    const [l] = await db.insert(s.locations).values({ siteId: nfd.id, warehouseId: wh.id, code, name, kind, section, takeoutShelf: code === "SHOP-01" }).returning();
     places[code] = l.id;
     if (role) await db.insert(s.warehouseSpecialLocations).values({ organizationId: O, siteId: nfd.id, warehouseId: wh.id, role, locationId: l.id });
   }

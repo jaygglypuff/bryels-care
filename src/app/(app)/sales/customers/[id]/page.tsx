@@ -29,6 +29,8 @@ import {
 } from "./customer-forms";
 import { registerAppHooks } from "@/modules/wiring";
 import { PortalAccessPanel } from "./portal-access";
+import { customerSamples } from "@/modules/inventory";
+import { TakeoutRows } from "@/ui/inventory/takeout-rows";
 import { DeleteDraftButton } from "../../../delete-draft-button";
 import { DoNext, whoDoes } from "../../next-step";
 
@@ -51,6 +53,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
     throw e;
   }
   const c = d.customer;
+  const samples = await customerSamples(ctx, c.id);
   const [segLabels, segOptions] = await Promise.all([customerSegmentLabels(ctx), customerSegmentOptions(ctx, { keep: c.segment })]);
   const canEdit = ctx.can("masterdata.customer.edit");
   const canReq = ctx.can("masterdata.customer_requirement.create");
@@ -384,6 +387,14 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
                   ))}
                 </ul>
               )}
+            </Card>
+          )}
+
+          {/* ADR-138: free samples given to this customer through "Take a few out". */}
+          {samples.length > 0 && (
+            <Card>
+              <CardTitle>Free samples</CardTitle>
+              <TakeoutRows rows={samples.slice(0, 10)} testId="customer-samples" />
             </Card>
           )}
 

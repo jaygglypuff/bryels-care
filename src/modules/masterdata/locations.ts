@@ -49,6 +49,10 @@ const LocationInput = z
     kind: z.enum(LOCATION_KINDS, { message: "Choose the location class." }),
     parentLocationId: optUuid,
     isPickable: bool(true),
+    /** ADR-138: the "Online shop shelf" (Take a few out takes from it first); storage places only; omitted = unchanged on edit. */
+    takeoutShelf: z
+      .union([z.boolean(), z.literal("on"), z.literal("true"), z.literal("false"), z.literal(""), z.null(), z.undefined()])
+      .transform((v) => (v === undefined || v === null ? undefined : v === true || v === "on" || v === "true")),
     /** S6 (ADR-077): warehouse section; "" = derived from the class and warehouse kind; omitted = unchanged on edit. */
     section: z
       .union([z.enum(LOCATION_SECTIONS, { message: "Choose a section." }), z.literal(""), z.null(), z.undefined()])
@@ -84,6 +88,7 @@ export async function listLocations(ctx: AuthContext, f: LocationFilter = {}) {
       status: locations.status,
       isActive: locations.isActive,
       isPickable: locations.isPickable,
+      takeoutShelf: locations.takeoutShelf,
       section: locations.section,
       effectiveSection: sql<string>`${sectionSql("locations", "warehouses")}`,
       parentLocationId: locations.parentLocationId,
@@ -190,9 +195,10 @@ export async function createLocation(ctx: AuthContext, raw: unknown, opts?: InTx
     const v = { ...parsed, code };
     await assertOrgUniqueCode(tx, ctx, v.code);
     await assertParent(tx, w.id, v.parentLocationId);
+    if (v.takeoutShelf && v.kind !== "storage") throw new DomainError("validation", "Only a storage shelf can be the online shop shelf.", { field: "takeoutShelf" });
     const [l] = await tx
       .insert(locations)
-      .values({ siteId: w.siteId, warehouseId: w.id, code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable, section: v.section ?? null })
+      .values({ siteId: w.siteId, warehouseId: w.id, code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable, takeoutShelf: v.takeoutShelf ?? false, section: v.section ?? null })
       .returning();
     await audit(tx, ctx, { action: "masterdata.location.created", entityType: "location", entityId: l.id, entityNumber: l.code, siteId: l.siteId, after: { ...v } });
     return l;
@@ -220,8 +226,10 @@ export async function updateLocation(ctx: AuthContext, locationId: string, raw: 
       if (role) throw new DomainError("state", `Location ${before.code} is the warehouse's ${role.role} location; designate another location first.`, { field: "kind" });
     }
     await assertParent(tx, before.warehouseId, v.parentLocationId, before.id);
-    const [after] = await tx.update(locations).set({ code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable, section: v.section === undefined ? before.section : v.section }).where(eq(locations.id, before.id)).returning();
-    const d = diff(before, after, ["code", "name", "kind", "parentLocationId", "isPickable", "section"]);
+    const takeoutShelf = v.takeoutShelf === undefined ? before.takeoutShelf : v.takeoutShelf;
+    if (takeoutShelf && v.kind !== "storage") throw new DomainError("validation", "Only a storage shelf can be the online shop shelf.", { field: "takeoutShelf" });
+    const [after] = await tx.update(locations).set({ code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable, takeoutShelf, section: v.section === undefined ? before.section : v.section }).where(eq(locations.id, before.id)).returning();
+    const d = diff(before, after, ["code", "name", "kind", "parentLocationId", "isPickable", "takeoutShelf", "section"]);
     if (d.changed.length) await audit(tx, ctx, { action: "masterdata.location.updated", entityType: "location", entityId: after.id, entityNumber: after.code, siteId: after.siteId, before: d.before, after: d.after });
     return after;
   });

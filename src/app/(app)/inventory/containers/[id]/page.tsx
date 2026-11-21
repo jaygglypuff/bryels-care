@@ -7,6 +7,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { boxesAtLocation, getContainer, type ContainerDetail } from "@/modules/inventory/containers";
+import { shelfChecksOf } from "@/modules/inventory/takeout-queries";
 import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
@@ -54,6 +55,7 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
   const label = action("label");
   const move = action("move");
   const seal = action("seal");
+  const counts = ctx.can("inventory.takeout.create") || ctx.can("inventory.takeout.view") ? await shelfChecksOf(ctx, box.id) : [];
 
   const next = fresh && label ? (
     <NextStep text="Print its label and stick it on the box." action={{ label: "Print box label", href: label.href }} />
@@ -172,6 +174,26 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
           </ul>
         )}
       </section>
+
+      {counts.length > 0 && (
+        <section className="space-y-2" data-testid="box-counts">
+          <h2 className="text-[16px] font-semibold">Counts of what is left</h2>
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[8px] border border-line bg-surface">
+            {counts.map((c) => (
+              <li key={c.id} className="flex min-h-[48px] flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[14px]">
+                <span>
+                  Counted {new Decimal(c.counted).toString()} {new Decimal(c.counted).eq(c.expected) ? "(matches)" : `(the app had ${new Decimal(c.expected).toString()})`} · {c.by} · {fmtDateTime(c.at)}
+                </span>
+                {c.adjustmentId && (
+                  <Link href={`/inventory/adjustments/${c.adjustmentId}`} className="text-primary-text hover:underline">
+                    Stock fix {c.adjustmentNumber}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="text-[16px] font-semibold">Moves of this box</h2>
