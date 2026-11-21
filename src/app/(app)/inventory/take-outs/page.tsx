@@ -159,7 +159,7 @@ function Totals({ title, rows }: { title: string; rows: { label: string; pieces:
             {rows.slice(0, 8).map((r) => (
               <tr key={r.label} className="border-b border-line last:border-0">
                 <td className="px-4 py-2">{r.label}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{r.pieces} pcs</td>
+                <td className="px-4 py-2 text-right tabular-nums">{r.pieces} {r.pieces === "1" ? "piece" : "pieces"}</td>
               </tr>
             ))}
           </tbody>
