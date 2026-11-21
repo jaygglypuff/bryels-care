@@ -103,6 +103,13 @@ describe("master search: every record type by number", () => {
     }
   });
 
+  it("a person is found by an email without digits, in any capitals (CI picked warehouse.rvs under en_US sorting)", async () => {
+    for (const q of ["warehouse.rvs@bryels-care.test", "Warehouse.RVS@bryels-care.test", "warehouse2.nfd@bryels-care.test"]) {
+      const hits = await numberHits(everything, q);
+      expect(hits.some((h) => h.type === "person" && h.number === q.toLowerCase() && h.exact), q).toBe(true);
+    }
+  });
+
   it("capitals and dashes do not matter (bill-26-00001, BILL2600001)", async () => {
     for (const s of samples) {
       const lower = s.number.toLowerCase();

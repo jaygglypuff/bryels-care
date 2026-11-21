@@ -85,6 +85,8 @@ type RecordType = {
   num: string;
   /** More columns that hold a number people type (old paper number, supplier's own number). */
   alsoNum?: readonly string[];
+  /** The number is stored in small letters (an email): the exact look-up compares in capitals, like the typed forms. */
+  numLower?: boolean;
   /** The name shown first (party, product, title). */
   name?: string;
   status?: string;
@@ -172,7 +174,7 @@ export const RECORD_TYPES: readonly RecordType[] = [
   { key: "how_to", noun: "How-to sheet", icon: "recipe", prefixes: ["WI"], from: "work_instructions t", num: "t.code", name: "t.name", scope: "org", view: ["masterdata.work_instruction.view"], href: id("/masterdata/work-instructions"), master: true },
   // ---------------------------------------------------------------- people (round 5, B report: "Dino" found nothing)
   // People who hold a job at a site where the caller may view people, or organisation-wide (scopeFor "person").
-  { key: "person", noun: "Person who uses the app", icon: "person", prefixes: [], from: "users t", num: "t.email", name: "t.display_name", status: "t.status", scope: "org", view: ["identity.user.view"], href: id("/admin/users"), master: true, words: { cols: ["t.display_name"], group: "people", order: "name" } },
+  { key: "person", noun: "Person who uses the app", icon: "person", prefixes: [], from: "users t", num: "t.email", numLower: true, name: "t.display_name", status: "t.status", scope: "org", view: ["identity.user.view"], href: id("/admin/users"), master: true, words: { cols: ["t.display_name"], group: "people", order: "name" } },
 ];
 
 /**
@@ -254,7 +256,7 @@ const orderBy = (t: RecordType) => sql.raw(t.words?.order === "name" || !t.date 
 function exactBranch(ctx: AuthContext, t: RecordType, scope: SQL, q: NumberQuery): SQL {
   const cols = [t.num, ...(t.alsoNum ?? [])];
   const forms = sql.join(q.exact.map((f) => sql`${f}`), sql`, `);
-  const match = sql.join(cols.map((c) => sql`${sql.raw(c)} in (${forms})`), sql` or `);
+  const match = sql.join(cols.map((c) => (t.numLower ? sql`upper(${sql.raw(c)}) in (${forms})` : sql`${sql.raw(c)} in (${forms})`)), sql` or `);
   return sql`(select ${selectList(t, sql`0`)} from ${sql.raw(t.from)}
     where ${sql.raw(t.org ?? "t.organization_id")} = ${ctx.organizationId}::uuid and ${scope} ${t.where ? sql`and ${sql.raw(t.where)}` : sql``} and (${match})
     limit ${TYPE_LIMIT})`;
